@@ -52,4 +52,10 @@
 
 ## Recordatorios de Mónica
 
-_(aquí se irán agregando las cosas que Mónica pida recordar)_
+### Modelo de negocio (explicado por Mónica, 2026-06-03)
+- Compra libros a **editoriales** a crédito a **6 meses plazo**
+- Vende a **escuelas y colegios** en temporada de inicio de clases
+- Los libros no vendidos se **devuelven a la editorial** → editorial emite **notas de crédito**
+- Paga a la editorial al final: facturas - notas de crédito = lo que realmente debe
+- Da **comisiones** a colegios y librerías por las ventas que le permiten hacer
+- Las comisiones se llaman "**capacitación**" y vienen como facturas **sin IVA**
