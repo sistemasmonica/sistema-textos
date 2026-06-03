@@ -914,21 +914,27 @@ function setSyncStatus(s){
   else{el.textContent='⚠️ Sin conexión';el.style.opacity='0.8';}
 }
 
+let syncCompleted=false;
+
 async function saveToCloud(data){
   try{
     setSyncStatus('sync');
     const ts=new Date().toISOString();
-    await Promise.all([
+    const saves=[
       sb.from('txe_registros').upsert({version:'v1',data:data.regs,updated_at:ts}),
       sb.from('txe_banco').upsert({version:'v1',data:data.banco,updated_at:ts}),
       sb.from('txe_conciliaciones').upsert({version:'v1',data:data.conciliaciones,updated_at:ts}),
       sb.from('txe_movinventario').upsert({version:'v1',data:data.movInv,updated_at:ts}),
       sb.from('txe_guias').upsert({version:'v1',data:data.guias,updated_at:ts}),
       sb.from('txe_colegios').upsert({version:'v1',data:data.colegios,updated_at:ts}),
-      sb.from('txe_coldata').upsert({version:'v1',data:data.colData,updated_at:ts}),
-      sb.from('txe_notascredito').upsert({version:'v1',data:data.notasCredito,updated_at:ts}),
-      sb.from('txe_comisiones').upsert({version:'v1',data:data.comisiones,updated_at:ts})
-    ]);
+      sb.from('txe_coldata').upsert({version:'v1',data:data.colData,updated_at:ts})
+    ];
+    // Solo guardar tablas nuevas una vez que syncFromCloud haya cargado la data real
+    if(syncCompleted){
+      saves.push(sb.from('txe_notascredito').upsert({version:'v1',data:data.notasCredito,updated_at:ts}));
+      saves.push(sb.from('txe_comisiones').upsert({version:'v1',data:data.comisiones,updated_at:ts}));
+    }
+    await Promise.all(saves);
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err');console.warn('Cloud save error:',e);}
 }
@@ -988,7 +994,13 @@ async function syncFromCloud(){
     }
     const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones};
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
+    syncCompleted=true;
     updateCount();renderDash();
+    // Re-renderizar paneles nuevos si están activos en este momento
+    const activePanel=document.querySelector('.pn.on');
+    if(activePanel?.id==='pn-editorial')renderDeudaEditorial();
+    if(activePanel?.id==='pn-comisiones')renderComisiones();
+    if(activePanel?.id==='pn-liquidacion')renderLiquidacion();
     setSyncStatus('ok');
     // Cargar clave Claude
     const cfgTable=tablesOk?'txe_config':'app_data';
@@ -1092,6 +1104,8 @@ function save(){
 function fmt(n){return'$'+(parseFloat(n)||0).toFixed(2)}
 function today(){return new Date().toISOString().split('T')[0]}
 function uid(){return Date.now()+'_'+Math.random().toString(36).substr(2,6)}
+function escH(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function parseLocalDate(s){if(!s)return new Date();const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function mesAnio(d){if(!d)return'';const p=d.split('-');return p[0]+'-'+p[1]}
 function mesLabel(m){if(!m)return'';const mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];const p=m.split('-');return mn[parseInt(p[1])-1]+' '+p[0]}
 function calcTotal(s,i,t){
@@ -1122,7 +1136,7 @@ function tab(id,el){
   if(id==='banco')renderBanco();
   if(id==='decl'){renderDecl();}
   if(id==='colegios'){renderColegios();}
-  if(id==='editorial'){renderDeudaEditorial();}
+  if(id==='editorial'){renderDeudaEditorial();document.getElementById('edit-tab-deuda').classList.add('on');}
   if(id==='comisiones'){renderComisiones();}
   if(id==='liquidacion'){renderLiquidacion();}
 }
@@ -3226,12 +3240,12 @@ function editTab(id,el){
 
 function renderDeudaEditorial(){
   const compras=DB.regs.filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares');
-  const hoy=new Date();
+  const hoy=new Date();hoy.setHours(0,0,0,0);
   let totalDeuda=0,totalVencida=0,totalPorVencer=0;
   const html=compras.length===0
     ?'<tr><td colspan="8" class="empty">No hay compras de textos registradas. Agrega facturas de editorial en el módulo Manual o XML.</td></tr>'
-    :[...compras].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r=>{
-      const vence=new Date(r.fecha);vence.setDate(vence.getDate()+180);
+    :[...compras].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(r=>{
+      const vence=parseLocalDate(r.fecha);vence.setDate(vence.getDate()+180);
       const dias=Math.ceil((vence-hoy)/(1000*60*60*24));
       const pagado=r.pagadaEditorial||false;
       if(!pagado){
@@ -3243,10 +3257,11 @@ function renderDeudaEditorial(){
       else if(dias<0){bdg='bdg-err';txt=`Vencida ${Math.abs(dias)}d`;}
       else if(dias<=30){bdg='bdg-warn';txt=`${dias} días`;}
       else{bdg='bdg-ok';txt=`${dias} días`;}
+      const fechaVence=`${vence.getFullYear()}-${String(vence.getMonth()+1).padStart(2,'0')}-${String(vence.getDate()).padStart(2,'0')}`;
       return`<tr>
-        <td>${r.fecha}</td><td>${r.proveedor||'-'}</td><td><span class="chip">${r.numFact||'-'}</span></td>
+        <td>${escH(r.fecha||'-')}</td><td>${escH(r.proveedor||'-')}</td><td><span class="chip">${escH(r.numFact||'-')}</span></td>
         <td class="cr"><b>${fmt(r.total)}</b></td>
-        <td>${vence.toISOString().split('T')[0]}</td>
+        <td>${fechaVence}</td>
         <td style="text-align:center">${pagado?'-':dias}</td>
         <td><span class="bdg ${bdg}">${txt}</span></td>
         <td>${pagado
@@ -3272,11 +3287,11 @@ function renderNotasCredito(){
   document.getElementById('nc-count').textContent=DB.notasCredito.length;
   document.getElementById('edit-tb-nc').innerHTML=DB.notasCredito.length===0
     ?'<tr><td colspan="6" class="empty">No hay notas de crédito registradas</td></tr>'
-    :[...DB.notasCredito].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(n=>`<tr>
-        <td>${n.fecha}</td><td>${n.editorial}</td>
-        <td><span class="chip">${n.num||'-'}</span></td>
+    :[...DB.notasCredito].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(n=>`<tr>
+        <td>${escH(n.fecha||'-')}</td><td>${escH(n.editorial)}</td>
+        <td><span class="chip">${escH(n.num||'-')}</span></td>
         <td class="cg"><b>${fmt(n.total)}</b></td>
-        <td>${n.nota||'-'}</td>
+        <td>${escH(n.nota||'-')}</td>
         <td><button class="btn btn-d btn-sm" onclick="delNC('${n.id}')"><i class="ti ti-trash"></i></button></td>
       </tr>`).join('');
 }
@@ -3334,10 +3349,10 @@ function renderComisiones(){
   document.getElementById('com-lib-total').textContent=fmt(totalLib);
   document.getElementById('com-tb').innerHTML=data.length===0
     ?'<tr><td colspan="7" class="empty">No hay comisiones registradas</td></tr>'
-    :data.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(c=>`<tr>
-        <td>${c.fecha}</td><td><b>${c.beneficiario}</b></td>
+    :data.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(c=>`<tr>
+        <td>${escH(c.fecha||'-')}</td><td><b>${escH(c.beneficiario)}</b></td>
         <td><span class="bdg ${c.tipo==='colegio'?'bdg-negocio':'bdg-ia'}">${c.tipo==='colegio'?'Colegio':'Librería'}</span></td>
-        <td><span class="chip">${c.numFactura||'-'}</span></td>
+        <td><span class="chip">${escH(c.numFactura||'-')}</span></td>
         <td class="cr"><b>${fmt(c.monto)}</b></td>
         <td><span class="bdg ${c.estado==='pagado'?'bdg-ok':'bdg-warn'}">${c.estado==='pagado'?'Pagado':'Pendiente'}</span></td>
         <td style="display:flex;gap:4px">
@@ -3366,18 +3381,17 @@ function renderLiquidacion(){
   let anioFil=anioEl?anioEl.value:'';
   const anios=[...new Set([
     ...DB.regs.map(r=>r.fecha?.split('-')[0]),
-    ...DB.notasCredito.map(n=>n.fecha?.split('-')[0]),
     ...DB.comisiones.map(c=>c.fecha?.split('-')[0])
   ].filter(Boolean))].sort().reverse();
   if(anioEl)anioEl.innerHTML='<option value="">Todos los años</option>'+anios.map(a=>`<option value="${a}"${a===anioFil?' selected':''}>${a}</option>`).join('');
   const f=arr=>anioFil?arr.filter(x=>x.fecha?.startsWith(anioFil)):arr;
+  // NCs no se filtran por año: una NC del año siguiente reduce la compra del año anterior
   const ventas=f(DB.regs).filter(r=>r.tipo==='venta').reduce((a,r)=>a+r.total,0);
   const comprasEdit=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').reduce((a,r)=>a+r.total,0);
-  const totalNC=f(DB.notasCredito).reduce((a,n)=>a+n.total,0);
-  const costoNeto=comprasEdit-totalNC;
+  const totalNC=DB.notasCredito.reduce((a,n)=>a+n.total,0);
+  const costoNeto=Math.max(0,comprasEdit-totalNC);
   const comisiones=f(DB.comisiones).reduce((a,c)=>a+c.monto,0);
   const otrosGastos=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria!=='Textos escolares').reduce((a,r)=>a+r.total,0);
-  const gastosPersonales=f(DB.regs).filter(r=>r.tipo==='personal').reduce((a,r)=>a+r.total,0);
   const utilidad=ventas-costoNeto-comisiones-otrosGastos;
   document.getElementById('liq-ventas').textContent=fmt(ventas);
   document.getElementById('liq-costo').textContent=fmt(costoNeto);
@@ -3392,22 +3406,32 @@ function renderLiquidacion(){
     <div class="pf"><span>Comisiones / capacitación</span><span class="cr">− ${fmt(comisiones)}</span></div>
     <div class="pf"><span>Otros gastos negocio</span><span class="cr">− ${fmt(otrosGastos)}</span></div>
     <div class="pf" style="border-top:2px solid var(--bd);font-weight:700;font-size:14px;padding:10px 0"><span>UTILIDAD ESTIMADA</span><span class="${utilidad>=0?'cg':'cr'}">${fmt(utilidad)}</span></div>`;
-  // Por editorial
-  const porEdit={};
-  f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').forEach(r=>{porEdit[r.proveedor]=(porEdit[r.proveedor]||0)+r.total;});
-  f(DB.notasCredito).forEach(n=>{porEdit[n.editorial]=(porEdit[n.editorial]||0)-n.total;});
-  document.getElementById('liq-por-editorial').innerHTML=Object.keys(porEdit).length===0
+  // Por editorial — claves normalizadas para evitar duplicados por mayúsculas/espacios
+  const normK=s=>(s||'').trim().toLowerCase();
+  const porEditMap={};
+  f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').forEach(r=>{
+    const k=normK(r.proveedor);
+    if(!porEditMap[k])porEditMap[k]={display:r.proveedor||'(sin nombre)',total:0};
+    porEditMap[k].total+=r.total;
+  });
+  // NCs sin filtro de año, normalizadas igual
+  DB.notasCredito.forEach(n=>{
+    const k=normK(n.editorial);
+    if(!porEditMap[k])porEditMap[k]={display:n.editorial||'(sin nombre)',total:0};
+    porEditMap[k].total-=n.total;
+  });
+  document.getElementById('liq-por-editorial').innerHTML=Object.keys(porEditMap).length===0
     ?'<div class="empty">Sin compras editoriales registradas</div>'
-    :Object.entries(porEdit).sort((a,b)=>b[1]-a[1]).map(([ed,tot])=>`<div class="pf"><span>${ed}</span><span class="cr">${fmt(Math.max(0,tot))}</span></div>`).join('');
-  // Por colegio
+    :Object.values(porEditMap).sort((a,b)=>b.total-a.total).map(e=>`<div class="pf"><span>${escH(e.display)}</span><span class="${e.total>0?'cr':'cg'}">${fmt(e.total)}</span></div>`).join('');
+  // Por colegio — solo registros con proveedor definido (#8 fix)
   const porCol={};
-  f(DB.regs).filter(r=>r.tipo==='venta').forEach(r=>{porCol[r.proveedor]=(porCol[r.proveedor]||0)+r.total;});
+  f(DB.regs).filter(r=>r.tipo==='venta'&&r.proveedor).forEach(r=>{porCol[r.proveedor]=(porCol[r.proveedor]||0)+r.total;});
   document.getElementById('liq-por-colegio').innerHTML=Object.keys(porCol).length===0
     ?'<div class="empty">Sin ventas registradas</div>'
     :Object.entries(porCol).sort((a,b)=>b[1]-a[1]).map(([col,venta])=>{
-        const com=f(DB.comisiones).filter(c=>c.tipo==='colegio'&&c.beneficiario===col).reduce((a,c)=>a+c.monto,0);
+        const com=f(DB.comisiones).filter(c=>c.tipo==='colegio'&&normK(c.beneficiario)===normK(col)).reduce((a,c)=>a+c.monto,0);
         const margen=venta-com;
-        return`<div class="pf"><span><b>${col}</b></span><span style="display:flex;gap:12px;font-size:11px">
+        return`<div class="pf"><span><b>${escH(col)}</b></span><span style="display:flex;gap:12px;font-size:11px">
           <span>Venta: <b class="cg">${fmt(venta)}</b></span>
           <span>Comisión: <b class="cr">${fmt(com)}</b></span>
           <span>Margen: <b class="${margen>=0?'cg':'cr'}">${fmt(margen)}</b></span>
