@@ -65,9 +65,10 @@ GRANT ALL ON app_data TO authenticated;
 ## Archivos del proyecto
 ```
 sistema_textos/
-├── index.html   ← app completa (único archivo)
-├── netlify.toml               ← config de Netlify
-└── CLAUDE.md                  ← este archivo
+├── index.html     ← app completa (único archivo)
+├── netlify.toml   ← config de Netlify
+├── CLAUDE.md      ← instrucciones para Claude
+└── memory.md      ← notas importantes y recordatorios de Mónica
 ```
 
 ## Cómo hacer deploy de cambios
