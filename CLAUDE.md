@@ -54,7 +54,7 @@ GRANT ALL ON app_data TO authenticated;
 4. Indicador en el header: `☁️ Guardado` / `🔄 Sincronizando...` / `⚠️ Sin conexión`
 
 ## PENDIENTES (tareas para próxima sesión)
-- [ ] **CRÍTICO**: Crear tabla en Supabase — correr el SQL de arriba en el SQL Editor del dashboard
+- [x] **HECHO**: Tabla `app_data` creada en Supabase (confirmado 2026-06-03)
 - [ ] **CRÍTICO**: Conectar repo GitHub a Netlify para deploy automático
   - netlify.com → Add site → Import from GitHub → sistemasmonica/sistema-textos → branch main → publish dir `.`
 - [ ] Verificar que la sincronización cloud funciona abriendo la URL de Netlify
