@@ -81,3 +81,37 @@ git push origin main
 - Tabler Icons: `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/`
 - xlsx.js: `https://cdn.jsdelivr.net/npm/xlsx@0.18.5/`
 - Supabase JS v2: `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/`
+
+---
+
+## COMANDOS DE SESIÓN — INSTRUCCIONES PARA CLAUDE
+
+> Estos comandos los escribe Mónica al inicio y fin de cada sesión de trabajo.
+> Claude DEBE ejecutarlos automáticamente sin pedir confirmación adicional.
+
+### Cuando Mónica escribe "iniciar sesion" (o variantes: "iniciar sesión", "inicio"):
+Ejecutar EN ORDEN los siguientes pasos y reportar el resultado de cada uno:
+
+1. `git pull origin main` — traer últimos cambios del servidor
+2. `git status` — mostrar qué archivos han cambiado
+3. `git log --oneline -5` — mostrar los últimos 5 cambios guardados
+4. Leer el archivo `CLAUDE.md` y mostrar la lista de PENDIENTES actuales
+5. Mostrar un resumen claro: **"Todo listo para trabajar. Últimos cambios: [X]. Pendientes: [Y]."**
+
+### Cuando Mónica escribe "cerrar" (o variantes: "cerrar sesion", "cerrar sesión", "guardar y cerrar"):
+Ejecutar EN ORDEN los siguientes pasos y reportar el resultado de cada uno:
+
+1. `git status` — ver qué archivos cambiaron en esta sesión
+2. `git add SISTEMA_TEXTOS_2026.html CLAUDE.md netlify.toml` — preparar archivos (solo los que existan y hayan cambiado)
+3. `git add -A` — incluir cualquier archivo nuevo que se haya creado
+4. `git commit -m "Actualización [fecha de hoy]: [resumen breve de los cambios hechos en la sesión]"` — guardar con descripción automática
+5. `git push origin main` — subir al servidor GitHub
+6. Confirmar con mensaje: **"Todo guardado y subido. Netlify desplegará la versión nueva en ~30 segundos."**
+7. Si el push falla por falta de token, explicar a Mónica el error en términos simples y dar el paso a seguir.
+
+### Notas importantes para Claude:
+- Mónica NO sabe programación — usar lenguaje simple, sin jerga técnica
+- Si algo falla, explicar QUÉ pasó y QUÉ tiene que hacer Mónica (un paso concreto)
+- El branch siempre es `main`, el repo es `sistemasmonica/sistema-textos`
+- Netlify se despliega automáticamente cuando el push a `main` es exitoso
+- Si hay conflictos de merge, resolverlos favoreciendo los cambios locales (los de Mónica)
