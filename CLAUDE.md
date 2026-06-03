@@ -55,9 +55,11 @@ GRANT ALL ON app_data TO authenticated;
 
 ## PENDIENTES (tareas para próxima sesión)
 - [x] **HECHO**: Tabla `app_data` creada en Supabase (confirmado 2026-06-03)
-- [ ] **CRÍTICO**: Conectar repo GitHub a Netlify para deploy automático
-  - netlify.com → Add site → Import from GitHub → sistemasmonica/sistema-textos → branch main → publish dir `.`
-- [ ] Verificar que la sincronización cloud funciona abriendo la URL de Netlify
+- [x] **HECHO**: Netlify conectado a GitHub, deploy automático funcionando (2026-06-03)
+- [x] **HECHO**: Archivo renombrado a `index.html` (2026-06-03)
+- [x] **HECHO**: CSS responsive para celulares agregado (2026-06-03)
+- [x] **HECHO**: Migración a tablas separadas en Supabase — ☁️ Guardado confirmado (2026-06-03)
+  - Tablas: txe_registros, txe_banco, txe_conciliaciones, txe_movinventario, txe_guias, txe_colegios, txe_coldata, txe_config
 - [ ] (Opcional) Personalizar el nombre del sitio Netlify en Site settings
 
 ## Archivos del proyecto
