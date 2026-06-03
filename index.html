@@ -117,6 +117,30 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--g1);border-color
 .modal-t{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
 .tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;background:var(--lt);color:var(--mu);margin-right:3px}
 hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
+@media(max-width:640px){
+  .w{padding:8px}
+  .hdr{flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px}
+  .hdr h1{font-size:13px}
+  .pill{font-size:10px}
+  .nav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:3px}
+  .nt{min-width:76px;flex:0 0 auto;font-size:10px;padding:6px 4px}
+  .sc-grid,.sc-grid-5{grid-template-columns:repeat(2,1fr)!important}
+  .two,.three{grid-template-columns:1fr!important}
+  .f2,.f3,.f4{grid-template-columns:1fr!important}
+  .ia-meta{grid-template-columns:1fr 1fr!important}
+  .btn-row{flex-direction:column}
+  .btn-row .btn{width:100%;justify-content:center}
+  .filters{flex-direction:column;align-items:stretch}
+  .filters select,.filters input{width:100%;min-width:unset}
+  .sh{flex-direction:column;align-items:flex-start;gap:6px}
+  .sh h2{font-size:12px}
+  .modal{padding:14px;border-radius:8px}
+  .card{padding:10px}
+  table{font-size:11px}
+  th,td{padding:6px 8px}
+  .sc-val{font-size:16px}
+  input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{font-size:14px}
+}
 </style>
 </head>
 <body>

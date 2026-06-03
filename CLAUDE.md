@@ -6,7 +6,7 @@
 - Supabase org: `sistemasmonica` / proyecto: `sistemalibros`
 
 ## Qué es la aplicación
-Sistema completo de control de negocio en un solo archivo HTML (`SISTEMA_TEXTOS_2026.html`).
+Sistema completo de control de negocio en un solo archivo HTML (`index.html`).
 
 **Módulos:**
 - Dashboard con métricas (ventas, compras, utilidad, inventario)
@@ -29,7 +29,7 @@ Sistema completo de control de negocio en un solo archivo HTML (`SISTEMA_TEXTOS_
 | Branch principal | `main` |
 
 ## Credenciales
-- **Supabase anon key**: guardada directamente en `SISTEMA_TEXTOS_2026.html` (constante `SUPA_KEY`)
+- **Supabase anon key**: guardada directamente en `index.html` (constante `SUPA_KEY`)
 - **GitHub token**: generar nuevo en GitHub → Settings → Developer settings → Personal access tokens (el anterior puede haber sido revocado por push protection)
 
 ## Arquitectura de datos (Supabase)
@@ -63,15 +63,15 @@ GRANT ALL ON app_data TO authenticated;
 ## Archivos del proyecto
 ```
 sistema_textos/
-├── SISTEMA_TEXTOS_2026.html   ← app completa (único archivo)
+├── index.html   ← app completa (único archivo)
 ├── netlify.toml               ← config de Netlify
 └── CLAUDE.md                  ← este archivo
 ```
 
 ## Cómo hacer deploy de cambios
 ```bash
-# Editar SISTEMA_TEXTOS_2026.html
-git add SISTEMA_TEXTOS_2026.html
+# Editar index.html
+git add index.html
 git commit -m "descripcion del cambio"
 git push origin main
 # Netlify auto-despliega en ~30 segundos
@@ -102,7 +102,7 @@ Ejecutar EN ORDEN los siguientes pasos y reportar el resultado de cada uno:
 Ejecutar EN ORDEN los siguientes pasos y reportar el resultado de cada uno:
 
 1. `git status` — ver qué archivos cambiaron en esta sesión
-2. `git add SISTEMA_TEXTOS_2026.html CLAUDE.md netlify.toml` — preparar archivos (solo los que existan y hayan cambiado)
+2. `git add index.html CLAUDE.md netlify.toml` — preparar archivos (solo los que existan y hayan cambiado)
 3. `git add -A` — incluir cualquier archivo nuevo que se haya creado
 4. `git commit -m "Actualización [fecha de hoy]: [resumen breve de los cambios hechos en la sesión]"` — guardar con descripción automática
 5. `git push origin main` — subir al servidor GitHub

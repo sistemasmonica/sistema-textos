@@ -1,11 +1,6 @@
 [build]
   publish = "."
 
-[[redirects]]
-  from = "/"
-  to = "/SISTEMA_TEXTOS_2026.html"
-  status = 200
-
 [[headers]]
   for = "/*"
   [headers.values]
