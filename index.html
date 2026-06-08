@@ -2074,6 +2074,17 @@ function importarExcelProductos(input){
         return;
       }
 
+      // Función para parsear números con coma o punto decimal (formato Ecuador)
+      const parseNum=s=>{
+        if(s===undefined||s===null||s==='')return 0;
+        let v=String(s).trim().replace(/[$ ]/g,'');
+        // Formato europeo: 1.234,50 → 1234.50
+        if(v.indexOf(',')>-1&&v.indexOf('.')>-1){
+          if(v.lastIndexOf(',')>v.lastIndexOf('.'))v=v.replace(/\./g,'').replace(',','.');
+          else v=v.replace(/,/g,'');
+        }else if(v.indexOf(',')>-1){v=v.replace(',','.');}
+        return parseFloat(v)||0;
+      };
       // Reemplazar catálogo completo con lo importado
       DB.productos=[];
       let importados=0;
@@ -2093,9 +2104,9 @@ function importarExcelProductos(input){
           nombre,
           editorial: ((iCol  >=0?cells[iCol]  :'')||'').trim(),
           nivel    : ((iNivel>=0?cells[iNivel] :'')||'').trim(),
-          stockInicial: parseFloat((iCant >=0?cells[iCant] :'')||0)||0,
-          precioCosto : parseFloat((iCosto>=0?cells[iCosto]:'')||0)||0,
-          precioVenta : parseFloat((iPvta >=0?cells[iPvta] :'')||0)||0,
+          stockInicial: parseNum(iCant >=0?cells[iCant] :''),
+          precioCosto : parseNum(iCosto>=0?cells[iCosto]:''),
+          precioVenta : parseNum(iPvta >=0?cells[iPvta] :''),
           nota:'',
           creadoEn:new Date().toISOString()
         });
@@ -2107,7 +2118,8 @@ function importarExcelProductos(input){
         return;
       }
       save();renderCatalogo();updateCount();
-      toast('✅ '+importados+' productos importados. Haz clic en 💾 Backup para guardar en la nube.','ok');
+      const p0=DB.productos[0];
+      toast('✅ '+importados+' productos. Primero: "'+p0?.nombre+'" | Colec: col'+iCol+' Nom: col'+iNom+' Costo: col'+iCosto+' Precio: col'+iPvta,'ok');
     }catch(e){toast('Error leyendo archivo: '+e.message,'err');console.error(e);}
   };
   if(ext==='csv')r.readAsText(f,'UTF-8');
