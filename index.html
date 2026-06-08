@@ -382,13 +382,15 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh">
       <h2>Catálogo de productos</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('fi-excel').click()"><i class="ti ti-file-spreadsheet"></i> Importar lista de precios</button>
         <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
-        <button class="btn btn-d btn-sm" onclick="limpiarProductos()"><i class="ti ti-refresh"></i> Restaurar lista</button>
+        <button class="btn btn-d btn-sm" onclick="limpiarProductos()"><i class="ti ti-refresh"></i> Restaurar lista original</button>
       </div>
     </div>
+    <input type="file" id="fi-excel" accept=".csv,.xls,.xlsx" style="display:none" onchange="importarExcelProductos(this)">
     <div style="background:var(--g4);border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--g1);margin-bottom:10px;display:flex;gap:8px;align-items:flex-start">
       <i class="ti ti-list-check" style="margin-top:1px;flex-shrink:0"></i>
-      <span><b>Lista de precios de libros.</b> El stock se actualiza al registrar <b>Entradas</b> y <b>Guías de retiro</b>. Para actualizar precios haz clic en el ✏️ de cada fila.</span>
+      <span><b>Lista de precios de libros.</b> El stock se actualiza al registrar <b>Entradas</b> y <b>Guías de retiro</b>. Las facturas de compra <b>no modifican</b> esta lista. Para actualizar precios haz clic en el ✏️ de cada fila.</span>
     </div>
     <div class="filters">
       <input type="search" id="inv-q" placeholder="Buscar producto, editorial, código..." oninput="renderCatalogo()" style="min-width:200px">
