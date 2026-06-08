@@ -2062,10 +2062,10 @@ function importarExcelProductos(input){
       const iNivel=hdrs.findIndex(h=>/nivel|año|grado/.test(h));
       // Para CANTIDAD: puede haber varias columnas "cantidad" — tomar la primera
       const iCant =hdrs.findIndex(h=>/cantidad|cant\b|stock/.test(h));
-      // Para COSTO: buscar exacto
-      const iCosto=hdrs.findIndex(h=>/^costo$|costo\s|p\.?\s*costo/.test(h));
-      // Para PRECIO de venta: buscar PRECIO, PVP, P.VENTA
-      const iPvta =hdrs.findIndex(h=>/^precio$|^pvp$|p\.?\s*venta|precio\s*venta|precio\s*v/.test(h));
+      // Para COSTO: buscar exacto (excluir TOTAL que es costo×cantidad)
+      const iCosto=hdrs.findIndex(h=>/^costo$|costo\s|p\.?\s*costo/.test(h)&&!/total/.test(h));
+      // Para PRECIO de venta: buscar PRECIO, PVP, P.VENTA o PRODUCTO (precio unitario de venta)
+      const iPvta =hdrs.findIndex(h=>/^precio$|^pvp$|^producto$|p\.?\s*venta|precio\s*venta|precio\s*v/.test(h));
 
       if(iNom<0&&iCol<0){
         toast('No se encontraron columnas NOMBRE o COLECCION. Encabezados detectados: '+hdrs.join(' | '),'err');
