@@ -1023,6 +1023,14 @@ async function syncFromCloud(){
       else{renderCatalogo();}
     }
     setSyncStatus('ok');
+    // Cargar productos desde nube SOLO si no hay productos locales
+    if(DB.productos.length===0){
+      const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
+      if(prodRow?.value?.data?.length>0){
+        DB.productos=prodRow.value.data;
+        renderCatalogo();updateCount();
+      }
+    }
     // Cargar clave Claude
     const cfgTable=tablesOk?'txe_config':'app_data';
     const{data:krow}=await sb.from(cfgTable).select('value').eq('key','claude_key').maybeSingle();
