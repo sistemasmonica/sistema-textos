@@ -382,16 +382,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh">
       <h2>Catálogo de productos</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('fi-excel').click()"><i class="ti ti-file-spreadsheet"></i> Importar Kardex</button>
-        <button class="btn btn-p btn-sm" onclick="abrirModalProducto()"><i class="ti ti-plus"></i> Nuevo</button>
-        <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> CSV</button>
-        <button class="btn btn-d btn-sm" onclick="limpiarProductos()"><i class="ti ti-refresh"></i> Restaurar Kardex</button>
+        <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+        <button class="btn btn-d btn-sm" onclick="limpiarProductos()"><i class="ti ti-refresh"></i> Restaurar lista</button>
       </div>
     </div>
-    <input type="file" id="fi-excel" accept=".csv,.xls,.xlsx" style="display:none" onchange="importarExcelProductos(this)">
     <div style="background:var(--g4);border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--g1);margin-bottom:10px;display:flex;gap:8px;align-items:flex-start">
-      <i class="ti ti-check" style="margin-top:1px;flex-shrink:0"></i>
-      <span><b>Inventario pre-cargado</b> con 237 productos del Kardex. Usa el botón <b>💾 Backup</b> (arriba) para guardar tus facturas y datos — así no los pierdes si descargas una versión nueva del sistema. Para restaurar, usa <b>📂 Restaurar</b>.</span>
+      <i class="ti ti-list-check" style="margin-top:1px;flex-shrink:0"></i>
+      <span><b>Lista de precios de libros.</b> El stock se actualiza al registrar <b>Entradas</b> y <b>Guías de retiro</b>. Para actualizar precios haz clic en el ✏️ de cada fila.</span>
     </div>
     <div class="filters">
       <input type="search" id="inv-q" placeholder="Buscar producto, editorial, código..." oninput="renderCatalogo()" style="min-width:200px">
@@ -917,6 +914,13 @@ function setSyncStatus(s){
 let syncCompleted=false;
 
 async function saveToCloud(data){
+  // No escribir arrays vacíos a la nube antes de completar el sync inicial.
+  // Esto previene que un navegador sin datos borre datos reales guardados en la nube.
+  if(!syncCompleted){
+    const hasData=(data.regs?.length||0)+(data.banco?.length||0)+
+                  (data.movInv?.length||0)+(data.guias?.length||0)>0;
+    if(!hasData)return;
+  }
   try{
     setSyncStatus('sync');
     const ts=new Date().toISOString();
@@ -955,15 +959,17 @@ async function syncFromCloud(){
     ]);
     const tablesOk=!r0.error;
     if(tablesOk){
-      if(r0.data?.data!=null)DB.regs=r0.data.data;
-      if(r1.data?.data!=null)DB.banco=r1.data.data;
-      if(r2.data?.data!=null)DB.conciliaciones=r2.data.data;
-      if(r3.data?.data!=null)DB.movInv=r3.data.data;
-      if(r4.data?.data!=null)DB.guias=r4.data.data;
-      if(r5.data?.data!=null)DB.colegios=r5.data.data;
-      if(r6.data?.data!=null)DB.colData=r6.data.data;
-      if(r7.data?.data!=null)DB.notasCredito=r7.data.data;
-      if(r8.data?.data!=null)DB.comisiones=r8.data.data;
+      // Solo sobreescribir datos locales si la nube tiene datos reales (length > 0).
+      // Esto protege contra que arrays vacíos [] de la nube borren datos del localStorage.
+      if(r0.data?.data?.length>0)DB.regs=r0.data.data;
+      if(r1.data?.data?.length>0)DB.banco=r1.data.data;
+      if(r2.data?.data?.length>0)DB.conciliaciones=r2.data.data;
+      if(r3.data?.data?.length>0)DB.movInv=r3.data.data;
+      if(r4.data?.data?.length>0)DB.guias=r4.data.data;
+      if(r5.data?.data?.length>0)DB.colegios=r5.data.data;
+      if(r6.data?.data!=null&&Object.keys(r6.data.data).length>0)DB.colData=r6.data.data;
+      if(r7.data?.data?.length>0)DB.notasCredito=r7.data.data;
+      if(r8.data?.data?.length>0)DB.comisiones=r8.data.data;
       const empty=!r0.data&&!r1.data&&!r2.data&&!r3.data&&!r4.data&&!r5.data&&!r6.data;
       if(empty){
         const{data:old}=await sb.from('app_data').select('value').eq('key','txe_v4').maybeSingle();
@@ -996,11 +1002,20 @@ async function syncFromCloud(){
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     syncCompleted=true;
     updateCount();renderDash();
-    // Re-renderizar paneles nuevos si están activos en este momento
+    // Re-renderizar paneles si están activos en este momento
     const activePanel=document.querySelector('.pn.on');
     if(activePanel?.id==='pn-editorial')renderDeudaEditorial();
     if(activePanel?.id==='pn-comisiones')renderComisiones();
     if(activePanel?.id==='pn-liquidacion')renderLiquidacion();
+    if(activePanel?.id==='pn-mov')renderMov();
+    if(activePanel?.id==='pn-inv'){
+      // Re-renderizar la sub-pestaña de inventario que esté activa
+      const invActivo=document.querySelector('#pn-inv .inv-pn[style*="block"]');
+      if(invActivo?.id==='inv-entradas')renderEntradas();
+      else if(invActivo?.id==='inv-guias'){renderGuias();}
+      else if(invActivo?.id==='inv-rep')renderStockReport();
+      else{renderCatalogo();}
+    }
     setSyncStatus('ok');
     // Cargar clave Claude
     const cfgTable=tablesOk?'txe_config':'app_data';
@@ -1722,12 +1737,21 @@ function renderCatalogo(){
     return true;
   });
   const tb=document.getElementById('tb-cat');
-  if(!prods.length){tb.innerHTML=`<tr><td colspan="9"><div class="empty">${DB.productos.length?'Sin resultados para el filtro':'Sin productos. Agrega productos o importa tu Excel.'}</div></td></tr>`;return}
+  if(!prods.length){tb.innerHTML=`<tr><td colspan="8"><div class="empty">${DB.productos.length?'Sin resultados para el filtro':'Sin productos cargados.'}</div></td></tr>`;return}
+  // Productos con al menos un movimiento de inventario
+  const prodsConMov=new Set(DB.movInv.map(m=>m.prodId));
   tb.innerHTML=prods.map(p=>{
     const st=stockActual(p.id);
-    const rowClass=st===0?'stock-zero':st<=5?'stock-low':'stock-ok';
-    const stBadge=st===0?`<span class="bdg bdg-err">Agotado</span>`:st<=5?`<span class="bdg bdg-warn">${st}</span>`:`<span class="bdg bdg-ok">${st}</span>`;
-    const valInv=fmt(st*(p.precioCosto||0));
+    const tieneMov=prodsConMov.has(p.id);
+    // Sin movimientos → no mostrar stock (es solo lista de precios)
+    // Con movimientos → mostrar stock real (puede ser agotado si se consumió todo)
+    const rowClass=!tieneMov?'':st===0?'stock-zero':st<=5?'stock-low':'stock-ok';
+    const stBadge=!tieneMov
+      ?`<span class="bdg" style="background:#f3f4f6;color:#9ca3af">—</span>`
+      :st===0?`<span class="bdg bdg-err">Agotado</span>`
+      :st<=5?`<span class="bdg bdg-warn">${st}</span>`
+      :`<span class="bdg bdg-ok">${st}</span>`;
+    const valInv=tieneMov?fmt(st*(p.precioCosto||0)):'—';
     return`<tr class="${rowClass}">
       <td style="font-family:monospace">${p.codigo||'—'}</td>
       <td><strong>${p.nombre}</strong>${p.nota?`<br><small style="color:var(--mu)">${p.nota}</small>`:''}</td>
@@ -1737,8 +1761,7 @@ function renderCatalogo(){
       <td style="font-family:monospace">${fmt(p.precioVenta)}</td>
       <td>${stBadge}</td>
       <td style="font-family:monospace">${valInv}</td>
-      <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button>
-          <button class="btn btn-d btn-sm" onclick="eliminarProducto('${p.id}')"><i class="ti ti-trash"></i></button></td>
+      <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td>
     </tr>`;
   }).join('');
   updateCount();
@@ -1967,7 +1990,16 @@ function renderStockReport(){
   let totalCosto=0;let totalVenta=0;
   const tb=document.getElementById('tb-rep-stock');
   if(!DB.productos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos en inventario</div></td></tr>';return}
-  const rows=DB.productos.map(p=>{
+  // Solo mostrar en el reporte los productos que tienen al menos una entrada registrada
+  const prodsConEntradas=DB.productos.filter(p=>DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'));
+  if(!prodsConEntradas.length){
+    tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin entradas de inventario registradas. Registra entradas en la pestaña "Entradas".</div></td></tr>';
+    document.getElementById('rep-nprod').textContent='0';
+    document.getElementById('rep-valcosto').textContent='$0.00';
+    document.getElementById('rep-valventa').textContent='$0.00';
+    return;
+  }
+  const rows=prodsConEntradas.map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
