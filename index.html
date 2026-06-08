@@ -1007,7 +1007,7 @@ async function syncFromCloud(){
         if(v.colData)DB.colData=v.colData;
       }
     }
-    const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones};
+    const toSave={productos:DB.productos,regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones};
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     syncCompleted=true;
     updateCount();renderDash();
@@ -1031,6 +1031,10 @@ async function syncFromCloud(){
       const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
       if(prodRow?.value?.data?.length>0){
         DB.productos=prodRow.value.data;
+        // Guardar en localStorage para que estén disponibles en la próxima apertura
+        const lsData=JSON.parse(localStorage.getItem('txe_v4')||'{}');
+        lsData.productos=DB.productos;
+        localStorage.setItem('txe_v4',JSON.stringify(lsData));
         renderCatalogo();updateCount();
       }
     }
