@@ -2080,8 +2080,8 @@ function importarExcelProductos(input){
       const vistos=new Set();
 
       for(let i=hdrRow+1;i<lines.length;i++){
-        const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
-        const nombre=(iNom>=0?cells[iNom]:cells[1]||'').trim();
+        const cells=lines[i].split(sep).map(c=>(c||'').replace(/"/g,'').trim());
+        const nombre=((iNom>=0?cells[iNom]:cells[1])||'').trim();
         if(!nombre||nombre.length<2)continue;
         const clave=nombre.toLowerCase();
         if(vistos.has(clave))continue;
@@ -2089,13 +2089,13 @@ function importarExcelProductos(input){
 
         DB.productos.push({
           id:uid(),
-          codigo  : iCod>=0  ?(cells[iCod]  ||'').trim():'',
+          codigo   : ((iCod  >=0?cells[iCod]  :'')||'').trim(),
           nombre,
-          editorial: iCol>=0  ?(cells[iCol]  ||'').trim():'',
-          nivel   : iNivel>=0 ?(cells[iNivel]||'').trim():'',
-          stockInicial: iCant>=0 ?parseFloat(cells[iCant]) ||0:0,
-          precioCosto : iCosto>=0?parseFloat(cells[iCosto])||0:0,
-          precioVenta : iPvta>=0 ?parseFloat(cells[iPvta]) ||0:0,
+          editorial: ((iCol  >=0?cells[iCol]  :'')||'').trim(),
+          nivel    : ((iNivel>=0?cells[iNivel] :'')||'').trim(),
+          stockInicial: parseFloat((iCant >=0?cells[iCant] :'')||0)||0,
+          precioCosto : parseFloat((iCosto>=0?cells[iCosto]:'')||0)||0,
+          precioVenta : parseFloat((iPvta >=0?cells[iPvta] :'')||0)||0,
           nota:'',
           creadoEn:new Date().toISOString()
         });
