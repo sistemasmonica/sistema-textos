@@ -2077,7 +2077,7 @@ function imprimirInventario(){
     @media print{button{display:none}body{padding:8px}.header img{height:55px}}
   </style></head><body>
   <div class="header">
-    <img src="${LOGO}" alt="DM BOOKS">
+    <img src="${LOGO}" alt="DM BOOKS" onload="if(window._logoLoaded)return;window._logoLoaded=true;window.print();">
     <div class="header-info">
       <h1>DM Books — Distribuidora de Textos Escolares</h1>
       <p>Reporte de Inventario 2026 &nbsp;|&nbsp; Fecha: ${fecha}</p>
@@ -2105,7 +2105,6 @@ function imprimirInventario(){
   </table>
   <\/body><\/html>`);
   win.document.close();
-  win.onload=()=>win.print();
 }
 
 // ===================================================
