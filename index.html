@@ -1746,9 +1746,7 @@ function renderCatalogo(){
   const prodsConMov=new Set(DB.movInv.map(m=>m.prodId));
   tb.innerHTML=prods.map(p=>{
     const st=stockActual(p.id);
-    const tieneMov=prodsConMov.has(p.id);
-    // Sin movimientos → no mostrar stock (es solo lista de precios)
-    // Con movimientos → mostrar stock real (puede ser agotado si se consumió todo)
+    const tieneMov=prodsConMov.has(p.id)||p.stockInicial>0;
     const rowClass=!tieneMov?'':st===0?'stock-zero':st<=5?'stock-low':'stock-ok';
     const stBadge=!tieneMov
       ?`<span class="bdg" style="background:#f3f4f6;color:#9ca3af">—</span>`
