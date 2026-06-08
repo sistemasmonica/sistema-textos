@@ -935,6 +935,9 @@ async function saveToCloud(data){
       sb.from('txe_colegios').upsert({version:'v1',data:data.colegios,updated_at:ts}),
       sb.from('txe_coldata').upsert({version:'v1',data:data.colData,updated_at:ts})
     ];
+    // Guardar productos en nube solo si hay productos importados
+    if(data.productos?.length>0)
+      saves.push(sb.from('txe_config').upsert({key:'productos',value:{data:data.productos},updated_at:ts}));
     // Solo guardar tablas nuevas una vez que syncFromCloud haya cargado la data real
     if(syncCompleted){
       saves.push(sb.from('txe_notascredito').upsert({version:'v1',data:data.notasCredito,updated_at:ts}));
@@ -1019,6 +1022,9 @@ async function syncFromCloud(){
       else{renderCatalogo();}
     }
     setSyncStatus('ok');
+    // Cargar productos desde nube (lista de precios importada por la usuaria)
+    const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
+    if(prodRow?.value?.data?.length>0)DB.productos=prodRow.value.data;
     // Cargar clave Claude
     const cfgTable=tablesOk?'txe_config':'app_data';
     const{data:krow}=await sb.from(cfgTable).select('value').eq('key','claude_key').maybeSingle();
@@ -1064,14 +1070,12 @@ let editLineasEntrada=0;
 
 function load(){
   try{
-    // PRODUCTOS: siempre del Kardex embebido, NUNCA del localStorage
-    DB.productos=DEFAULT_PRODUCTOS.map(p=>({...p}));
-
-    // REGISTROS y demás: desde localStorage
+    // PRODUCTOS: desde localStorage si el usuario importó su lista; si no, catálogo vacío
+    // El catálogo solo muestra lo que la usuaria importa — no se carga nada automático
     const d=localStorage.getItem('txe_v4');
     if(d){
       const parsed=JSON.parse(d);
-      // Solo restaurar lo que no son productos
+      if(parsed.productos?.length>0) DB.productos=parsed.productos;
       if(parsed.regs) DB.regs=parsed.regs;
       if(parsed.banco) DB.banco=parsed.banco;
       if(parsed.conciliaciones) DB.conciliaciones=parsed.conciliaciones;
@@ -1098,8 +1102,8 @@ function load(){
 }
 function save(){
   try{
-    // Guardar todo MENOS productos (están embebidos en el HTML)
     const toSave={
+      productos:DB.productos,
       regs:DB.regs,
       banco:DB.banco,
       conciliaciones:DB.conciliaciones,
@@ -2151,11 +2155,11 @@ function importarExcelProductos(input){
 }
 
 function limpiarProductos(){
-  if(!confirm('¿Limpiar movimientos de inventario? El catálogo del Kardex siempre se mantiene.'))return;
+  if(!confirm('¿Restaurar la lista original de precios? Esto reemplaza tu lista actual con el Kardex pre-cargado.'))return;
   DB.movInv=[];
   DB.productos=DEFAULT_PRODUCTOS.map(p=>({...p}));
   save();renderCatalogo();updateCount();
-  toast('Inventario restaurado: '+DB.productos.length+' productos del Kardex.','ok');
+  toast('Lista restaurada: '+DB.productos.length+' productos del Kardex pre-cargado.','ok');
 }
 
 function exportProductosCSV(){
@@ -3214,6 +3218,7 @@ function backupData(){
   const toSave={
     version:'backup_v2',
     fecha_backup: new Date().toISOString(),
+    productos:DB.productos,
     regs:DB.regs, banco:DB.banco, conciliaciones:DB.conciliaciones,
     movInv:DB.movInv, guias:DB.guias, colegios:DB.colegios, colData:DB.colData,
     notasCredito:DB.notasCredito||[], comisiones:DB.comisiones||[]
@@ -3235,6 +3240,7 @@ function restoreData(input){
     try{
       const restored=JSON.parse(ev.target.result);
       if(!restored.regs)throw new Error('Archivo inválido — falta campo regs');
+      if(restored.productos?.length>0) DB.productos=restored.productos;
       DB.regs=restored.regs||[];
       DB.banco=restored.banco||[];
       DB.conciliaciones=restored.conciliaciones||[];
