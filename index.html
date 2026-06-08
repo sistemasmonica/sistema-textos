@@ -925,7 +925,8 @@ async function saveToCloud(data){
   // Esto previene que un navegador sin datos borre datos reales guardados en la nube.
   if(!syncCompleted){
     const hasData=(data.regs?.length||0)+(data.banco?.length||0)+
-                  (data.movInv?.length||0)+(data.guias?.length||0)>0;
+                  (data.movInv?.length||0)+(data.guias?.length||0)+
+                  (data.productos?.length||0)>0;
     if(!hasData)return;
   }
   try{
