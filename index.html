@@ -3175,17 +3175,23 @@ function imprimirAnexo(){
 // BACKUP / RESTORE
 // ===================================================
 function backupData(){
+  const fecha=new Date().toISOString().split('T')[0];
+  const hora=new Date().toTimeString().split(' ')[0].replace(/:/g,'-');
   const toSave={
+    version:'backup_v2',
+    fecha_backup: new Date().toISOString(),
     regs:DB.regs, banco:DB.banco, conciliaciones:DB.conciliaciones,
-    movInv:DB.movInv, guias:DB.guias, colegios:DB.colegios, colData:DB.colData
+    movInv:DB.movInv, guias:DB.guias, colegios:DB.colegios, colData:DB.colData,
+    notasCredito:DB.notasCredito||[], comisiones:DB.comisiones||[]
   };
   const data=JSON.stringify(toSave,null,2);
   const a=document.createElement('a');
-  const fecha=new Date().toISOString().split('T')[0];
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
-  a.download='backup_textos_'+fecha+'.json';
+  a.download='backup_textos_'+fecha+'_'+hora+'.json';
   a.click();
-  toast('Backup guardado: backup_textos_'+fecha+'.json','ok');
+  // Sincronizar a la nube al mismo tiempo
+  saveToCloud(toSave);
+  toast('💾 Backup guardado y sincronizado a la nube','ok');
 }
 
 function restoreData(input){
@@ -3194,16 +3200,18 @@ function restoreData(input){
   r.onload=ev=>{
     try{
       const restored=JSON.parse(ev.target.result);
-      if(!restored.regs)throw new Error('Archivo inválido');
-      if(restored.regs) DB.regs=restored.regs;
-      if(restored.banco) DB.banco=restored.banco;
-      if(restored.conciliaciones) DB.conciliaciones=restored.conciliaciones;
-      if(restored.movInv) DB.movInv=restored.movInv;
-      if(restored.guias) DB.guias=restored.guias;
-      if(restored.colegios) DB.colegios=restored.colegios;
-      if(restored.colData) DB.colData=restored.colData;
+      if(!restored.regs)throw new Error('Archivo inválido — falta campo regs');
+      DB.regs=restored.regs||[];
+      DB.banco=restored.banco||[];
+      DB.conciliaciones=restored.conciliaciones||[];
+      DB.movInv=restored.movInv||[];
+      DB.guias=restored.guias||[];
+      DB.colegios=restored.colegios||[];
+      DB.colData=restored.colData||{};
+      DB.notasCredito=restored.notasCredito||[];
+      DB.comisiones=restored.comisiones||[];
       save();updateCount();renderDash();
-      toast('Datos restaurados: '+DB.regs.length+' registros','ok');
+      toast('✅ Datos restaurados: '+DB.regs.length+' registros','ok');
     }catch(e){toast('Error leyendo backup: '+e.message,'err')}
   };
   r.readAsText(f,'UTF-8');

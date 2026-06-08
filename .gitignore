@@ -1,0 +1,5 @@
+# Backups locales — datos privados, no subir a GitHub
+base_datos_local/*.json
+base_datos_local/*.csv
+base_datos_local/historial.csv
+base_datos_local/historial_respaldos.csv

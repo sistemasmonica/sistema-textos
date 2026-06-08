@@ -1,0 +1,49 @@
+=====================================================
+  BASE DE DATOS LOCAL - Sistema Textos Escolares
+=====================================================
+
+Esta carpeta es tu respaldo local de seguridad.
+Aqui se guardan copias de todos tus datos.
+
+ARCHIVOS QUE VERAS AQUI:
+--------------------------
+  backup_ACTUAL.json          → Ultimo respaldo completo
+  backup_2026-06-07_20-00.json → Copias con fecha y hora
+  historial.csv               → Registro de todos los backups
+  registros_facturas.csv      → Facturas (abre con Excel)
+  colegios.csv                → Colegios (abre con Excel)
+
+
+COMO HACER UN RESPALDO:
+--------------------------
+HAY DOS FORMAS:
+
+FORMA 1 - Desde la app (mas facil, respalda datos del navegador):
+  1. Abre la app en Chrome/Edge
+  2. Haz clic en el boton "Backup" (arriba a la derecha)
+  3. Se descarga un archivo JSON automaticamente
+  4. MUEVE ese archivo a esta carpeta
+  5. Listo! Tu informacion esta segura aqui.
+
+FORMA 2 - Script automatico (respalda desde la nube Supabase):
+  1. Ve a la carpeta del sistema (sistema_textos)
+  2. Haz doble clic en "hacer_backup.bat"
+  3. El script descarga todo de la nube y lo guarda aqui
+
+
+COMO RESTAURAR TUS DATOS:
+--------------------------
+  1. Abre la app en Chrome/Edge
+  2. Haz clic en "Restaurar" (boton junto a Backup)
+  3. Selecciona el archivo backup_ACTUAL.json (o cualquier copia)
+  4. Tus datos se cargan automaticamente
+
+
+IMPORTANTE:
+-----------
+  - Haz backup al menos una vez por semana
+  - Guarda copias en un USB o en tu correo electronico
+  - Si tienes problemas, contacta a tu asistente
+
+
+=====================================================
