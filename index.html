@@ -375,7 +375,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt on" onclick="invTab('catalogo',this)"><i class="ti ti-list-details"></i> Catálogo</button>
     <button class="nt" onclick="invTab('entradas',this)"><i class="ti ti-arrow-bar-down"></i> Entradas</button>
     <button class="nt" onclick="invTab('guias',this)"><i class="ti ti-truck-delivery"></i> Guías de retiro</button>
-    <button class="nt" onclick="invTab('inv-rep',this)"><i class="ti ti-chart-bar"></i> Reporte stock</button>
+    <button class="nt" onclick="invTab('rep',this)"><i class="ti ti-chart-bar"></i> Reporte stock</button>
   </div>
 
   <!-- CATÁLOGO -->
@@ -1167,7 +1167,7 @@ function invTab(id,el){
   if(id==='catalogo')renderCatalogo();
   if(id==='entradas')renderEntradas();
   if(id==='guias')renderGuias();
-  if(id==='inv-rep')renderStockReport();
+  if(id==='rep')renderStockReport();
 }
 
 // ===================================================
