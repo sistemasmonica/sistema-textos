@@ -1992,10 +1992,10 @@ function renderStockReport(){
   let totalCosto=0;let totalVenta=0;
   const tb=document.getElementById('tb-rep-stock');
   if(!DB.productos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos en inventario</div></td></tr>';return}
-  // Solo mostrar en el reporte los productos que tienen al menos una entrada registrada
-  const prodsConEntradas=DB.productos.filter(p=>DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'));
+  // Mostrar productos con stock inicial importado O con entradas registradas
+  const prodsConEntradas=DB.productos.filter(p=>p.stockInicial>0||DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'));
   if(!prodsConEntradas.length){
-    tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin entradas de inventario registradas. Registra entradas en la pestaña "Entradas".</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos con stock. Importa tu lista de precios o registra entradas.</div></td></tr>';
     document.getElementById('rep-nprod').textContent='0';
     document.getElementById('rep-valcosto').textContent='$0.00';
     document.getElementById('rep-valventa').textContent='$0.00';
