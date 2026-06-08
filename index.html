@@ -2038,19 +2038,21 @@ function importarExcelProductos(input){
         csv=XLSX.utils.sheet_to_csv(ws,{FS:'\t'});
       }
       const lines=csv.split('\n').map(l=>l.trim()).filter(l=>l.replace(/\t|,|;/g,'').trim());
-      const sep=lines[0]?.split('\t').length>2?'\t':(lines[0]?.indexOf(';')>-1?';':',');
+      // Para Excel siempre usamos tab (así lo exporta XLSX). Para CSV detectamos.
+      const sep=ext==='csv'
+        ?(lines.find(l=>l.includes('\t'))?'\t':lines[0]?.indexOf(';')>-1?';':',')
+        :'\t';
 
-      // Buscar la fila de encabezados buscando COLECCION o NOMBRE exacto
-      // (ignora filas de título como "LISTA DE PRECIOS INVENTARIO 2026")
+      // Buscar la fila de encabezados (ignora título como "LISTA DE PRECIOS INVENTARIO 2026")
       let hdrRow=-1;
       for(let i=0;i<Math.min(lines.length,20);i++){
         const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-        const tieneNombre=cells.some(c=>c==='nombre'||c==='titulo'||c==='descripcion'||c==='descripción');
-        const tieneColeccion=cells.some(c=>c==='coleccion'||c==='colección'||c==='editorial');
+        const tieneNombre   =cells.some(c=>c.includes('nombre')||c.includes('titulo')||c.includes('descripci'));
+        const tieneColeccion=cells.some(c=>c.includes('coleccion')||c.includes('colecci')||c.includes('editorial'));
         if(tieneNombre||tieneColeccion){hdrRow=i;break;}
       }
       if(hdrRow<0){
-        toast('No se encontró fila de encabezados. La fila debe tener: COLECCION, NOMBRE, COSTO, PRECIO','err');
+        toast('No se encontró fila de encabezados. Asegúrate que una fila diga: COLECCION, NOMBRE, COSTO...','err');
         return;
       }
 
