@@ -1022,9 +1022,6 @@ async function syncFromCloud(){
       else{renderCatalogo();}
     }
     setSyncStatus('ok');
-    // Cargar productos desde nube (lista de precios importada por la usuaria)
-    const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
-    if(prodRow?.value?.data?.length>0)DB.productos=prodRow.value.data;
     // Cargar clave Claude
     const cfgTable=tablesOk?'txe_config':'app_data';
     const{data:krow}=await sb.from(cfgTable).select('value').eq('key','claude_key').maybeSingle();
@@ -2076,15 +2073,16 @@ function importarExcelProductos(input){
       const iCosto=hdrs.findIndex(h=>h==='costo'||h==='p.costo'||h==='p. costo'||h==='precio costo'||h==='costo unit');
       const iPvta =hdrs.findIndex(h=>h==='precio'||h==='pvp'||h==='producto'||h==='p.venta'||h==='p. venta'||h==='precio venta'||h==='precio unit');
 
-      // Mostrar diagnóstico antes de importar
+      // Fila de datos de ejemplo para diagnóstico
+      const filaEj=filas[hdrRow+1]||[];
       const diagMsg='Columnas detectadas:\n'+
-        'COLECCION → col '+iCol+' ("'+hdrs[iCol]+'")\n'+
-        'NOMBRE    → col '+iNom+' ("'+hdrs[iNom]+'")\n'+
-        'CANTIDAD  → col '+iCant+' ("'+hdrs[iCant]+'")\n'+
-        'COSTO     → col '+iCosto+' ("'+hdrs[iCosto]+'")\n'+
-        'PRECIO    → col '+iPvta+' ("'+hdrs[iPvta]+'")\n\n'+
-        'Todos los encabezados: '+hdrs.join(' | ')+'\n\n'+
-        'Ejemplo fila 1: '+filas[hdrRow+1]?.join(' | ');
+        'COLECCION → col '+iCol+' ("'+hdrs[iCol]+'") valor: "'+filaEj[iCol]+'"\n'+
+        'NOMBRE    → col '+iNom+' ("'+hdrs[iNom]+'") valor: "'+filaEj[iNom]+'"\n'+
+        'CANTIDAD  → col '+iCant+' ("'+hdrs[iCant]+'") valor: "'+filaEj[iCant]+'"\n'+
+        'COSTO     → col '+iCosto+' ("'+hdrs[iCosto]+'") valor: "'+filaEj[iCosto]+'"\n'+
+        'PRECIO    → col '+iPvta+' ("'+hdrs[iPvta]+'") valor: "'+filaEj[iPvta]+'"\n\n'+
+        'ENCABEZADOS RAW: '+hdrs.join(' | ')+'\n'+
+        'FILA 1 RAW: '+filaEj.join(' | ');
 
       if(iNom<0){
         alert('No se encontró columna NOMBRE.\n\n'+diagMsg);
