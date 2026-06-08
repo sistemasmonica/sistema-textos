@@ -2029,98 +2029,107 @@ function importarExcelProductos(input){
   const r=new FileReader();
   r.onload=ev=>{
     try{
-      // Leer el archivo
-      let csv='';
-      if(ext==='csv'){csv=ev.target.result;}
-      else{
-        const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        csv=XLSX.utils.sheet_to_csv(ws,{FS:'\t'});
-      }
-      const lines=csv.split('\n').map(l=>l.trim()).filter(l=>l.replace(/\t|,|;/g,'').trim());
-      // Para Excel siempre usamos tab (así lo exporta XLSX). Para CSV detectamos.
-      const sep=ext==='csv'
-        ?(lines.find(l=>l.includes('\t'))?'\t':lines[0]?.indexOf(';')>-1?';':',')
-        :'\t';
-
-      // Buscar la fila de encabezados (ignora título como "LISTA DE PRECIOS INVENTARIO 2026")
-      let hdrRow=-1;
-      for(let i=0;i<Math.min(lines.length,20);i++){
-        const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-        const tieneNombre   =cells.some(c=>c.includes('nombre')||c.includes('titulo')||c.includes('descripci'));
-        const tieneColeccion=cells.some(c=>c.includes('coleccion')||c.includes('colecci')||c.includes('editorial'));
-        if(tieneNombre||tieneColeccion){hdrRow=i;break;}
-      }
-      if(hdrRow<0){
-        toast('No se encontró fila de encabezados. Asegúrate que una fila diga: COLECCION, NOMBRE, COSTO...','err');
-        return;
-      }
-
-      // Mapear columnas según encabezados
-      const hdrs=lines[hdrRow].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-      const iCol  =hdrs.findIndex(h=>/coleccion|colecci|editorial/.test(h));
-      const iNom  =hdrs.findIndex(h=>/^nombre$|^titulo$|^descripci/.test(h));
-      const iCod  =hdrs.findIndex(h=>/^codigo$|^c.digo$|^sku$|^ref$/.test(h));
-      const iNivel=hdrs.findIndex(h=>/nivel|año|grado/.test(h));
-      // Para CANTIDAD: puede haber varias columnas "cantidad" — tomar la primera
-      const iCant =hdrs.findIndex(h=>/cantidad|cant\b|stock/.test(h));
-      // Para COSTO: buscar exacto (excluir TOTAL que es costo×cantidad)
-      const iCosto=hdrs.findIndex(h=>/^costo$|costo\s|p\.?\s*costo/.test(h)&&!/total/.test(h));
-      // Para PRECIO de venta: buscar PRECIO, PVP, P.VENTA o PRODUCTO (precio unitario de venta)
-      const iPvta =hdrs.findIndex(h=>/^precio$|^pvp$|^producto$|p\.?\s*venta|precio\s*venta|precio\s*v/.test(h));
-
-      if(iNom<0&&iCol<0){
-        toast('No se encontraron columnas NOMBRE o COLECCION. Encabezados detectados: '+hdrs.join(' | '),'err');
-        return;
-      }
-
-      // Función para parsear números con coma o punto decimal (formato Ecuador)
+      // Parsear números formato Ecuador: 1.234,50 o 1234.50 o 1234,50
       const parseNum=s=>{
         if(s===undefined||s===null||s==='')return 0;
-        let v=String(s).trim().replace(/[$ ]/g,'');
-        // Formato europeo: 1.234,50 → 1234.50
+        let v=String(s).trim().replace(/[$\s]/g,'');
+        if(v===''||v==='-')return 0;
         if(v.indexOf(',')>-1&&v.indexOf('.')>-1){
-          if(v.lastIndexOf(',')>v.lastIndexOf('.'))v=v.replace(/\./g,'').replace(',','.');
-          else v=v.replace(/,/g,'');
+          v=v.lastIndexOf(',')>v.lastIndexOf('.')?v.replace(/\./g,'').replace(',','.'):v.replace(/,/g,'');
         }else if(v.indexOf(',')>-1){v=v.replace(',','.');}
         return parseFloat(v)||0;
       };
-      // Reemplazar catálogo completo con lo importado
+
+      let filas=[];
+      if(ext==='csv'){
+        const txt=ev.target.result;
+        const sep=txt.indexOf('\t')>-1?'\t':txt.indexOf(';')>-1?';':',';
+        filas=txt.split('\n').map(l=>l.split(sep).map(c=>c.replace(/"/g,'').trim()));
+      }else{
+        const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        filas=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+      }
+
+      // Buscar fila de encabezados (ignora el título "LISTA DE PRECIOS INVENTARIO 2026")
+      let hdrRow=-1;
+      for(let i=0;i<Math.min(filas.length,20);i++){
+        const celdas=filas[i].map(c=>String(c||'').toLowerCase().trim());
+        if(celdas.some(c=>c==='nombre'||c==='titulo'||c.startsWith('descripci'))||
+           celdas.some(c=>c==='coleccion'||c==='colección'||c.includes('colecci')||c==='editorial')){
+          hdrRow=i;break;
+        }
+      }
+      if(hdrRow<0){
+        alert('No se encontró la fila de encabezados.\n\nEncabezados detectados en primeras filas:\n'+
+          filas.slice(0,5).map((f,i)=>'Fila '+(i+1)+': '+f.join(' | ')).join('\n'));
+        return;
+      }
+
+      // Mapear columnas
+      const hdrs=filas[hdrRow].map(c=>String(c||'').toLowerCase().trim());
+      const iCol  =hdrs.findIndex(h=>h==='coleccion'||h==='colección'||h==='editorial'||h.includes('colecci'));
+      const iNom  =hdrs.findIndex(h=>h==='nombre'||h==='titulo'||h==='título'||h.startsWith('descripci'));
+      const iCod  =hdrs.findIndex(h=>h==='codigo'||h==='código'||h==='sku'||h==='ref');
+      const iNivel=hdrs.findIndex(h=>h.includes('nivel')||h.includes('año')||h.includes('grado'));
+      const iCant =hdrs.findIndex(h=>h==='cantidad'||h==='cant'||h==='stock'||h==='existencia');
+      const iCosto=hdrs.findIndex(h=>h==='costo'||h==='p.costo'||h==='p. costo'||h==='precio costo'||h==='costo unit');
+      const iPvta =hdrs.findIndex(h=>h==='precio'||h==='pvp'||h==='producto'||h==='p.venta'||h==='p. venta'||h==='precio venta'||h==='precio unit');
+
+      // Mostrar diagnóstico antes de importar
+      const diagMsg='Columnas detectadas:\n'+
+        'COLECCION → col '+iCol+' ("'+hdrs[iCol]+'")\n'+
+        'NOMBRE    → col '+iNom+' ("'+hdrs[iNom]+'")\n'+
+        'CANTIDAD  → col '+iCant+' ("'+hdrs[iCant]+'")\n'+
+        'COSTO     → col '+iCosto+' ("'+hdrs[iCosto]+'")\n'+
+        'PRECIO    → col '+iPvta+' ("'+hdrs[iPvta]+'")\n\n'+
+        'Todos los encabezados: '+hdrs.join(' | ')+'\n\n'+
+        'Ejemplo fila 1: '+filas[hdrRow+1]?.join(' | ');
+
+      if(iNom<0){
+        alert('No se encontró columna NOMBRE.\n\n'+diagMsg);
+        return;
+      }
+
       DB.productos=[];
       let importados=0;
       const vistos=new Set();
-
-      for(let i=hdrRow+1;i<lines.length;i++){
-        const cells=lines[i].split(sep).map(c=>(c||'').replace(/"/g,'').trim());
-        const nombre=((iNom>=0?cells[iNom]:cells[1])||'').trim();
+      for(let i=hdrRow+1;i<filas.length;i++){
+        const c=filas[i];
+        if(!c||c.every(x=>String(x||'').trim()===''))continue;
+        const nombre=String(iNom>=0?c[iNom]:c[1]||'').trim();
         if(!nombre||nombre.length<2)continue;
         const clave=nombre.toLowerCase();
         if(vistos.has(clave))continue;
         vistos.add(clave);
-
         DB.productos.push({
           id:uid(),
-          codigo   : ((iCod  >=0?cells[iCod]  :'')||'').trim(),
+          codigo   :String(iCod  >=0?c[iCod]  :'').trim(),
           nombre,
-          editorial: ((iCol  >=0?cells[iCol]  :'')||'').trim(),
-          nivel    : ((iNivel>=0?cells[iNivel] :'')||'').trim(),
-          stockInicial: parseNum(iCant >=0?cells[iCant] :''),
-          precioCosto : parseNum(iCosto>=0?cells[iCosto]:''),
-          precioVenta : parseNum(iPvta >=0?cells[iPvta] :''),
-          nota:'',
-          creadoEn:new Date().toISOString()
+          editorial:String(iCol  >=0?c[iCol]  :'').trim(),
+          nivel    :String(iNivel>=0?c[iNivel] :'').trim(),
+          stockInicial:parseNum(iCant >=0?c[iCant] :''),
+          precioCosto :parseNum(iCosto>=0?c[iCosto]:''),
+          precioVenta :parseNum(iPvta >=0?c[iPvta] :''),
+          nota:'',creadoEn:new Date().toISOString()
         });
         importados++;
       }
-
       if(!importados){
-        toast('No se importaron productos. Verifica que el archivo tenga datos bajo los encabezados.','err');
+        alert('No se importaron productos.\n\n'+diagMsg);
         return;
       }
       save();renderCatalogo();updateCount();
       const p0=DB.productos[0];
-      toast('✅ '+importados+' productos. Primero: "'+p0?.nombre+'" | Colec: col'+iCol+' Nom: col'+iNom+' Costo: col'+iCosto+' Precio: col'+iPvta,'ok');
-    }catch(e){toast('Error leyendo archivo: '+e.message,'err');console.error(e);}
+      alert('✅ '+importados+' productos importados.\n\n'+
+        'Primer producto:\n'+
+        '  Nombre: '+p0.nombre+'\n'+
+        '  Editorial: '+p0.editorial+'\n'+
+        '  Cantidad: '+p0.stockInicial+'\n'+
+        '  P.Costo: '+p0.precioCosto+'\n'+
+        '  P.Venta: '+p0.precioVenta+'\n\n'+
+        diagMsg);
+    }catch(e){alert('Error leyendo archivo: '+e.message);console.error(e);}
   };
   if(ext==='csv')r.readAsText(f,'UTF-8');
   else r.readAsArrayBuffer(f);
