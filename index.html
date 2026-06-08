@@ -920,6 +920,15 @@ function setSyncStatus(s){
 
 let syncCompleted=false;
 
+async function guardarProductosNube(prods){
+  if(!prods?.length)return;
+  try{
+    const ts=new Date().toISOString();
+    await sb.from('txe_config').upsert({key:'productos',value:{data:prods},updated_at:ts});
+    console.log('Productos guardados en nube:',prods.length);
+  }catch(e){console.warn('Error guardando productos en nube:',e);}
+}
+
 async function saveToCloud(data){
   // No escribir arrays vacíos a la nube antes de completar el sync inicial.
   // Esto previene que un navegador sin datos borre datos reales guardados en la nube.
@@ -2208,16 +2217,19 @@ function importarExcelProductos(input){
         alert('No se importaron productos.\n\n'+diagMsg);
         return;
       }
+      // Guardar en localStorage inmediatamente
+      localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
       save();renderCatalogo();updateCount();
+      // Guardar productos en Supabase directamente, sin ninguna condición
+      guardarProductosNube(DB.productos);
       const p0=DB.productos[0];
-      alert('✅ '+importados+' productos importados.\n\n'+
+      alert('✅ '+importados+' productos importados y guardados en la nube.\n\n'+
         'Primer producto:\n'+
         '  Nombre: '+p0.nombre+'\n'+
         '  Editorial: '+p0.editorial+'\n'+
         '  Cantidad: '+p0.stockInicial+'\n'+
         '  P.Costo: '+p0.precioCosto+'\n'+
-        '  P.Venta: '+p0.precioVenta+'\n\n'+
-        diagMsg);
+        '  P.Venta: '+p0.precioVenta);
     }catch(e){alert('Error leyendo archivo: '+e.message);console.error(e);}
   };
   if(ext==='csv')r.readAsText(f,'UTF-8');
