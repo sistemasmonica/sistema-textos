@@ -1008,7 +1008,7 @@ async function syncFromCloud(){
         if(v.colData)DB.colData=v.colData;
       }
     }
-    const toSave={productos:DB.productos,regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones};
+    const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones};
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     syncCompleted=true;
     updateCount();renderDash();
@@ -1027,15 +1027,12 @@ async function syncFromCloud(){
       else{renderCatalogo();}
     }
     setSyncStatus('ok');
-    // Cargar productos desde nube SOLO si no hay productos locales
-    if(DB.productos.length===0){
+    // Siempre cargar productos desde Supabase (clave independiente txe_config/productos)
+    {
       const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
       if(prodRow?.value?.data?.length>0){
         DB.productos=prodRow.value.data;
-        // Guardar en localStorage para que estén disponibles en la próxima apertura
-        const lsData=JSON.parse(localStorage.getItem('txe_v4')||'{}');
-        lsData.productos=DB.productos;
-        localStorage.setItem('txe_v4',JSON.stringify(lsData));
+        localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
         renderCatalogo();updateCount();
       }
     }
@@ -1084,12 +1081,12 @@ let editLineasEntrada=0;
 
 function load(){
   try{
-    // PRODUCTOS: desde localStorage si el usuario importó su lista; si no, catálogo vacío
-    // El catálogo solo muestra lo que la usuaria importa — no se carga nada automático
+    // PRODUCTOS: clave independiente txe_productos (nunca se sobreescribe con otros datos)
+    const dp=localStorage.getItem('txe_productos');
+    if(dp){try{const pp=JSON.parse(dp);if(pp?.length>0)DB.productos=pp;}catch(ex){}}
     const d=localStorage.getItem('txe_v4');
     if(d){
       const parsed=JSON.parse(d);
-      if(parsed.productos?.length>0) DB.productos=parsed.productos;
       if(parsed.regs) DB.regs=parsed.regs;
       if(parsed.banco) DB.banco=parsed.banco;
       if(parsed.conciliaciones) DB.conciliaciones=parsed.conciliaciones;
@@ -1116,8 +1113,10 @@ function load(){
 }
 function save(){
   try{
+    // Productos en clave propia — nunca se mezclan con el resto
+    if(DB.productos.length>0)
+      localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
     const toSave={
-      productos:DB.productos,
       regs:DB.regs,
       banco:DB.banco,
       conciliaciones:DB.conciliaciones,
@@ -1129,7 +1128,7 @@ function save(){
       comisiones:DB.comisiones
     };
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
-    saveToCloud(toSave);
+    saveToCloud({...toSave,productos:DB.productos});
   }catch(e){toast('Error guardando datos','err')}
 }
 
