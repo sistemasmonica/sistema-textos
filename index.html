@@ -2048,35 +2048,39 @@ function importarExcelProductos(input){
         const ws=wb.Sheets[wb.SheetNames[0]];
         filas=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
         // Mostrar datos crudos para diagnóstico
-        alert('DIAGNÓSTICO - primeras 3 filas del Excel:\n\n'+
-          filas.slice(0,3).map((f,i)=>'Fila '+(i+1)+':\n'+f.map((c,j)=>'  col'+j+': "'+c+'"').join('\n')).join('\n\n'));
       }
 
-      // Buscar fila de encabezados (ignora el título "LISTA DE PRECIOS INVENTARIO 2026")
+      // Buscar fila de encabezados: la fila que tenga MÁS columnas reconocidas (ignora títulos)
       let hdrRow=-1;
-      for(let i=0;i<Math.min(filas.length,20);i++){
+      let hdrScore=-1;
+      for(let i=0;i<Math.min(filas.length,10);i++){
         const celdas=filas[i].map(c=>String(c||'').toLowerCase().trim());
-        if(celdas.some(c=>c==='nombre'||c==='titulo'||c.startsWith('descripci'))||
-           celdas.some(c=>c==='coleccion'||c==='colección'||c.includes('colecci')||c==='editorial')){
-          hdrRow=i;break;
-        }
+        let sc=0;
+        if(celdas.some(c=>c==='nombre'||c==='titulo'||c==='título'||c==='title'))sc++;
+        if(celdas.some(c=>c.includes('colecci')||c==='editorial'))sc++;
+        if(celdas.some(c=>c.includes('pvp')||c==='precio'||c==='producto'||c.includes('p.venta')))sc++;
+        if(celdas.some(c=>c.includes('costo')))sc++;
+        if(celdas.some(c=>c==='cantidad'||c==='cant'||c.includes('inicial')||c.includes('ingreso')))sc++;
+        if(sc>hdrScore){hdrScore=sc;hdrRow=i;}
       }
-      if(hdrRow<0){
-        alert('No se encontró la fila de encabezados.\n\nEncabezados detectados en primeras filas:\n'+
+      if(hdrScore<2){
+        alert('No se encontró la fila de encabezados.\n\nPrimeras 5 filas:\n'+
           filas.slice(0,5).map((f,i)=>'Fila '+(i+1)+': '+f.join(' | ')).join('\n'));
         return;
       }
 
-      // Mapear columnas
+      // Mapear columnas — soporta KARDEX_TEXTOS_2026 (TÍTULO, PVP($), COSTO NETO($)) y otros formatos
       const hdrs=filas[hdrRow].map(c=>String(c||'').toLowerCase().trim());
-      const iCol  =hdrs.findIndex(h=>h==='coleccion'||h==='colección'||h==='editorial'||h.includes('colecci'));
       const iNom  =hdrs.findIndex(h=>h==='nombre'||h==='titulo'||h==='título'||h.startsWith('descripci'));
-      const iCod  =hdrs.findIndex(h=>h==='codigo'||h==='código'||h==='sku'||h==='ref');
-      const iNivel=hdrs.findIndex(h=>h.includes('nivel')||h.includes('año')||h.includes('grado'));
-      const iCant =hdrs.findIndex(h=>h==='cantidad'||h==='cant'||h==='stock'||h==='existencia');
-      const iCosto=hdrs.findIndex(h=>h==='costo'||h==='p.costo'||h==='p. costo'||h==='precio costo'||h==='costo unit'||h.replace(/\s/g,'')===('costo'));
-      let iPvta   =hdrs.findIndex(h=>h==='precio'||h==='pvp'||h==='producto'||h==='p.venta'||h==='p. venta'||h==='precio venta'||h==='precio unit'||h.replace(/\s/g,'')===('producto')||h.replace(/\s/g,'')===('precio'));
-      // Si no encontró columna de precio, usar siempre la siguiente a COSTO
+      const iCol  =hdrs.findIndex(h=>h.includes('colecci')||h==='editorial');
+      const iCod  =hdrs.findIndex(h=>h==='codigo'||h==='código'||h==='sku'||h==='ref'||h==="#"||h==='#');
+      const iNivel=hdrs.findIndex(h=>h.includes('nivel')||h.includes('año')||h.includes('grado')||h==='línea'||h==='linea'||h==='línea');
+      const iCant =hdrs.findIndex(h=>h==='cantidad'||h==='cant'||h.includes('inicial')||h.includes('ingreso'));
+      const iCosto=hdrs.findIndex(h=>h.includes('costo')&&!h.includes('total')&&!h.includes('valor'));
+      let iPvta   =hdrs.findIndex(h=>h.includes('pvp')||h==='precio'||h==='producto'||h.includes('p.venta')||h.includes('precio venta')||h.includes('precio unit'));
+      // Si PVP viene antes de COSTO (formato KARDEX): columna anterior a COSTO
+      if(iPvta<0&&iCosto>0)iPvta=iCosto-1;
+      // Si PRECIO viene después de COSTO (otros formatos): columna siguiente
       if(iPvta<0&&iCosto>=0)iPvta=iCosto+1;
 
       // Fila de datos de ejemplo para diagnóstico
