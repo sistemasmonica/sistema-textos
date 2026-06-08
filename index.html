@@ -2046,6 +2046,9 @@ function importarExcelProductos(input){
         const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
         const ws=wb.Sheets[wb.SheetNames[0]];
         filas=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+        // Mostrar datos crudos para diagnóstico
+        alert('DIAGNÓSTICO - primeras 3 filas del Excel:\n\n'+
+          filas.slice(0,3).map((f,i)=>'Fila '+(i+1)+':\n'+f.map((c,j)=>'  col'+j+': "'+c+'"').join('\n')).join('\n\n'));
       }
 
       // Buscar fila de encabezados (ignora el título "LISTA DE PRECIOS INVENTARIO 2026")
