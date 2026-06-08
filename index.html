@@ -2028,126 +2028,85 @@ function importarExcelProductos(input){
   const ext=f.name.split('.').pop().toLowerCase();
   const r=new FileReader();
   r.onload=ev=>{
-    let rows=[];
     try{
+      // Leer el archivo
       let csv='';
       if(ext==='csv'){csv=ev.target.result;}
       else{
         const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-        // Tomar la primera hoja útil
         const ws=wb.Sheets[wb.SheetNames[0]];
         csv=XLSX.utils.sheet_to_csv(ws,{FS:'\t'});
       }
-      const lines=csv.split('\n').map(l=>l.trim()).filter(Boolean);
-      // Detectar separador
-      const sep=lines[0].split('\t').length>2?'\t':(lines[0].indexOf(';')>-1?';':',');
-      
-      // Buscar fila de cabecera
+      const lines=csv.split('\n').map(l=>l.trim()).filter(l=>l.replace(/\t|,|;/g,'').trim());
+      const sep=lines[0]?.split('\t').length>2?'\t':(lines[0]?.indexOf(';')>-1?';':',');
+
+      // Buscar la fila de encabezados buscando COLECCION o NOMBRE exacto
+      // (ignora filas de título como "LISTA DE PRECIOS INVENTARIO 2026")
       let hdrRow=-1;
-      for(let i=0;i<Math.min(lines.length,10);i++){
+      for(let i=0;i<Math.min(lines.length,20);i++){
         const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-        if(cells.some(c=>/nombre|titulo|título/.test(c))||cells.some(c=>/^nombre$/.test(c))){hdrRow=i;break;}
+        const tieneNombre=cells.some(c=>c==='nombre'||c==='titulo'||c==='descripcion'||c==='descripción');
+        const tieneColeccion=cells.some(c=>c==='coleccion'||c==='colección'||c==='editorial');
+        if(tieneNombre||tieneColeccion){hdrRow=i;break;}
+      }
+      if(hdrRow<0){
+        toast('No se encontró fila de encabezados. La fila debe tener: COLECCION, NOMBRE, COSTO, PRECIO','err');
+        return;
       }
 
-      // ── FORMATO KARDEX (COLECCION | NOMBRE | CANTIDAD | COSTO PROM. | TOTAL) ──
-      const isKardex=hdrRow>=0&&lines[hdrRow].toLowerCase().includes('costo');
-      
+      // Mapear columnas según encabezados
+      const hdrs=lines[hdrRow].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
+      const iCol  =hdrs.findIndex(h=>/coleccion|colecci|editorial/.test(h));
+      const iNom  =hdrs.findIndex(h=>/^nombre$|^titulo$|^descripci/.test(h));
+      const iCod  =hdrs.findIndex(h=>/^codigo$|^c.digo$|^sku$|^ref$/.test(h));
+      const iNivel=hdrs.findIndex(h=>/nivel|año|grado/.test(h));
+      // Para CANTIDAD: puede haber varias columnas "cantidad" — tomar la primera
+      const iCant =hdrs.findIndex(h=>/cantidad|cant\b|stock/.test(h));
+      // Para COSTO: buscar exacto
+      const iCosto=hdrs.findIndex(h=>/^costo$|costo\s|p\.?\s*costo/.test(h));
+      // Para PRECIO de venta: buscar PRECIO, PVP, P.VENTA
+      const iPvta =hdrs.findIndex(h=>/^precio$|^pvp$|p\.?\s*venta|precio\s*venta|precio\s*v/.test(h));
+
+      if(iNom<0&&iCol<0){
+        toast('No se encontraron columnas NOMBRE o COLECCION. Encabezados detectados: '+hdrs.join(' | '),'err');
+        return;
+      }
+
+      // Reemplazar catálogo completo con lo importado
+      DB.productos=[];
       let importados=0;
-      const existentes=new Set(DB.productos.map(p=>p.nombre.toLowerCase().trim()));
+      const vistos=new Set();
 
-      if(isKardex||hdrRow<0){
-        // Detectar columnas Kardex
-        const hdrs=hdrRow>=0?lines[hdrRow].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim()):[];
-        const iCol=hdrs.findIndex(h=>/colecci/.test(h));   // COLECCION o código
-        const iNom=hdrs.findIndex(h=>/nombre|titulo/.test(h));
-        const iCant=hdrs.findIndex(h=>/cantidad/.test(h));
-        const iCosto=hdrs.findIndex(h=>/costo/.test(h));
-        const iTotal=hdrs.findIndex(h=>/^total$/.test(h));
-        const startRow=hdrRow>=0?hdrRow+1:0;
+      for(let i=hdrRow+1;i<lines.length;i++){
+        const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
+        const nombre=(iNom>=0?cells[iNom]:cells[1]||'').trim();
+        if(!nombre||nombre.length<2)continue;
+        const clave=nombre.toLowerCase();
+        if(vistos.has(clave))continue;
+        vistos.add(clave);
 
-        for(let i=startRow;i<lines.length;i++){
-          const cells=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
-          if(cells.length<2)continue;
-          // Col 0 puede ser coleccion (texto) o código (número)
-          const col0=cells[0]||'';
-          const col1=cells[1]||'';
-          // Si hdrRow no encontrado, detectar si es fila de datos
-          // col0 es código numérico si empieza con dígitos
-          const isCode=/^\d/.test(col0);
-          const coleccion=isCode?'':col0;
-          const codigo=isCode?col0:'';
-          // nombre: si hay código en col0, col1 es nombre; si col0 es colección, col1 es nombre
-          const nombre=iNom>=0?cells[iNom]:col1;
-          if(!nombre||/coleccion|nombre|kardex|fecha|total/i.test(nombre))continue;
-          if(existentes.has(nombre.toLowerCase()))continue;
-          const cantIdx=iCant>=0?iCant:2;
-          const costoIdx=iCosto>=0?iCosto:3;
-          const cant=parseFloat(cells[cantIdx])||0;
-          const costo=parseFloat(cells[costoIdx])||0;
-          DB.productos.push({
-            id:uid(),
-            codigo,
-            nombre,
-            editorial:coleccion||'EVOLUCION 5.0',
-            nivel:'',
-            stockInicial:cant,
-            precioCosto:costo,
-            precioVenta:0,
-            nota:'',
-            creadoEn:new Date().toISOString()
-          });
-          existentes.add(nombre.toLowerCase());
-          importados++;
-        }
-      } else {
-        // Formato genérico (nombre, editorial, stock, costo, venta)
-        const hdrs=lines[hdrRow].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-        const iCod=hdrs.findIndex(h=>/c.digo|sku|ref/.test(h));
-        const iNom=hdrs.findIndex(h=>/nombre|producto|libro|descripci/.test(h));
-        const iEdit=hdrs.findIndex(h=>/editorial|proveedor|marca|colec/.test(h));
-        const iNivel=hdrs.findIndex(h=>/nivel|año|grado/.test(h));
-        const iStock=hdrs.findIndex(h=>/stock|cantidad|existencia/.test(h));
-        const iPcosto=hdrs.findIndex(h=>/costo|compra/.test(h));
-        const iPventa=hdrs.findIndex(h=>/venta|pvp/.test(h));
-        for(let i=hdrRow+1;i<lines.length;i++){
-          const cols=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
-          const nom=iNom>=0?cols[iNom]:cols[1]||'';
-          if(!nom||existentes.has(nom.toLowerCase()))continue;
-          DB.productos.push({
-            id:uid(),codigo:iCod>=0?cols[iCod]:'',nombre:nom,
-            editorial:iEdit>=0?cols[iEdit]:'',nivel:iNivel>=0?cols[iNivel]:'',
-            stockInicial:parseFloat(iStock>=0?cols[iStock]:'0')||0,
-            precioCosto:parseFloat(iPcosto>=0?cols[iPcosto]:'0')||0,
-            precioVenta:parseFloat(iPventa>=0?cols[iPventa]:'0')||0,
-            nota:'',creadoEn:new Date().toISOString()
-          });
-          existentes.add(nom.toLowerCase());
-          importados++;
-        }
+        DB.productos.push({
+          id:uid(),
+          codigo  : iCod>=0  ?(cells[iCod]  ||'').trim():'',
+          nombre,
+          editorial: iCol>=0  ?(cells[iCol]  ||'').trim():'',
+          nivel   : iNivel>=0 ?(cells[iNivel]||'').trim():'',
+          stockInicial: iCant>=0 ?parseFloat(cells[iCant]) ||0:0,
+          precioCosto : iCosto>=0?parseFloat(cells[iCosto])||0:0,
+          precioVenta : iPvta>=0 ?parseFloat(cells[iPvta]) ||0:0,
+          nota:'',
+          creadoEn:new Date().toISOString()
+        });
+        importados++;
       }
-      // Intentar rellenar precios desde hojas adicionales del mismo workbook
-      // (si el archivo tiene una hoja de precios)
-      if(ext!=='csv'&&typeof XLSX!=='undefined'){
-        try{
-          const wb2=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-          wb2.SheetNames.forEach(sn=>{
-            if(!/precio|price|pvp|tarifa/i.test(sn))return;
-            const ws2=wb2.Sheets[sn];
-            const rows2=XLSX.utils.sheet_to_json(ws2,{header:1,defval:''});
-            rows2.forEach(row=>{
-              const nom=(row[1]||row[0]||'').toString().trim().toLowerCase();
-              const pvp=parseFloat(row[3])||0;
-              const pneto=parseFloat(row[5]||row[4])||0;
-              if(!nom||(!pvp&&!pneto))return;
-              const p=DB.productos.find(x=>x.nombre.toLowerCase().trim()===nom);
-              if(p){if(pvp)p.precioVenta=pvp;if(pneto)p.precioCosto=pneto;}
-            });
-          });
-        }catch(ex){}
+
+      if(!importados){
+        toast('No se importaron productos. Verifica que el archivo tenga datos bajo los encabezados.','err');
+        return;
       }
       save();renderCatalogo();updateCount();
-      toast(importados+' productos importados del Kardex ('+DB.productos.length+' total). Importa el Excel de Colegios para completar precios.','ok');
-    }catch(e){toast('Error leyendo archivo: '+e.message,'err');console.error(e)}
+      toast('✅ '+importados+' productos importados. Haz clic en 💾 Backup para guardar en la nube.','ok');
+    }catch(e){toast('Error leyendo archivo: '+e.message,'err');console.error(e);}
   };
   if(ext==='csv')r.readAsText(f,'UTF-8');
   else r.readAsArrayBuffer(f);
