@@ -156,7 +156,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="pill" id="rc">0 registros</div>
     <div class="pill" id="inv-pill">0 productos</div>
     <div class="pill" id="sync-status" title="Estado de sincronización con la nube">☁️ Conectando...</div>
-    <div class="pill" style="background:rgba(255,255,0,.3);color:#fff;font-size:10px">v8-jun</div>
+    <div class="pill" style="background:rgba(255,255,0,.3);color:#fff;font-size:10px">v9-jun</div>
     <button onclick="backupData()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Guardar todos los datos en un archivo JSON">💾 Backup</button>
     <label style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
   </div>
@@ -174,6 +174,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <button class="nt" onclick="tab('mov',this)"><i class="ti ti-list"></i> Movimientos</button>
   <button class="nt" onclick="tab('decl',this)"><i class="ti ti-file-certificate"></i> Declaraciones</button>
   <button class="nt" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
+  <button class="nt" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
   <button class="nt" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> Editorial</button>
   <button class="nt" onclick="tab('comisiones',this)"><i class="ti ti-percentage"></i> Comisiones</button>
   <button class="nt" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
@@ -207,6 +208,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="fg" style="margin:0"><label>API Key de Anthropic</label><input type="password" id="claude-key" placeholder="sk-ant-api03-..." oninput="saveClaudeKey(this.value)"></div>
       <div style="font-size:11px;color:var(--p1);padding-bottom:8px">Obtén tu clave en <b>console.anthropic.com</b>. Se guarda de forma segura en tu perfil.</div>
     </div>
+  </div>
+  <div style="margin-bottom:10px">
+    <button class="btn btn-sm" style="background:#0d47a1;color:#fff;font-size:12px" onclick="abrirGuiaCorreo()"><i class="ti ti-mail-forward"></i> Configurar correo automático</button>
+    <span style="font-size:11px;color:var(--mu);margin-left:8px">Carga facturas XML directo desde tu Hotmail, sin arrastrar archivos</span>
   </div>
   <div id="correo-queue" style="display:none;background:#e8f5e9;border:2px solid #43a047;border-radius:10px;padding:14px;margin-bottom:12px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -395,6 +400,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh">
       <h2>Catálogo de productos</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="abrirModalProducto()"><i class="ti ti-plus"></i> Nuevo producto</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('fi-excel').click()"><i class="ti ti-file-spreadsheet"></i> Importar lista de precios</button>
         <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
@@ -444,10 +450,16 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-s" onclick="limpiarEntrada()"><i class="ti ti-x"></i> Limpiar</button>
       </div>
     </div>
-    <div class="sh" style="margin-top:4px"><h2>Historial de entradas</h2></div>
+    <div class="sh" style="margin-top:4px">
+      <h2>Historial de entradas</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="exportarEntradasCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
+        <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirEntradas()"><i class="ti ti-printer"></i> Imprimir reporte</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Total unidades</th><th>Valor total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Total unidades</th><th>Valor total</th><th></th></tr></thead>
         <tbody id="tb-entradas"></tbody>
       </table>
     </div>
@@ -457,14 +469,18 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div id="inv-guias" class="inv-pn" style="display:none">
     <div class="sh">
       <h2>Guías de retiro de productos</h2>
-      <button class="btn btn-p btn-sm" onclick="abrirModalGuia()"><i class="ti ti-plus"></i> Nueva guía</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="abrirModalGuia()"><i class="ti ti-plus"></i> Nueva guía</button>
+        <button class="btn btn-s btn-sm" onclick="exportarGuiasCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
+        <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirGuias()"><i class="ti ti-printer"></i> Imprimir reporte</button>
+      </div>
     </div>
     <div class="filters">
       <input type="search" id="guia-q" placeholder="Buscar colegio o cliente..." oninput="renderGuias()" style="min-width:180px">
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>N° Guía</th><th>Fecha</th><th>Cliente / Colegio</th><th>Productos</th><th>Total unid.</th><th>Valor</th><th></th></tr></thead>
+        <thead><tr><th>N° Guía</th><th>Fecha</th><th>Cliente / Colegio</th><th>Productos</th><th>Total unid.</th><th>Valor</th><th>Acciones</th></tr></thead>
         <tbody id="tb-guias"></tbody>
       </table>
     </div>
@@ -485,7 +501,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Código</th><th>Producto</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th></tr></thead>
+        <thead><tr><th>Código</th><th>Producto</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th><th></th></tr></thead>
         <tbody id="tb-rep-stock"></tbody>
       </table>
     </div>
@@ -721,6 +737,30 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
 </div>
 
+<!-- PANEL: CONSOLIDADO -->
+<div id="pn-cons" class="pn">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+    <select id="cons-anio" onchange="renderConsolidado()" style="padding:7px 9px;border:1px solid var(--bd);border-radius:6px;font-size:12px"><option value="">Todos los años</option></select>
+    <button class="btn btn-s btn-sm" onclick="renderConsolidado()"><i class="ti ti-refresh"></i> Actualizar</button>
+    <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirConsolidado()"><i class="ti ti-printer"></i> Imprimir consolidado</button>
+  </div>
+  <div class="sc-grid" id="cons-cards"></div>
+  <div class="two">
+    <div class="card">
+      <div class="card-t cg"><i class="ti ti-school"></i> Ventas por colegio</div>
+      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total vendido</th></tr></thead><tbody id="cons-tb-col"></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-t cb"><i class="ti ti-calendar-month"></i> Ventas por mes</div>
+      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Mes</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total</th></tr></thead><tbody id="cons-tb-mes"></tbody></table></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-t cp"><i class="ti ti-trophy"></i> Productos más vendidos</div>
+    <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Producto</th><th style="text-align:center">Unidades vendidas</th><th style="text-align:right">Total vendido</th></tr></thead><tbody id="cons-tb-prod"></tbody></table></div>
+  </div>
+</div>
+
 <!-- PANEL: EDITORIAL -->
 <div id="pn-editorial" class="pn">
   <div class="nav" style="margin-bottom:12px">
@@ -899,7 +939,83 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
 </div>
 
+<!-- MODAL CORREO AUTOMÁTICO -->
+<div class="modal-overlay" id="modal-correo-guia">
+  <div class="modal" style="width:min(680px,95vw)">
+    <div class="modal-t">
+      <span><i class="ti ti-mail-forward" style="color:#0d47a1"></i> Cómo conectar tu correo Hotmail</span>
+      <button class="btn btn-s" onclick="document.getElementById('modal-correo-guia').classList.remove('on')">✕</button>
+    </div>
+    <div style="font-size:13px;line-height:1.6">
+      <div style="background:#e3f2fd;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#1565c0">
+        <b>¿Cómo funciona?</b> Cada vez que llegue una factura XML al correo, el sistema la cargará automáticamente al módulo XML+IA sin que tengas que hacer nada.
+      </div>
+
+      <b style="font-size:13px;color:#0d47a1">PASO 1 — Crear cuenta en Make.com (gratis)</b>
+      <ol style="margin:8px 0 14px 18px;font-size:12px;color:#444">
+        <li>Abre <b>make.com</b> en tu navegador</li>
+        <li>Haz clic en <b>"Get started free"</b></li>
+        <li>Regístrate con tu correo (puede ser el mismo Hotmail)</li>
+      </ol>
+
+      <b style="font-size:13px;color:#0d47a1">PASO 2 — Crear la automatización</b>
+      <ol style="margin:8px 0 14px 18px;font-size:12px;color:#444">
+        <li>En Make.com haz clic en <b>"Create a new scenario"</b></li>
+        <li>Haz clic en el círculo con el signo + y busca <b>"Email"</b></li>
+        <li>Selecciona <b>"Email → Watch Emails"</b></li>
+        <li>Make.com te dará una dirección como: <b style="color:#2e7d32">tuusuario@hook.make.com</b> — cópiala</li>
+      </ol>
+
+      <b style="font-size:13px;color:#0d47a1">PASO 3 — Agregar la acción HTTP</b>
+      <ol style="margin:8px 0 14px 18px;font-size:12px;color:#444">
+        <li>Haz clic en el + después del módulo Email</li>
+        <li>Busca <b>"HTTP"</b> → selecciona <b>"Make a Request"</b></li>
+        <li>Configura así:</li>
+      </ol>
+      <div style="background:#f5f5f5;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;margin-bottom:14px;word-break:break-all">
+        <b>URL:</b> https://pqluiqsvfeddmxpuxyhm.supabase.co/rest/v1/txe_xmlqueue<br>
+        <b>Method:</b> POST<br>
+        <b>Headers:</b><br>
+        &nbsp;&nbsp;apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbHVpcXN2ZmVkZG14cHV4eWhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTI4MDYsImV4cCI6MjA5NjA4ODgwNn0.cdWKlECRLxms1y8a3sSHr1i5rsif9B94mDrvigHNm2A<br>
+        &nbsp;&nbsp;Content-Type: application/json<br>
+        <b>Body (JSON):</b><br>
+        &nbsp;&nbsp;&#123;"xml_content": "{{1.attachments[].content}}", "filename": "{{1.attachments[].filename}}", "remitente": "{{1.from[].address}}", "procesado": false&#125;
+      </div>
+
+      <b style="font-size:13px;color:#0d47a1">PASO 4 — Reenviar correos desde Hotmail</b>
+      <ol style="margin:8px 0 14px 18px;font-size:12px;color:#444">
+        <li>Abre tu Hotmail (outlook.live.com)</li>
+        <li>Ve a <b>Configuración → Ver toda la configuración de Outlook</b></li>
+        <li>Busca <b>"Reglas"</b> → <b>"Agregar nueva regla"</b></li>
+        <li>Condición: <b>El asunto contiene "factura"</b> (o el texto que usen tus proveedores)</li>
+        <li>Acción: <b>Reenviar a</b> → pega la dirección de Make.com del paso 2</li>
+        <li>Haz clic en <b>Guardar</b></li>
+      </ol>
+
+      <div style="background:#fff3e0;border-radius:8px;padding:10px;font-size:11px;color:#e65100">
+        <b>Listo.</b> Cuando llegue un correo con XML, Make.com lo captará y aparecerá automáticamente en esta pantalla con el aviso verde "📬 Facturas nuevas en tu correo". Solo haz clic en <b>Procesar con IA</b>.
+      </div>
+    </div>
+    <div style="margin-top:14px;text-align:right">
+      <button class="btn" onclick="document.getElementById('modal-correo-guia').classList.remove('on')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE GUÍA -->
+<div class="modal-overlay" id="modal-entrada-det">
+  <div class="modal">
+    <div class="modal-t">
+      <span id="ent-det-titulo">Detalle de entrada</span>
+      <button class="btn btn-s btn-sm" onclick="cerrarModal('modal-entrada-det')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="ent-det-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-s" onclick="cerrarModal('modal-entrada-det')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-guia-det">
   <div class="modal">
     <div class="modal-t">
@@ -1190,6 +1306,7 @@ function tab(id,el){
   if(id==='dash')renderDash();
   if(id==='mov')renderMov();
   if(id==='rep')renderRep();
+  if(id==='cons')renderConsolidado();
   if(id==='inv')renderCatalogo();
   if(id==='banco')renderBanco();
   if(id==='decl'){renderDecl();}
@@ -1497,6 +1614,10 @@ dz.addEventListener('drop',e=>{
 // ===================================================
 // COLA DE CORREO — facturas automáticas desde Hotmail
 // ===================================================
+function abrirGuiaCorreo(){
+  document.getElementById('modal-correo-guia').classList.add('on');
+}
+
 async function verificarCorreoQueue(){
   try{
     const{data,error}=await sb.from('txe_xmlqueue').select('id,filename,remitente,created_at').eq('procesado',false).order('created_at',{ascending:true});
@@ -1936,8 +2057,233 @@ function renderEntradas(){
     const totalUnd=g.lineas.reduce((a,l)=>a+l.cant,0);
     const totalVal=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
     const prods=g.lineas.map(l=>`${l.nom} (${l.cant})`).join(', ');
-    return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td></tr>`;
+    const key=encodeURIComponent(g.fecha+'|'+g.ref+'|'+g.prov);
+    return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td><td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verEntrada('${key}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirEntrada('${key}')" title="Imprimir Comprobante"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarEntrada('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
   }).join('');
+}
+
+function verEntrada(key){
+  const partes=decodeURIComponent(key).split('|');
+  const fecha=partes[0],ref=partes[1],prov=partes[2];
+  const lineas=DB.movInv.filter(m=>m.tipo==='entrada'&&m.fecha===fecha&&(m.ref||'')===(ref||'')&&(m.proveedor||'')===(prov||''));
+  document.getElementById('ent-det-titulo').textContent='Entrada — '+prov+' '+fecha;
+  document.getElementById('ent-det-body').innerHTML=`
+    <div class="f3" style="margin-bottom:10px">
+      <div><div class="sc-lbl">Fecha</div><div style="font-weight:600">${fecha}</div></div>
+      <div><div class="sc-lbl">Factura</div><div style="font-weight:600">${ref||'—'}</div></div>
+      <div><div class="sc-lbl">Editorial</div><div style="font-weight:600">${prov}</div></div>
+    </div>
+    <table><thead><tr><th>Producto</th><th>Cantidad</th><th>P.Costo</th><th>Subtotal</th><th></th></tr></thead>
+    <tbody>${lineas.map(l=>{
+      const prod=DB.productos.find(p=>p.id===l.prodId);
+      return`<tr>
+        <td>${prod?.nombre||'N/A'}</td>
+        <td><input type="number" value="${l.cantidad}" min="1" style="width:70px;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:12px" onchange="editarCantEntrada('${l.id}',this.value)"></td>
+        <td style="font-family:monospace">${fmt(l.precioCosto||0)}</td>
+        <td style="font-family:monospace;font-weight:600">${fmt(l.cantidad*(l.precioCosto||0))}</td>
+        <td><button class="btn btn-d btn-sm" onclick="eliminarLineaEntrada('${l.id}','${key}')"><i class="ti ti-trash"></i></button></td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  abrirModal('modal-entrada-det');
+}
+
+function editarCantEntrada(movId, nuevaCant){
+  const mov=DB.movInv.find(m=>m.id===movId);
+  if(!mov)return;
+  mov.cantidad=parseInt(nuevaCant)||0;
+  save();renderEntradas();renderCatalogo();renderStockReport();
+  toast('Cantidad actualizada','ok');
+}
+
+function eliminarLineaEntrada(movId, key){
+  if(!confirm('¿Eliminar este producto de la entrada?'))return;
+  DB.movInv=DB.movInv.filter(m=>m.id!==movId);
+  save();renderEntradas();renderCatalogo();renderStockReport();
+  cerrarModal('modal-entrada-det');
+  toast('Producto eliminado de la entrada','ok');
+}
+
+function eliminarEntrada(key){
+  if(!confirm('¿Eliminar esta entrada? El stock se actualizará automáticamente.'))return;
+  const partes=decodeURIComponent(key).split('|');
+  const fecha=partes[0],ref=partes[1],prov=partes[2];
+  DB.movInv=DB.movInv.filter(m=>!(m.tipo==='entrada'&&m.fecha===fecha&&(m.ref||'')===(ref||'')&&(m.proveedor||'')===(prov||'')));
+  save();renderEntradas();renderCatalogo();renderStockReport();
+  toast('Entrada eliminada y stock actualizado','ok');
+}
+
+function imprimirEntrada(key){
+  const partes=decodeURIComponent(key).split('|');
+  const fecha=partes[0],ref=partes[1],prov=partes[2];
+  const lineas=DB.movInv.filter(m=>m.tipo==='entrada'&&m.fecha===fecha&&(m.ref||'')===(ref||'')&&(m.proveedor||'')===(prov||''));
+  if(!lineas.length)return;
+  const LOGO_B64='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';
+  let logoSrc='';
+  try{const bStr=atob(LOGO_B64);const arr=new Uint8Array(bStr.length);for(let i=0;i<bStr.length;i++)arr[i]=bStr.charCodeAt(i);logoSrc=URL.createObjectURL(new Blob([arr],{type:'image/jpeg'}));}catch(ex){logoSrc='';}
+  const totalUnd=lineas.reduce((a,m)=>a+m.cantidad,0);
+  const totalVal=lineas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
+  const filas=lineas.map(m=>{
+    const prod=DB.productos.find(p=>p.id===m.prodId);
+    return`<tr>
+      <td style="text-align:center;border:1px solid #ccc;padding:6px 8px;font-weight:700">${m.cantidad}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px">${prod?.nombre||'N/A'}</td>
+      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace">${fmt(m.precioCosto||0)}</td>
+      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-weight:700">${fmt(m.cantidad*(m.precioCosto||0))}</td>
+    </tr>`;
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Comprobante de Recepción — ${ref||fecha}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#111;max-width:780px;margin:0 auto}
+    .hdr-t{width:100%;border-collapse:collapse;margin-bottom:10px}
+    .empresa h1{font-size:28px;font-weight:900;letter-spacing:4px;color:#111;text-align:center}
+    .info-co{font-size:11px;line-height:1.9;color:#333;text-align:right}
+    .titulo-doc{background:#1a6b3c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:9px 18px;font-size:16px;font-weight:800;letter-spacing:2px;margin-bottom:10px}
+    .campos{border:1px solid #bbb;padding:8px 14px;margin-bottom:12px;font-size:12px}
+    .campo-fila{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+    .campo-fila.full{grid-template-columns:1fr}
+    .campo{display:flex;gap:6px;align-items:baseline;padding-bottom:3px;border-bottom:1px dashed #ccc}
+    .campo b{min-width:80px;color:#222;white-space:nowrap}
+    .campo span{flex:1;border-bottom:1px solid #666;min-height:14px}
+    table.prod{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px}
+    table.prod th{background:#1a6b3c;color:#fff;padding:7px 9px;border:1px solid #155a30;font-size:11px;text-align:left}
+    table.prod td{padding:5px 9px;border:1px solid #ccc}
+    .tr-total{background:#d4edda;font-weight:700}
+    .disc{font-size:10px;font-style:italic;color:#555;border-top:1px solid #ddd;padding-top:6px;margin-bottom:36px}
+    .firmas{display:flex;justify-content:space-between;margin-top:44px}
+    .firma{text-align:center;width:42%}
+    .firma-linea{border-top:1px solid #333;padding-top:5px;font-size:11px;font-weight:700;letter-spacing:2px}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
+    @media print{.btn-print{display:none!important}body{padding:10px}}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir Comprobante</button>
+  <table class="hdr-t">
+    <tr>
+      <td class="empresa"><h1 style="font-size:24px;letter-spacing:3px">${prov.toUpperCase()}</h1></td>
+      <td class="info-co">Entregado a: D&amp;M Books<br>Sector: Llano Grande<br>Correo: maricelaalvarado5@hotmail.com</td>
+    </tr>
+  </table>
+  <div class="titulo-doc"><span>COMPROBANTE DE RECEPCIÓN</span><span>${ref?'Factura N° &nbsp;'+ref:fecha}</span></div>
+  <div class="campos">
+    <div class="campo-fila">
+      <div class="campo"><b>Editorial:</b><span>${prov}</span></div>
+      <div class="campo"><b>Fecha:</b><span>${fecha}</span></div>
+    </div>
+  </div>
+  <table class="prod">
+    <thead>
+      <tr>
+        <th style="text-align:center;width:55px">CANT</th>
+        <th>DESCRIPCIÓN</th>
+        <th style="text-align:right;width:85px">P. COSTO</th>
+        <th style="text-align:right;width:85px">SUBTOTAL</th>
+      </tr>
+    </thead>
+    <tbody>${filas}</tbody>
+    <tfoot>
+      <tr class="tr-total">
+        <td style="text-align:center">${totalUnd}</td>
+        <td style="text-align:right">TOTAL RECIBIDO:</td>
+        <td></td>
+        <td style="text-align:right;font-family:monospace">${fmt(totalVal)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="disc">Confirmo haber recibido los textos detallados arriba en conformidad.</div>
+  <div class="firmas">
+    <div class="firma"><div class="firma-linea">EDITORIAL</div></div>
+    <div class="firma"><div class="firma-linea">RECEPTOR</div></div>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
+function eliminarGuia(id){
+  if(!confirm('¿Eliminar esta guía? El stock se devolverá automáticamente.'))return;
+  const g=DB.guias.find(x=>x.id===id);if(!g)return;
+  DB.movInv=DB.movInv.filter(m=>!(m.tipo==='salida'&&m.ref===g.numero));
+  DB.guias=DB.guias.filter(x=>x.id!==id);
+  save();renderGuias();renderCatalogo();renderStockReport();
+  toast('Guía eliminada y stock restaurado','ok');
+}
+
+function exportarEntradasCSV(){
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada');
+  if(!entradas.length)return toast('No hay entradas registradas','err');
+  const filas=[['Fecha','N° Factura','Editorial / Proveedor','Producto','Cantidad','Precio Costo','Subtotal']];
+  const grupos={};
+  entradas.forEach(m=>{
+    const key=m.ref+'|'+m.proveedor+'|'+m.fecha;
+    if(!grupos[key])grupos[key]={fecha:m.fecha,ref:m.ref,prov:m.proveedor,lineas:[]};
+    const prod=DB.productos.find(p=>p.id===m.prodId);
+    grupos[key].lineas.push({nom:prod?.nombre||'N/A',cant:m.cantidad,costo:m.precioCosto||0});
+  });
+  Object.values(grupos).sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(g=>{
+    g.lineas.forEach((l,i)=>{
+      filas.push([
+        i===0?g.fecha:'', i===0?(g.ref||''):'', i===0?g.prov:'',
+        l.nom, l.cant, l.costo.toFixed(2), (l.cant*l.costo).toFixed(2)
+      ]);
+    });
+  });
+  const csv=filas.map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='entradas_inventario_'+today()+'.csv';
+  a.click();
+  toast('Archivo Excel descargado','ok');
+}
+
+function imprimirEntradas(){
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada');
+  if(!entradas.length)return toast('No hay entradas registradas','err');
+  const grupos={};
+  entradas.forEach(m=>{
+    const key=m.ref+'|'+m.proveedor+'|'+m.fecha;
+    if(!grupos[key])grupos[key]={fecha:m.fecha,ref:m.ref,prov:m.proveedor,lineas:[]};
+    const prod=DB.productos.find(p=>p.id===m.prodId);
+    grupos[key].lineas.push({nom:prod?.nombre||'N/A',cant:m.cantidad,costo:m.precioCosto||0});
+  });
+  const arr=Object.values(grupos).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const totalUnd=arr.reduce((s,g)=>s+g.lineas.reduce((a,l)=>a+l.cant,0),0);
+  const totalVal=arr.reduce((s,g)=>s+g.lineas.reduce((a,l)=>a+l.cant*l.costo,0),0);
+  const filas=arr.map(g=>{
+    const prods=g.lineas.map(l=>`${l.nom} x${l.cant}`).join('<br>');
+    const und=g.lineas.reduce((a,l)=>a+l.cant,0);
+    const val=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
+    return`<tr><td>${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="font-size:11px">${prods}</td><td style="text-align:center">${und}</td><td style="text-align:right;font-weight:600">${fmt(val)}</td></tr>`;
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Reporte Entradas de Inventario</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+      h2{color:#1a6b3c;margin-bottom:4px}
+      p{color:#666;font-size:11px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1a6b3c;color:#fff;padding:7px 8px;text-align:left;font-size:11px}
+      td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+      tr:nth-child(even) td{background:#f5faf7}
+      .total-row td{font-weight:700;background:#d4edda;border-top:2px solid #1a6b3c}
+    </style></head><body>
+    <h2>Reporte de Entradas de Inventario</h2>
+    <p>Generado el ${today()} &nbsp;|&nbsp; Total entradas: ${arr.length} &nbsp;|&nbsp; Total unidades: ${totalUnd} &nbsp;|&nbsp; Total valor: ${fmt(totalVal)}</p>
+    <table>
+      <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Unid.</th><th>Valor</th></tr></thead>
+      <tbody>${filas}
+        <tr class="total-row">
+          <td colspan="4" style="text-align:right">TOTALES:</td>
+          <td style="text-align:center">${totalUnd}</td>
+          <td style="text-align:right">${fmt(totalVal)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <br><button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+    </body></html>`);
+  win.document.close();
 }
 
 // ===================================================
@@ -2046,7 +2392,7 @@ function renderGuias(){
       <td style="max-width:180px;font-size:11px">${prods}</td>
       <td>${totalUnd}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(g.total)}</td>
-      <td><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button></td>
+      <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`;
   }).join('');
 }
@@ -2069,6 +2415,164 @@ function verGuia(id){
   abrirModal('modal-guia-det');
 }
 
+function exportarGuiasCSV(){
+  if(!DB.guias.length)return toast('No hay guías registradas','err');
+  const filas=[['N° Guía','Fecha','Cliente / Colegio','Factura Venta','Producto','Cantidad','Precio Venta','Subtotal','Total Guía','Observación']];
+  DB.guias.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(g=>{
+    g.lineas.forEach((l,i)=>{
+      filas.push([
+        g.numero, g.fecha, g.cliente, g.factura||'',
+        l.nombre, l.cantidad, l.precioVenta.toFixed(2),
+        (l.cantidad*l.precioVenta).toFixed(2),
+        i===0?g.total.toFixed(2):'',
+        i===0?(g.observacion||''):''
+      ]);
+    });
+  });
+  const csv=filas.map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='guias_retiro_'+today()+'.csv';
+  a.click();
+  toast('Archivo Excel descargado','ok');
+}
+
+function imprimirGuias(){
+  if(!DB.guias.length)return toast('No hay guías registradas','err');
+  const guias=[...DB.guias].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const totalGeneral=guias.reduce((s,g)=>s+g.total,0);
+  const totalUnidades=guias.reduce((s,g)=>s+g.lineas.reduce((a,l)=>a+l.cantidad,0),0);
+  const filas=guias.map(g=>{
+    const prods=g.lineas.map(l=>`${l.nombre} x${l.cantidad}`).join('<br>');
+    const und=g.lineas.reduce((a,l)=>a+l.cantidad,0);
+    return`<tr>
+      <td>${g.numero}</td><td>${g.fecha}</td><td>${g.cliente}</td>
+      <td style="font-size:11px">${prods}</td>
+      <td style="text-align:center">${und}</td>
+      <td style="text-align:right;font-weight:600">${fmt(g.total)}</td>
+      <td>${g.factura||'—'}</td>
+    </tr>`;
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Reporte Guías de Retiro</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+      h2{color:#1a6b3c;margin-bottom:4px}
+      p{color:#666;font-size:11px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1a6b3c;color:#fff;padding:7px 8px;text-align:left;font-size:11px}
+      td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+      tr:nth-child(even) td{background:#f5faf7}
+      .total-row td{font-weight:700;background:#d4edda;border-top:2px solid #1a6b3c}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h2>Reporte de Guías de Retiro</h2>
+    <p>Generado el ${today()} &nbsp;|&nbsp; Total guías: ${guias.length} &nbsp;|&nbsp; Total unidades: ${totalUnidades} &nbsp;|&nbsp; Total valor: ${fmt(totalGeneral)}</p>
+    <table>
+      <thead><tr><th>N° Guía</th><th>Fecha</th><th>Cliente / Colegio</th><th>Productos</th><th>Unid.</th><th>Valor</th><th>Factura</th></tr></thead>
+      <tbody>${filas}
+        <tr class="total-row">
+          <td colspan="4" style="text-align:right">TOTALES:</td>
+          <td style="text-align:center">${totalUnidades}</td>
+          <td style="text-align:right">${fmt(totalGeneral)}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <br><button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+    </body></html>`);
+  win.document.close();
+}
+
+function imprimirGuia(id){
+  const g=DB.guias.find(x=>x.id===id);if(!g)return;
+  const LOGO_B64='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';
+  let logoSrc='';
+  try{const bStr=atob(LOGO_B64);const arr=new Uint8Array(bStr.length);for(let i=0;i<bStr.length;i++)arr[i]=bStr.charCodeAt(i);logoSrc=URL.createObjectURL(new Blob([arr],{type:'image/jpeg'}));}catch(ex){logoSrc='';}
+  const filas=g.lineas.map(l=>`
+    <tr>
+      <td style="text-align:center;border:1px solid #ccc;padding:6px 8px;font-weight:700">${l.cantidad}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px">${l.nombre}</td>
+      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace">${fmt(l.precioVenta)}</td>
+      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-weight:700">${fmt(l.cantidad*l.precioVenta)}</td>
+    </tr>`).join('');
+  const totalUnd=g.lineas.reduce((a,l)=>a+l.cantidad,0);
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Nota de Entrega ${g.numero}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#111;max-width:780px;margin:0 auto}
+    .hdr-t{width:100%;border-collapse:collapse;margin-bottom:10px}
+    .empresa h1{font-size:28px;font-weight:900;letter-spacing:4px;color:#111;text-align:center}
+    .info-co{font-size:11px;line-height:1.9;color:#333;text-align:right}
+    .titulo-doc{background:#383838;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:9px 18px;font-size:16px;font-weight:800;letter-spacing:2px;margin-bottom:10px}
+    .campos{border:1px solid #bbb;padding:8px 14px;margin-bottom:12px;font-size:12px}
+    .campo-fila{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+    .campo-fila.full{grid-template-columns:1fr}
+    .campo{display:flex;gap:6px;align-items:baseline;padding-bottom:3px;border-bottom:1px dashed #ccc}
+    .campo b{min-width:65px;color:#222;white-space:nowrap}
+    .campo span{flex:1;border-bottom:1px solid #666;min-height:14px}
+    table.prod{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px}
+    table.prod th{background:#383838;color:#fff;padding:7px 9px;border:1px solid #555;font-size:11px;text-align:left}
+    table.prod td{padding:5px 9px;border:1px solid #ccc}
+    .tr-total{background:#e0e0e0;font-weight:700}
+    .disc{font-size:10px;font-style:italic;color:#555;border-top:1px solid #ddd;padding-top:6px;margin-bottom:36px}
+    .firmas{display:flex;justify-content:space-between;margin-top:44px}
+    .firma{text-align:center;width:42%}
+    .firma-linea{border-top:1px solid #333;padding-top:5px;font-size:11px;font-weight:700;letter-spacing:2px}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
+    @media print{.btn-print{display:none!important}body{padding:10px}}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir Nota de Entrega</button>
+  <table class="hdr-t">
+    <tr>
+      <td style="width:90px;vertical-align:middle">${logoSrc?`<img src="${logoSrc}" style="width:80px;height:auto" alt="Logo">`:'&nbsp;'}</td>
+      <td class="empresa"><h1>D&amp;M BOOKS</h1></td>
+      <td class="info-co">Sector: Llano Grande<br>Correo: maricelaalvarado5@hotmail.com<br>Teléfono: 0997594528</td>
+    </tr>
+  </table>
+  <div class="titulo-doc"><span>NOTA DE ENTREGA</span><span>N° &nbsp; ${g.numero}</span></div>
+  <div class="campos">
+    <div class="campo-fila">
+      <div class="campo"><b>Nombre:</b><span>${g.cliente}</span></div>
+      <div class="campo"><b>Fecha:</b><span>${g.fecha}</span></div>
+    </div>
+    ${g.factura||g.observacion?`<div class="campo-fila full">
+      ${g.factura?`<div class="campo"><b>Factura:</b><span>${g.factura}</span></div>`:''}
+      ${g.observacion?`<div class="campo"><b>Observación:</b><span>${g.observacion}</span></div>`:''}
+    </div>`:''}
+  </div>
+  <table class="prod">
+    <thead>
+      <tr>
+        <th style="text-align:center;width:55px">CANT</th>
+        <th>DESCRIPCIÓN</th>
+        <th style="text-align:right;width:85px">P. UNIT</th>
+        <th style="text-align:right;width:85px">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>${filas}</tbody>
+    <tfoot>
+      <tr class="tr-total">
+        <td style="text-align:center">${totalUnd}</td>
+        <td style="text-align:right">TOTAL DE TEXTOS:</td>
+        <td></td>
+        <td style="text-align:right;font-family:monospace">${fmt(g.total)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="disc">Me comprometo a recibirlos y devolverlos en buen estado en el caso de no adquirirlos</div>
+  <div class="firmas">
+    <div class="firma"><div class="firma-linea">ASESOR</div></div>
+    <div class="firma"><div class="firma-linea">CLIENTE</div></div>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
 function renderStockReport(){
   let totalCosto=0;let totalVenta=0;
   const tb=document.getElementById('tb-rep-stock');
@@ -2081,7 +2585,7 @@ function renderStockReport(){
     const valC=st*p.precioCosto;const valV=st*p.precioVenta;
     totalCosto+=valC;totalVenta+=valV;
     const rc=st===0?'stock-zero':st<=5?'stock-low':'';
-    return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700">${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td></tr>`;
+    return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700">${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
   tb.innerHTML=rows+`<tr class="total-row"><td colspan="8" style="text-align:right">TOTAL VALOR INVENTARIO:</td><td style="font-family:monospace">${fmt(totalCosto)}</td></tr>`;
   document.getElementById('rep-nprod').textContent=DB.productos.length;
@@ -2423,6 +2927,141 @@ function toggleDet(id){
 // ===================================================
 // REPORTES
 // ===================================================
+function renderConsolidado(){
+  // Poblar selector de años
+  const anios=[...new Set(DB.guias.map(g=>g.fecha?.split('-')[0]).filter(Boolean))].sort().reverse();
+  const selA=document.getElementById('cons-anio');
+  const prev=selA.value;
+  selA.innerHTML='<option value="">Todos los años</option>'+anios.map(a=>`<option value="${a}"${a===prev?' selected':''}>${a}</option>`).join('');
+  const anioFil=selA.value;
+
+  const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+
+  const totalVentas=guias.reduce((a,g)=>a+g.total,0);
+  const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
+  const totalCompras=entradas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
+  const ganancia=totalVentas-totalCompras;
+
+  document.getElementById('cons-cards').innerHTML=`
+    <div class="sc"><div class="sc-lbl">Total ventas</div><div class="sc-val cb">${fmt(totalVentas)}</div><div class="sc-sub">${guias.length} guías · ${totalUnidades} unid.</div></div>
+    <div class="sc"><div class="sc-lbl">Total compras inventario</div><div class="sc-val cg">${fmt(totalCompras)}</div><div class="sc-sub">${entradas.length} movimientos</div></div>
+    <div class="sc"><div class="sc-lbl">Ganancia bruta</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${fmt(ganancia)}</div><div class="sc-sub">Ventas − Compras inventario</div></div>
+    <div class="sc"><div class="sc-lbl">Margen</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${totalVentas?((ganancia/totalVentas)*100).toFixed(1):'0.0'}%</div><div class="sc-sub">Sobre ventas totales</div></div>`;
+
+  // Ventas por colegio
+  const porColegio={};
+  guias.forEach(g=>{
+    const k=g.cliente||'Sin nombre';
+    if(!porColegio[k])porColegio[k]={guias:0,unidades:0,total:0};
+    porColegio[k].guias++;
+    porColegio[k].unidades+=g.lineas.reduce((s,l)=>s+l.cantidad,0);
+    porColegio[k].total+=g.total;
+  });
+  const colArr=Object.entries(porColegio).sort((a,b)=>b[1].total-a[1].total);
+  document.getElementById('cons-tb-col').innerHTML=colArr.length
+    ?colArr.map(([nom,v])=>`<tr><td>${nom}</td><td style="text-align:center">${v.guias}</td><td style="text-align:center">${v.unidades}</td><td style="text-align:right;font-family:monospace;font-weight:600">${fmt(v.total)}</td></tr>`).join('')
+      +`<tr class="total-row"><td>TOTAL</td><td style="text-align:center">${guias.length}</td><td style="text-align:center">${totalUnidades}</td><td style="text-align:right;font-family:monospace">${fmt(totalVentas)}</td></tr>`
+    :'<tr><td colspan="4"><div class="empty">Sin guías registradas</div></td></tr>';
+
+  // Ventas por mes
+  const porMes={};
+  guias.forEach(g=>{
+    const k=g.fecha?.substring(0,7)||'—';
+    if(!porMes[k])porMes[k]={guias:0,unidades:0,total:0};
+    porMes[k].guias++;
+    porMes[k].unidades+=g.lineas.reduce((s,l)=>s+l.cantidad,0);
+    porMes[k].total+=g.total;
+  });
+  const mesArr=Object.entries(porMes).sort((a,b)=>b[0].localeCompare(a[0]));
+  const MESES=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  document.getElementById('cons-tb-mes').innerHTML=mesArr.length
+    ?mesArr.map(([k,v])=>{const[y,m]=k.split('-');return`<tr><td>${MESES[+m]||k} ${y}</td><td style="text-align:center">${v.guias}</td><td style="text-align:center">${v.unidades}</td><td style="text-align:right;font-family:monospace;font-weight:600">${fmt(v.total)}</td></tr>`;}).join('')
+    :'<tr><td colspan="4"><div class="empty">Sin datos</div></td></tr>';
+
+  // Top productos vendidos
+  const porProd={};
+  guias.forEach(g=>g.lineas.forEach(l=>{
+    if(!porProd[l.nombre])porProd[l.nombre]={unidades:0,total:0};
+    porProd[l.nombre].unidades+=l.cantidad;
+    porProd[l.nombre].total+=l.cantidad*l.precioVenta;
+  }));
+  const prodArr=Object.entries(porProd).sort((a,b)=>b[1].unidades-a[1].unidades).slice(0,15);
+  document.getElementById('cons-tb-prod').innerHTML=prodArr.length
+    ?prodArr.map(([nom,v])=>`<tr><td>${nom}</td><td style="text-align:center;font-weight:600">${v.unidades}</td><td style="text-align:right;font-family:monospace">${fmt(v.total)}</td></tr>`).join('')
+    :'<tr><td colspan="3"><div class="empty">Sin datos</div></td></tr>';
+}
+
+function imprimirConsolidado(){
+  const anioFil=document.getElementById('cons-anio').value;
+  const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+  const totalVentas=guias.reduce((a,g)=>a+g.total,0);
+  const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
+  const totalCompras=entradas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
+  const ganancia=totalVentas-totalCompras;
+  const MESES=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // Por colegio
+  const porColegio={};
+  guias.forEach(g=>{const k=g.cliente||'Sin nombre';if(!porColegio[k])porColegio[k]={guias:0,unidades:0,total:0};porColegio[k].guias++;porColegio[k].unidades+=g.lineas.reduce((s,l)=>s+l.cantidad,0);porColegio[k].total+=g.total;});
+  const colArr=Object.entries(porColegio).sort((a,b)=>b[1].total-a[1].total);
+
+  // Por mes
+  const porMes={};
+  guias.forEach(g=>{const k=g.fecha?.substring(0,7)||'—';if(!porMes[k])porMes[k]={guias:0,unidades:0,total:0};porMes[k].guias++;porMes[k].unidades+=g.lineas.reduce((s,l)=>s+l.cantidad,0);porMes[k].total+=g.total;});
+  const mesArr=Object.entries(porMes).sort((a,b)=>b[0].localeCompare(a[0]));
+
+  const periodo=anioFil?`Año ${anioFil}`:'Todos los períodos';
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Consolidado D&M Books</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#111;max-width:820px;margin:0 auto}
+    h1{font-size:24px;font-weight:900;letter-spacing:3px;color:#111;text-align:center}
+    .subtitulo{text-align:center;font-size:11px;color:#555;margin-bottom:16px}
+    .titulo-sec{background:#1a6b3c;color:#fff;padding:7px 14px;font-size:13px;font-weight:700;margin:14px 0 6px;letter-spacing:1px}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+    .card{border:1px solid #ccc;border-radius:6px;padding:10px 12px;text-align:center}
+    .card .lbl{font-size:10px;color:#666;text-transform:uppercase;margin-bottom:4px}
+    .card .val{font-size:18px;font-weight:700;font-family:monospace}
+    .card .sub{font-size:10px;color:#888;margin-top:2px}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}
+    th{background:#1a6b3c;color:#fff;padding:6px 8px;text-align:left}
+    td{padding:5px 8px;border-bottom:1px solid #e0e0e0}
+    tr:nth-child(even) td{background:#f5faf7}
+    .tr-tot td{font-weight:700;background:#d4edda!important;border-top:2px solid #1a6b3c}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
+    @media print{.btn-print{display:none!important}}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+  <h1>D&amp;M BOOKS</h1>
+  <div class="subtitulo">Consolidado de Ventas &nbsp;|&nbsp; ${periodo} &nbsp;|&nbsp; Generado: ${today()}</div>
+  <div class="cards">
+    <div class="card"><div class="lbl">Total Ventas</div><div class="val" style="color:#1565c0">${fmt(totalVentas)}</div><div class="sub">${guias.length} guías · ${totalUnidades} unid.</div></div>
+    <div class="card"><div class="lbl">Total Compras</div><div class="val" style="color:#1a6b3c">${fmt(totalCompras)}</div><div class="sub">Inventario</div></div>
+    <div class="card"><div class="lbl">Ganancia Bruta</div><div class="val" style="color:${ganancia>=0?'#1a6b3c':'#c0392b'}">${fmt(ganancia)}</div><div class="sub">Ventas − Compras</div></div>
+    <div class="card"><div class="lbl">Margen</div><div class="val" style="color:${ganancia>=0?'#1a6b3c':'#c0392b'}">${totalVentas?((ganancia/totalVentas)*100).toFixed(1):'0.0'}%</div><div class="sub">Sobre ventas</div></div>
+  </div>
+  <div class="titulo-sec">VENTAS POR COLEGIO / CLIENTE</div>
+  <table><thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total Vendido</th></tr></thead><tbody>
+  ${colArr.map(([nom,v])=>`<tr><td>${nom}</td><td style="text-align:center">${v.guias}</td><td style="text-align:center">${v.unidades}</td><td style="text-align:right;font-family:monospace;font-weight:600">${fmt(v.total)}</td></tr>`).join('')}
+  <tr class="tr-tot"><td>TOTAL GENERAL</td><td style="text-align:center">${guias.length}</td><td style="text-align:center">${totalUnidades}</td><td style="text-align:right;font-family:monospace">${fmt(totalVentas)}</td></tr>
+  </tbody></table>
+  <div class="titulo-sec">VENTAS POR MES</div>
+  <table><thead><tr><th>Mes</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total</th></tr></thead><tbody>
+  ${mesArr.map(([k,v])=>{const[y,m]=k.split('-');return`<tr><td>${MESES[+m]||k} ${y}</td><td style="text-align:center">${v.guias}</td><td style="text-align:center">${v.unidades}</td><td style="text-align:right;font-family:monospace;font-weight:600">${fmt(v.total)}</td></tr>`;}).join('')}
+  </tbody></table>
+  <div class="titulo-sec">COMPRAS VS VENTAS</div>
+  <table><thead><tr><th>Concepto</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+  <tr><td>Total ventas (guías de retiro)</td><td style="text-align:right;font-family:monospace;font-weight:600;color:#1565c0">${fmt(totalVentas)}</td></tr>
+  <tr><td>Total compras inventario (entradas)</td><td style="text-align:right;font-family:monospace;font-weight:600;color:#1a6b3c">${fmt(totalCompras)}</td></tr>
+  <tr class="tr-tot"><td>GANANCIA BRUTA</td><td style="text-align:right;font-family:monospace;color:${ganancia>=0?'#1a6b3c':'#c0392b'}">${fmt(ganancia)}</td></tr>
+  </tbody></table>
+  </body></html>`);
+  win.document.close();
+}
+
 function renderRep(){
   const mes=document.getElementById('rep-mes').value;
   const anio=document.getElementById('rep-anio').value;
@@ -2520,7 +3159,7 @@ function updateCount(){
 // ===================================================
 // COLEGIOS — 3 VISTAS: CONTROL, KIT, FINANCIERO
 // ===================================================
-const COLEGIOS_BASE = [{"nombre":"HERNAN MALO GONZALES","libros":["IMAGINA Y APRENDE\nINICIAL 1","IMAGINA Y APRENDE 4\nAÑOS","IMAGINA Y APRENDE\nPREPARATORIA 1 EGB"],"kit":[{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 4 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"JAMBELI","libros":["CIVICA Y ACOMPAÑAMIENTO EGB  8","CIVICA Y ACOMPAÑAMIENTO EGB  9","CIVICA Y ACOMPAÑAMIENTO EGB  10","CIVICA Y ACOMPAÑAMIENTO BGU 1","CIVICA Y ACOMPAÑAMIENTO BGU 2","CIVICA Y ACOMPAÑAMIENTO BGU 3","FILOSOFIA BGU 1","FILOSOFIA BGU 2","EDUCACION PARA LA CIUDADANIA BGU 1","EDUCACION PARA LA CIUDADANIA BGU 2","HISTORIA BGU 1","HISTORIA BGU 2","HISTORIA BGU 3","MATEMATICA 3"],"kit":[{"titulo":"CIVICA 8vo","coleccion":"","nivel":""},{"titulo":"CVICA 9no","coleccion":"","nivel":""},{"titulo":"CIVICA 10mo","coleccion":"","nivel":""},{"titulo":"KIT 1ERO BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT 2DO BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT 1ERO BACHILLERATO","coleccion":"","nivel":""}]},{"nombre":"LATINOAMERICANO","libros":["IMAGINA Y APRENDE NUEVA EDICION 5 AÑOS","English Explorers preparatoria","LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","LENGUA Y LITERATURA EGB 10","MATEMATICA EGB 2","MATEMATICA EGB 3","MATEMATICA EGB 4","MATEMATICA EGB 5","MATEMATICA EGB 6","MATEMATICA EGB 7","MATEMATICA EGB 8","MATEMATICA EGB 9","MATEMATICA EGB 10","ESTUDIOS SOCIALES EGB 2","ESTUDIOS SOCIALES EGB 3","ESTUDIOS SOCIALES EGB 4","ESTUDIOS SOCIALES EGB 5","ESTUDIOS SOCIALES EGB 6","ESTUDIOS SOCIALES EGB 7","CIENCIAS NATURALES EGB 2","CIENCIAS NATURALES EGB 3","CIENCIAS NATURALES EGB 4","CIENCIAS NATURALES EGB 5","CIENCIAS NATURALES EGB 6","CIENCIAS NATURALES EGB 7","CIENCIAS NATURALES EGB 8","CIENCIAS NATURALES EGB 9","CIENCIAS NATURALES EGB 10","QUIMICA BGU 1","QUIMICA BGU 2","FISICA BGU 1","LENGUA Y LITERATURA BGU 1","LENGUA Y LITERATURA BGU 2","LENGUA Y LITERATURA BGU 3","MATEMATICA BGU 1","MATEMATICA BGU 2","MATEMATICA BGU 3","WONDER FAMILY 1","WONDER FAMILY 2","WONDER FAMILY 3","WONDER FAMILY 4","WONDER FAMILY 5","WONDER FAMILY 6","LIMITTLES A1.1","LIMITTLES A1.2","LIMITTLES A2.1","LIMITTLES A2.2","LIMITTLES B1.1","LIMITTLES B1.2","TOTAL INGLES"],"kit":[]},{"nombre":"HUELLITAS DE AMOR","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICAS 4 AÑOS"],"kit":[{"titulo":"PRE ESCRITURA 4 AÑOS","coleccion":"","nivel":""},{"titulo":"PRE MATEMATICAS 4 AÑOS","coleccion":"","nivel":""}]},{"nombre":"EL ROBLE","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICA 4 AÑOS","IMAGINA Y APRENDE INICIAL 2","INGLES EGB 1","IMAGINA Y APRENDE PREPARATORIA 1 EGB","CALIGRAFIA EGB 1","INGLES EGB 2"],"kit":[{"titulo":"KIT DE 4 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"GIOTTO","libros":["FISICA BGU 3","QUIMICA BGU 3","BIOLOGIA BGU 3","HISTORIA BGU 3","MATEMATICA 3","LENGUA Y LITERATURA 3"],"kit":[{"titulo":"KIT DIDACTICA 3ERO BGU","coleccion":"","nivel":""}]},{"nombre":"FEDERICO ENGELS","libros":["LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA 8","LENGUA Y LITERATURA 9","LENGUA Y LITERATURA 10"],"kit":[]},{"nombre":"GIRASOLES","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB"],"kit":[{"titulo":"IMAGINA Y APRENDE INICIAL 1","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE INICIAL 2","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE PREPARATORIA 1 EGB","coleccion":"","nivel":""}]},{"nombre":"COMENIOS","libros":["BIOLOGIA BGU 1","BIOLOGIA BGU 2","BIOLOGIA BGU 3","EDUCACION PARA LA CIUDADANIA BGU 1","EDUCACION PARA LA CIUDADANIA BGU 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","MATEMATICA EGB 10","MATEMATICA EGB 8","MATEMATICA EGB 9","6000"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"MATEMATICA 8","coleccion":"","nivel":""},{"titulo":"MATEMATICA 9","coleccion":"","nivel":""},{"titulo":"MATEMATICA 10","coleccion":"","nivel":""},{"titulo":"KIT 1ERO","coleccion":"","nivel":""},{"titulo":"KIT 2DO","coleccion":"","nivel":""},{"titulo":"BIOLOGIA","coleccion":"","nivel":""}]},{"nombre":"LOS ALAMOS","libros":["EDUCACION FINACIERA EGB 10","EDUCACION FINACIERA EGB 2","EDUCACION FINACIERA EGB 3","EDUCACION FINACIERA EGB 4","EDUCACION FINACIERA EGB 5","EDUCACION FINACIERA EGB 6","EDUCACION FINACIERA EGB 7","EDUCACION FINACIERA EGB 8","EDUCACION FINACIERA EGB 9","IMAGINA Y APRENDE PREPARATORIA 1 EGB","LENGUA Y LITERATURA 1","LENGUA Y LITERATURA 2","LENGUA Y LITERATURA 3","LENGUA Y LITERATURA EGB 10","LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","PASAPORTE A LA LECTURA EGB 10","PASAPORTE A LA LECTURA EGB 3","PASAPORTE A LA LECTURA EGB 4","PASAPORTE A LA LECTURA EGB 5","PASAPORTE A LA LECTURA EGB 6","PASAPORTE A LA LECTURA EGB 7","PASAPORTE A LA LECTURA EGB 8","PASAPORTE A LA LECTURA EGB 9"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 2DO BASICA","coleccion":"","nivel":""},{"titulo":"KIT 3ERO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 4TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 5TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 6TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 7MO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 8AVO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 9NO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 10MO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT DE 1ERO DE BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT DE 2DO DE BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT DE 3ERO DE BACHILLERATO","coleccion":"","nivel":""}]},{"nombre":"ESDRAS","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICA 4 AÑOS","IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2"],"kit":[{"titulo":"IMAGINA Y APRENDE DE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 4 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"SJM KIDS","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","LENGUA Y LITERATURA EGB 2","MATEMATICA EGB 2","ESTUDIOS SOCIALES EGB 2","CIENCIAS NATURALES EGB 2","PASAPORTE A LA LECTURA EGB 2"],"kit":[{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT SEGUNDO DE BASICA","coleccion":"","nivel":""}]},{"nombre":"CAM SUIZO","libros":["IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","MARCO","MARAVILLOSO AGUSTIN","LOS CUENTOS DE PUPA","CUENTOS DE HADAS, GATOS Y GARABATOS"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"AVENTURAS INICIALES COMPUTACION 4 AÑOS","coleccion":"","nivel":""}]},{"nombre":"DUMAS","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","PASAPORTE A LA LECTURA EGB 2","PASAPORTE A LA LECTURA EGB 3","PASAPORTE A LA LECTURA EGB 4","PASAPORTE A LA LECTURA EGB 5","PASAPORTE A LA LECTURA EGB 6","PASAPORTE A LA LECTURA EGB 7"],"kit":[]},{"nombre":"DOMINGO SAVIO","libros":["LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","LENGUA Y LITERATURA EGB 10","MATEMATICA EGB 2","MATEMATICA EGB 3","MATEMATICA EGB 4","MATEMATICA EGB 5","MATEMATICA EGB 6","MATEMATICA EGB 7","MATEMATICA EGB 8","MATEMATICA EGB 9","MATEMATICA EGB 10","ESTUDIOS SOCIALES EGB 2","ESTUDIOS SOCIALES EGB 3","ESTUDIOS SOCIALES EGB 4","ESTUDIOS SOCIALES EGB 5","ESTUDIOS SOCIALES EGB 6","ESTUDIOS SOCIALES EGB 7","ESTUDIOS SOCIALES EGB 8","ESTUDIOS SOCIALES EGB 9","ESTUDIOS SOCIALES EGB 10","CIENCIAS NATURALES EGB 2","CIENCIAS NATURALES EGB 3","CIENCIAS NATURALES EGB 4","CIENCIAS NATURALES EGB 5","CIENCIAS NATURALES EGB 6","CIENCIAS NATURALES EGB 7","CIENCIAS NATURALES EGB 8","CIENCIAS NATURALES EGB 9","CIENCIAS NATURALES EGB 10","MARCO","WONDER FAMILY 1","WONDER FAMILY 2","WONDER FAMILY 3","WONDER FAMILY 4","WONDER FAMILY 5","WONDER FAMILY 6","LIMITTLES A1.1","LIMITTLES A1.2","LIMITTLES A2.1"],"kit":[{"titulo":"MATEMATICAS 2","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 2","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 2","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 2","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 3","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 3","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 3","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 3","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 4","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 4","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 4","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 4","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 5","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 5","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 5","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 5","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 6","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 6","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 6","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 6","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 7","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 7","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 7","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 7","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 8","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 8","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 8","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 8","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 9","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 9","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 9","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 9","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 10","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 10","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 10","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 10","coleccion":"","nivel":""}]}];
+const COLEGIOS_BASE = [{"nombre":"HERNAN MALO GONZALES","libros":["IMAGINA Y APRENDE\nINICIAL 1","IMAGINA Y APRENDE 4\nAÑOS","IMAGINA Y APRENDE\nPREPARATORIA 1 EGB"],"kit":[{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 4 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE NUEVA EDICION 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"JAMBELI","libros":["CIVICA Y ACOMPAÑAMIENTO EGB  8","CIVICA Y ACOMPAÑAMIENTO EGB  9","CIVICA Y ACOMPAÑAMIENTO EGB  10","CIVICA Y ACOMPAÑAMIENTO BGU 1","CIVICA Y ACOMPAÑAMIENTO BGU 2","CIVICA Y ACOMPAÑAMIENTO BGU 3","FILOSOFIA BGU 1","FILOSOFIA BGU 2","EDUCACION PARA LA CIUDADANIA BGU 1","EDUCACION PARA LA CIUDADANIA BGU 2","HISTORIA BGU 1","HISTORIA BGU 2","HISTORIA BGU 3","MATEMATICA 3"],"kit":[{"titulo":"CIVICA 8vo","coleccion":"","nivel":""},{"titulo":"CVICA 9no","coleccion":"","nivel":""},{"titulo":"CIVICA 10mo","coleccion":"","nivel":""},{"titulo":"KIT 1ERO BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT 2DO BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT 1ERO BACHILLERATO","coleccion":"","nivel":""}]},{"nombre":"LATINOAMERICANO","libros":["IMAGINA Y APRENDE NUEVA EDICION 5 AÑOS","English Explorers preparatoria","LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","LENGUA Y LITERATURA EGB 10","MATEMATICA EGB 2","MATEMATICA EGB 3","MATEMATICA EGB 4","MATEMATICA EGB 5","MATEMATICA EGB 6","MATEMATICA EGB 7","MATEMATICA EGB 8","MATEMATICA EGB 9","MATEMATICA EGB 10","ESTUDIOS SOCIALES EGB 2","ESTUDIOS SOCIALES EGB 3","ESTUDIOS SOCIALES EGB 4","ESTUDIOS SOCIALES EGB 5","ESTUDIOS SOCIALES EGB 6","ESTUDIOS SOCIALES EGB 7","CIENCIAS NATURALES EGB 2","CIENCIAS NATURALES EGB 3","CIENCIAS NATURALES EGB 4","CIENCIAS NATURALES EGB 5","CIENCIAS NATURALES EGB 6","CIENCIAS NATURALES EGB 7","CIENCIAS NATURALES EGB 8","CIENCIAS NATURALES EGB 9","CIENCIAS NATURALES EGB 10","QUIMICA BGU 1","QUIMICA BGU 2","FISICA BGU 1","LENGUA Y LITERATURA BGU 1","LENGUA Y LITERATURA BGU 2","LENGUA Y LITERATURA BGU 3","MATEMATICA BGU 1","MATEMATICA BGU 2","MATEMATICA BGU 3","WONDER FAMILY 1","WONDER FAMILY 2","WONDER FAMILY 3","WONDER FAMILY 4","WONDER FAMILY 5","WONDER FAMILY 6","LIMITTLES A1.1","LIMITTLES A1.2","LIMITTLES A2.1","LIMITTLES A2.2","LIMITTLES B1.1","LIMITTLES B1.2","TOTAL INGLES"],"kit":[]},{"nombre":"HUELLITAS DE AMOR","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICAS 4 AÑOS"],"kit":[{"titulo":"PRE ESCRITURA 4 AÑOS","coleccion":"","nivel":""},{"titulo":"PRE MATEMATICAS 4 AÑOS","coleccion":"","nivel":""}]},{"nombre":"EL ROBLE","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICA 4 AÑOS","IMAGINA Y APRENDE INICIAL 2","INGLES EGB 1","IMAGINA Y APRENDE PREPARATORIA 1 EGB","CALIGRAFIA EGB 1","INGLES EGB 2"],"kit":[{"titulo":"KIT DE 4 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"GIOTTO","libros":["FISICA BGU 3","QUIMICA BGU 3","BIOLOGIA BGU 3","HISTORIA BGU 3","MATEMATICA 3","LENGUA Y LITERATURA 3"],"kit":[{"titulo":"KIT DIDACTICA 3ERO BGU","coleccion":"","nivel":""}]},{"nombre":"FEDERICO ENGELS","libros":["LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA 8","LENGUA Y LITERATURA 9","LENGUA Y LITERATURA 10"],"kit":[]},{"nombre":"GIRASOLES","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB"],"kit":[{"titulo":"IMAGINA Y APRENDE INICIAL 1","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE INICIAL 2","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE PREPARATORIA 1 EGB","coleccion":"","nivel":""}]},{"nombre":"COMENIOS","libros":["BIOLOGIA BGU 1","BIOLOGIA BGU 2","BIOLOGIA BGU 3","EDUCACION PARA LA CIUDADANIA BGU 1","EDUCACION PARA LA CIUDADANIA BGU 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","MATEMATICA EGB 10","MATEMATICA EGB 8","MATEMATICA EGB 9","6000"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"MATEMATICA 8","coleccion":"","nivel":""},{"titulo":"MATEMATICA 9","coleccion":"","nivel":""},{"titulo":"MATEMATICA 10","coleccion":"","nivel":""},{"titulo":"KIT 1ERO","coleccion":"","nivel":""},{"titulo":"KIT 2DO","coleccion":"","nivel":""},{"titulo":"BIOLOGIA","coleccion":"","nivel":""}]},{"nombre":"LOS ALAMOS","libros":["EDUCACION FINACIERA EGB 10","EDUCACION FINACIERA EGB 2","EDUCACION FINACIERA EGB 3","EDUCACION FINACIERA EGB 4","EDUCACION FINACIERA EGB 5","EDUCACION FINACIERA EGB 6","EDUCACION FINACIERA EGB 7","EDUCACION FINACIERA EGB 8","EDUCACION FINACIERA EGB 9","IMAGINA Y APRENDE PREPARATORIA 1 EGB","LENGUA Y LITERATURA 1","LENGUA Y LITERATURA 2","LENGUA Y LITERATURA 3","LENGUA Y LITERATURA EGB 10","LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","PASAPORTE A LA LECTURA EGB 10","PASAPORTE A LA LECTURA EGB 3","PASAPORTE A LA LECTURA EGB 4","PASAPORTE A LA LECTURA EGB 5","PASAPORTE A LA LECTURA EGB 6","PASAPORTE A LA LECTURA EGB 7","PASAPORTE A LA LECTURA EGB 8","PASAPORTE A LA LECTURA EGB 9"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 2DO BASICA","coleccion":"","nivel":""},{"titulo":"KIT 3ERO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 4TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 5TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 6TO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 7MO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 8AVO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 9NO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT 10MO DE BASICA","coleccion":"","nivel":""},{"titulo":"KIT DE 1ERO DE BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT DE 2DO DE BACHILLERATO","coleccion":"","nivel":""},{"titulo":"KIT DE 3ERO DE BACHILLERATO","coleccion":"","nivel":""}]},{"nombre":"ESDRAS","libros":["PRE ESCRITURA 4 AÑOS","PRE MATEMATICA 4 AÑOS","IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2"],"kit":[{"titulo":"IMAGINA Y APRENDE DE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 4 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT DE 5 AÑOS","coleccion":"","nivel":""}]},{"nombre":"SJM KIDS","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","LENGUA Y LITERATURA EGB 2","MATEMATICA EGB 2","ESTUDIOS SOCIALES EGB 2","CIENCIAS NATURALES EGB 2","PASAPORTE A LA LECTURA EGB 2"],"kit":[{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"IMAGINA Y APRENDE 3 AÑOS","coleccion":"","nivel":""},{"titulo":"KIT SEGUNDO DE BASICA","coleccion":"","nivel":""}]},{"nombre":"CAM SUIZO","libros":["IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","MARCO","MARAVILLOSO AGUSTIN","LOS CUENTOS DE PUPA","CUENTOS DE HADAS, GATOS Y GARABATOS"],"kit":[{"titulo":"IMAGINA Y APRENDE 5 AÑOS","coleccion":"","nivel":""},{"titulo":"AVENTURAS INICIALES COMPUTACION 4 AÑOS","coleccion":"","nivel":""}]},{"nombre":"DUMAS","libros":["IMAGINA Y APRENDE INICIAL 1","IMAGINA Y APRENDE INICIAL 2","IMAGINA Y APRENDE PREPARATORIA 1 EGB","PASAPORTE A LA LECTURA EGB 2","PASAPORTE A LA LECTURA EGB 3","PASAPORTE A LA LECTURA EGB 4","PASAPORTE A LA LECTURA EGB 5","PASAPORTE A LA LECTURA EGB 6","PASAPORTE A LA LECTURA EGB 7"],"kit":[]},{"nombre":"DOMINGO SAVIO","libros":["LENGUA Y LITERATURA EGB 2","LENGUA Y LITERATURA EGB 3","LENGUA Y LITERATURA EGB 4","LENGUA Y LITERATURA EGB 5","LENGUA Y LITERATURA EGB 6","LENGUA Y LITERATURA EGB 7","LENGUA Y LITERATURA EGB 8","LENGUA Y LITERATURA EGB 9","LENGUA Y LITERATURA EGB 10","MATEMATICA EGB 2","MATEMATICA EGB 3","MATEMATICA EGB 4","MATEMATICA EGB 5","MATEMATICA EGB 6","MATEMATICA EGB 7","MATEMATICA EGB 8","MATEMATICA EGB 9","MATEMATICA EGB 10","ESTUDIOS SOCIALES EGB 2","ESTUDIOS SOCIALES EGB 3","ESTUDIOS SOCIALES EGB 4","ESTUDIOS SOCIALES EGB 5","ESTUDIOS SOCIALES EGB 6","ESTUDIOS SOCIALES EGB 7","ESTUDIOS SOCIALES EGB 8","ESTUDIOS SOCIALES EGB 9","ESTUDIOS SOCIALES EGB 10","CIENCIAS NATURALES EGB 2","CIENCIAS NATURALES EGB 3","CIENCIAS NATURALES EGB 4","CIENCIAS NATURALES EGB 5","CIENCIAS NATURALES EGB 6","CIENCIAS NATURALES EGB 7","CIENCIAS NATURALES EGB 8","CIENCIAS NATURALES EGB 9","CIENCIAS NATURALES EGB 10","MARCO","WONDER FAMILY 1","WONDER FAMILY 2","WONDER FAMILY 3","WONDER FAMILY 4","WONDER FAMILY 5","WONDER FAMILY 6","LIMITTLES A1.1","LIMITTLES A1.2","LIMITTLES A2.1"],"kit":[{"titulo":"MATEMATICAS 2","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 2","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 2","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 2","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 3","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 3","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 3","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 3","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 4","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 4","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 4","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 4","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 5","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 5","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 5","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 5","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 6","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 6","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 6","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 6","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 7","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 7","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 7","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 7","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 8","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 8","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 8","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 8","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 9","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 9","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 9","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 9","coleccion":"","nivel":""},{"titulo":"MATEMATICAS 10","coleccion":"","nivel":""},{"titulo":"LENGUA Y LITERATURA 10","coleccion":"","nivel":""},{"titulo":"ESTUDIOS SOCIALES 10","coleccion":"","nivel":""},{"titulo":"CIENCIAS NATURALES 10","coleccion":"","nivel":""}]},{"nombre":"CARRUSEL SCHOOL","libros":[],"kit":[]},{"nombre":"LICEO MEDITERRANEO","libros":[],"kit":[]},{"nombre":"SAULO","libros":[],"kit":[]},{"nombre":"LUIS GODIN","libros":[],"kit":[]},{"nombre":"CDI CASITA TUYA","libros":[],"kit":[]},{"nombre":"HUMBERTO MATA","libros":[],"kit":[]},{"nombre":"CDI JARDINES DE SUEÑO","libros":[],"kit":[]},{"nombre":"CDI INFANCIA FELIZ","libros":[],"kit":[]},{"nombre":"CDI LIDER KIDS","libros":[],"kit":[]}];
 
 function initColData(){
   if(!DB.colData) DB.colData={};
