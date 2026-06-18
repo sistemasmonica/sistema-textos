@@ -3232,9 +3232,11 @@ function renderControl(){
   const tv=d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.pvp,0);
   const tvCosto=d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.costo,0);
   const comision=tv*(d.comisionPct/100);
-  const comisionPV=d.lineas.reduce((a,l)=>a+l.cant*0.5,0); // 0.5 por unidad entregada
+  const pvUnit=d.comisionPVUnit??0.5;
+  const comisionPV=d.lineas.reduce((a,l)=>a+l.cant*pvUnit,0);
   const totalColegio=comision+comisionPV;
   const pagoProveedor=tv-totalColegio;
+  const gananciaNet=pagoProveedor-tvCosto;
 
   let html=`
   <div style="background:#fff9c4;border:2px solid #f9d71c;border-radius:8px;padding:12px;margin-bottom:12px">
@@ -3305,17 +3307,26 @@ function renderControl(){
     </div>
 
     <!-- RESUMEN FINANCIERO -->
-    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div style="background:#fff;border:1px solid #e6c800;border-radius:6px;padding:10px">
+    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div style="background:#fff9c4;border:2px solid #e6c800;border-radius:6px;padding:10px">
+        <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px">Le pagas al colegio</div>
         <table style="width:100%;font-size:12px">
-          <tr><td style="padding:4px 0">COMISIÓN (<input type="number" value="${d.comisionPct}" min="0" max="100" style="width:45px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:12px" onchange="DB.colData['${nombre}'].comisionPct=parseFloat(this.value)||0;recalcControl('${nombre}')">%)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comision">$${comision.toFixed(2)}</td></tr>
-          <tr><td style="padding:4px 0">COMISIÓN P.VENTA (x0.50)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comisionpv">$${comisionPV.toFixed(2)}</td></tr>
-          <tr style="border-top:2px solid #f9d71c"><td style="padding:6px 0;font-weight:700">TOTAL COLEGIO</td><td style="font-family:monospace;font-weight:700;color:var(--a1);text-align:right" id="ctrl-totalcol">$${totalColegio.toFixed(2)}</td></tr>
+          <tr><td style="padding:3px 0">Comisión (<input type="number" value="${d.comisionPct}" min="0" max="100" style="width:40px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPct=parseFloat(this.value)||0;recalcControl('${nombre}')">%)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comision">$${comision.toFixed(2)}</td></tr>
+          <tr><td style="padding:3px 0">C. P.Venta (x$<input type="number" value="${pvUnit}" min="0" step="0.01" style="width:38px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPVUnit=parseFloat(this.value)||0;recalcControl('${nombre}')">)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comisionpv">$${comisionPV.toFixed(2)}</td></tr>
+          <tr style="border-top:2px solid #f9d71c"><td style="padding:5px 0;font-weight:700">TOTAL COLEGIO</td><td style="font-family:monospace;font-weight:700;color:var(--a1);text-align:right" id="ctrl-totalcol">$${totalColegio.toFixed(2)}</td></tr>
         </table>
       </div>
-      <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-weight:700;font-size:13px">PAGO A PROVEEDOR</span>
-        <span style="font-family:monospace;font-size:22px;font-weight:700;color:var(--g1)" id="ctrl-pagoprov">$${pagoProveedor.toFixed(2)}</span>
+      <div style="background:#e3f2fd;border:2px solid #90caf9;border-radius:6px;padding:10px">
+        <div style="font-size:10px;font-weight:700;color:#1565c0;text-transform:uppercase;margin-bottom:8px">Tu flujo de caja</div>
+        <table style="width:100%;font-size:12px">
+          <tr><td style="padding:3px 0">Tu ingreso (ventas − comisión)</td><td style="font-family:monospace;font-weight:700;text-align:right;color:var(--g1)" id="ctrl-pagoprov">$${pagoProveedor.toFixed(2)}</td></tr>
+          <tr><td style="padding:3px 0">Deuda editorial (costo libros)</td><td style="font-family:monospace;font-weight:700;text-align:right;color:var(--r1)" id="ctrl-deuda-edit">− $${tvCosto.toFixed(2)}</td></tr>
+        </table>
+      </div>
+      <div style="background:${gananciaNet>=0?'#e8f5e9':'#fef2f2'};border:2px solid ${gananciaNet>=0?'#a5d6a7':'#f5c6cb'};border-radius:6px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div style="font-size:10px;font-weight:700;color:${gananciaNet>=0?'#1b5e20':'var(--r1)'};text-transform:uppercase;margin-bottom:6px">TU GANANCIA NETA</div>
+        <div style="font-family:monospace;font-size:24px;font-weight:700;color:${gananciaNet>=0?'var(--g1)':'var(--r1)'}" id="ctrl-ganancia">$${gananciaNet.toFixed(2)}</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:4px">ingreso − costo editorial</div>
       </div>
     </div>
   </div>
@@ -3347,13 +3358,20 @@ function recalcControl(nombre){
   set('ctrl-s-dev',sDev);set('ctrl-s-vend',sVend);
   set('ctrl-s-tv','$'+sTv.toFixed(2));set('ctrl-s-vtot','$'+sVtot.toFixed(2));
   const comision=sTv*(d.comisionPct/100);
-  const comisionPV=sCant*0.5;
+  const pvUnit=d.comisionPVUnit??0.5;
+  const comisionPV=sCant*pvUnit;
   const totalCol=comision+comisionPV;
   const pagoProv=sTv-totalCol;
+  const ganancia=pagoProv-sVtot;
   set('ctrl-comision','$'+comision.toFixed(2));
   set('ctrl-comisionpv','$'+comisionPV.toFixed(2));
   set('ctrl-totalcol','$'+totalCol.toFixed(2));
   set('ctrl-pagoprov','$'+pagoProv.toFixed(2));
+  set('ctrl-deuda-edit','− $'+sVtot.toFixed(2));
+  const ganEl=document.getElementById('ctrl-ganancia');
+  if(ganEl){ganEl.textContent='$'+ganancia.toFixed(2);ganEl.style.color=ganancia>=0?'var(--g1)':'var(--r1)';
+    ganEl.parentElement.style.background=ganancia>=0?'#e8f5e9':'#fef2f2';
+    ganEl.parentElement.style.borderColor=ganancia>=0?'#a5d6a7':'#f5c6cb';}
 }
 
 function guardarControl(nombre){save();toast('Control de '+nombre+' guardado','ok');}
@@ -3363,9 +3381,12 @@ function imprimirControl(nombre){
   const win=window.open('','_blank');
   const tv=d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.pvp,0);
   const comision=tv*(d.comisionPct/100);
-  const comisionPV=d.lineas.reduce((a,l)=>a+l.cant*0.5,0);
+  const pvUnit=d.comisionPVUnit??0.5;
+  const comisionPV=d.lineas.reduce((a,l)=>a+l.cant*pvUnit,0);
   const totalCol=comision+comisionPV;
   const pago=tv-totalCol;
+  const costoEdit=d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.costo,0);
+  const ganancia=pago-costoEdit;
   win.document.write(`<html><head><title>Control ${nombre}</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;padding:15px}
   h2{text-align:center;background:#f9d71c;padding:8px;margin-bottom:12px}
@@ -3389,7 +3410,9 @@ function imprimirControl(nombre){
   <tr><td>COMISIÓN P.VENTA</td><td style="text-align:right">$${comisionPV.toFixed(2)}</td></tr>
   <tr style="font-weight:bold;background:#fff9c4"><td>TOTAL COLEGIO</td><td style="text-align:right">$${totalCol.toFixed(2)}</td></tr>
   </table>
-  <div class="pago">PAGO A PROVEEDOR: $${pago.toFixed(2)}</div>
+  <div class="pago" style="background:#e3f2fd;color:#1565c0">TU INGRESO (ventas − comisión colegio): $${pago.toFixed(2)}</div>
+  <div style="padding:6px 10px;font-size:12px;text-align:right">Costo editorial (libros vendidos): − $${costoEdit.toFixed(2)}</div>
+  <div class="pago" style="background:${ganancia>=0?'#e8f5e9':'#fef2f2'};color:${ganancia>=0?'#1b5e20':'#c0392b'}">TU GANANCIA NETA: $${ganancia.toFixed(2)}</div>
   <\/body><\/html>`);
   win.document.close();
   win.onload=()=>win.print();
@@ -3512,6 +3535,7 @@ function renderFin(){
           <th style="padding:7px;border:1px solid var(--bd);width:90px">DESC.INST %</th>
           <th style="padding:7px;border:1px solid var(--bd);width:90px">TOTAL DESC $</th>
           <th style="padding:7px;border:1px solid var(--bd);width:90px">NETO EDITORIAL $</th>
+          <th style="padding:7px;border:1px solid var(--bd);width:80px">COSTO % (tu costo)</th>
           <th style="padding:7px;border:1px solid var(--bd);width:90px">BENEF.DISTR $</th>
           <th style="padding:7px;border:1px solid var(--bd);width:100px">TOTAL BENEF $</th>
         </tr>
@@ -3519,9 +3543,10 @@ function renderFin(){
       <tbody>`;
 
   d.fin.forEach((f,i)=>{
+    const costoPct=f.costoPct??43;
     const descMonto=f.pvp*(f.descPct/100);
     const neto=f.pvp-descMonto;
-    const benefDistr=neto-f.pvp*0.43; // estimado costo editorial
+    const benefDistr=neto-f.pvp*(costoPct/100);
     const totalBenef=benefDistr*f.estudiantes;
     tbTotal+=totalBenef;
     html+=`<tr style="background:${i%2===0?'#fff':'#f9f9f9'}">
@@ -3540,6 +3565,10 @@ function renderFin(){
       </td>
       <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;font-family:monospace" id="fin-desc-${i}">$${descMonto.toFixed(2)}</td>
       <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;font-family:monospace" id="fin-neto-${i}">$${neto.toFixed(2)}</td>
+      <td style="border:1px solid #ddd;padding:3px">
+        <input type="number" min="0" max="100" step="0.1" value="${costoPct}" style="width:62px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px" title="Porcentaje del PVP que pagas a la editorial"
+          onchange="DB.colData['${nombre}'].fin[${i}].costoPct=parseFloat(this.value)||0;recalcFin('${nombre}')">
+      </td>
       <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;font-family:monospace" id="fin-benef-${i}">$${benefDistr.toFixed(2)}</td>
       <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:var(--g1)" id="fin-tbenef-${i}">$${totalBenef.toFixed(2)}</td>
     </tr>`;
@@ -3547,10 +3576,11 @@ function renderFin(){
 
   html+=`</tbody>
     <tfoot><tr style="background:var(--lt);font-weight:700">
-      <td colspan="7" style="padding:6px 8px;border:1px solid var(--bd);text-align:right">TOTAL BENEFICIO:</td>
+      <td colspan="8" style="padding:6px 8px;border:1px solid var(--bd);text-align:right">TOTAL BENEFICIO ESTIMADO:</td>
       <td style="padding:6px 8px;border:1px solid var(--bd);font-family:monospace;color:var(--g1);text-align:right" id="fin-total">$${tbTotal.toFixed(2)}</td>
     </tr></tfoot>
     </table></div>
+    <div style="background:#e8f5e9;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:11px;color:#1b5e20"><b>Nota:</b> El % Costo es el porcentaje del PVP que pagas a la editorial. Ajústalo por libro para obtener un estimado real de tu ganancia.</div>
   </div>
   <div class="btn-row" style="margin-top:10px">
     <button class="btn btn-p" onclick="guardarFin('${nombre}')"><i class="ti ti-check"></i> Guardar</button>
@@ -3564,9 +3594,10 @@ function recalcFin(nombre){
   const d=DB.colData[nombre];if(!d)return;
   let tbTotal=0;
   d.fin.forEach((f,i)=>{
+    const costoPct=f.costoPct??43;
     const desc=f.pvp*(f.descPct/100);
     const neto=f.pvp-desc;
-    const benef=neto-f.pvp*0.43;
+    const benef=neto-f.pvp*(costoPct/100);
     const tbenef=benef*f.estudiantes;
     tbTotal+=tbenef;
     const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent='$'+v.toFixed(2);};
@@ -4264,11 +4295,14 @@ function renderLiquidacion(){
     ?'<div class="empty">Sin ventas registradas</div>'
     :Object.entries(porCol).sort((a,b)=>b[1]-a[1]).map(([col,venta])=>{
         const com=f(DB.comisiones).filter(c=>c.tipo==='colegio'&&normK(c.beneficiario)===normK(col)).reduce((a,c)=>a+c.monto,0);
-        const margen=venta-com;
-        return`<div class="pf"><span><b>${escH(col)}</b></span><span style="display:flex;gap:12px;font-size:11px">
+        const colDat=DB.colData?.[col];
+        const costoEditCol=colDat?.lineas?.reduce((a,l)=>a+(l.cant-l.dev)*(l.costo||0),0)||0;
+        const margen=venta-com-costoEditCol;
+        return`<div class="pf"><span><b>${escH(col)}</b></span><span style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <span>Venta: <b class="cg">${fmt(venta)}</b></span>
           <span>Comisión: <b class="cr">${fmt(com)}</b></span>
-          <span>Margen: <b class="${margen>=0?'cg':'cr'}">${fmt(margen)}</b></span>
+          ${costoEditCol>0?`<span>Costo editorial: <b class="cr">${fmt(costoEditCol)}</b></span>`:''}
+          <span>Ganancia neta: <b class="${margen>=0?'cg':'cr'}">${fmt(margen)}</b></span>
         </span></div>`;
       }).join('');
 }
