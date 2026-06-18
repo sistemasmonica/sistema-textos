@@ -966,7 +966,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <div class="modal-overlay" id="modal-guia">
   <div class="modal">
     <div class="modal-t">
-      <span>Nueva guía de retiro</span>
+      <span id="modal-guia-titulo">Nueva guía de retiro</span>
       <button class="btn btn-s btn-sm" onclick="cerrarModal('modal-guia')"><i class="ti ti-x"></i></button>
     </div>
     <div class="f3">
@@ -981,9 +981,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <button class="btn btn-s btn-sm" onclick="agregarLineaGuia()"><i class="ti ti-plus"></i> Agregar producto</button>
     </div>
     <div class="fg"><label>Observación</label><input type="text" id="g-obs" placeholder="Notas adicionales..."></div>
+    <input type="hidden" id="g-edit-id" value="">
     <div id="g-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-bottom:10px;display:none"></div>
     <div class="btn-row">
-      <button class="btn btn-p" onclick="guardarGuia()"><i class="ti ti-check"></i> Registrar guía y descontar stock</button>
+      <button class="btn btn-p" id="btn-guardar-guia" onclick="guardarGuia()"><i class="ti ti-check"></i> Registrar guía y descontar stock</button>
       <button class="btn btn-s" onclick="cerrarModal('modal-guia')">Cancelar</button>
     </div>
   </div>
@@ -2375,8 +2376,10 @@ function abrirModalGuia(){
   document.getElementById('g-cliente').value='';
   document.getElementById('g-obs').value='';
   document.getElementById('g-fact').value='';
+  document.getElementById('g-edit-id').value='';
+  document.getElementById('modal-guia-titulo').textContent='Nueva guía de retiro';
+  document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Registrar guía y descontar stock';
   guiaLineas=0;
-  // Auto-numerar guía
   const n=DB.guias.length+1;
   document.getElementById('g-num').value='GR-'+String(n).padStart(3,'0');
   document.getElementById('g-fecha').value=today();
@@ -2420,7 +2423,33 @@ function actualizarResumenGuia(){
   res.innerHTML=`<b>Total unidades:</b> ${items} &nbsp;|&nbsp; <b>Valor:</b> ${fmt(total)}${alertas.length?`<div style="color:var(--r1);margin-top:4px">${alertas.join('<br>')}</div>`:''}`;
 }
 
+function editarGuia(id){
+  const g=DB.guias.find(x=>x.id===id);if(!g)return;
+  document.getElementById('g-lineas').innerHTML='';
+  guiaLineas=0;
+  document.getElementById('g-num').value=g.numero;
+  document.getElementById('g-fecha').value=g.fecha;
+  document.getElementById('g-cliente').value=g.cliente;
+  document.getElementById('g-fact').value=g.factura||'';
+  document.getElementById('g-obs').value=g.observacion||'';
+  document.getElementById('g-edit-id').value=id;
+  document.getElementById('modal-guia-titulo').textContent='Editar guía '+g.numero;
+  document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
+  document.getElementById('g-resumen').style.display='none';
+  g.lineas.forEach(l=>{
+    agregarLineaGuia();
+    const lastLine=document.getElementById('g-lineas').lastElementChild;
+    const sel=lastLine.querySelector('select');
+    const cantInput=lastLine.querySelector('[id$="-cant"]');
+    if(sel)sel.value=l.prodId;
+    if(cantInput)cantInput.value=l.cantidad;
+  });
+  actualizarResumenGuia();
+  abrirModal('modal-guia');
+}
+
 function guardarGuia(){
+  const editId=document.getElementById('g-edit-id').value||'';
   const cliente=document.getElementById('g-cliente').value.trim();
   if(!cliente)return toast('Ingresa el cliente o colegio','err');
   const lineasEls=[...document.getElementById('g-lineas').children];
@@ -2430,30 +2459,54 @@ function guardarGuia(){
     const sel=el.querySelector('select');
     const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
     if(!sel?.value||!cant)return;
-    const stock=stockActual(sel.value);
-    if(cant>stock){stockError=true;toast(`Stock insuficiente para ${sel.selectedOptions[0]?.text?.split('—')[0]}. Disponible: ${stock}`,'err');return;}
+    // Si estamos editando, devolver temporalmente el stock original de ese producto
+    let stockDisp=stockActual(sel.value);
+    if(editId){
+      const gOrig=DB.guias.find(x=>x.id===editId);
+      const lOrig=gOrig?.lineas.find(l=>l.prodId===sel.value);
+      if(lOrig)stockDisp+=lOrig.cantidad;
+    }
+    if(cant>stockDisp){stockError=true;toast(`Stock insuficiente para ${sel.selectedOptions[0]?.text?.split('—')[0]}. Disponible: ${stockDisp}`,'err');return;}
     const prod=DB.productos.find(p=>p.id===sel.value);
     lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',cantidad:cant,precioVenta:prod?.precioVenta||0});
   });
   if(stockError)return;
   if(!lineas.length)return toast('Agrega al menos un producto','err');
-  const guia={
-    id:uid(),
-    numero:document.getElementById('g-num').value,
-    fecha:document.getElementById('g-fecha').value||today(),
-    cliente,
-    factura:document.getElementById('g-fact').value,
-    observacion:document.getElementById('g-obs').value,
-    lineas,
-    total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)
-  };
-  DB.guias.push(guia);
-  // Descontar stock
-  lineas.forEach(l=>{
-    DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha:guia.fecha,ref:guia.numero,cliente});
-  });
-  save();cerrarModal('modal-guia');renderGuias();renderCatalogo();renderStockReport();
-  toast('Guía '+guia.numero+' registrada. Stock actualizado.','ok');
+  const numero=document.getElementById('g-num').value;
+  const fecha=document.getElementById('g-fecha').value||today();
+
+  if(editId){
+    // MODO EDICIÓN
+    const idx=DB.guias.findIndex(x=>x.id===editId);
+    if(idx===-1)return toast('Guía no encontrada','err');
+    const gOrig=DB.guias[idx];
+    // Eliminar movimientos de stock de la guía original
+    DB.movInv=DB.movInv.filter(m=>!(m.ref===gOrig.numero&&m.tipo==='salida'));
+    // Actualizar la guía
+    DB.guias[idx]={...gOrig,numero,fecha,cliente,
+      factura:document.getElementById('g-fact').value,
+      observacion:document.getElementById('g-obs').value,
+      lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
+    // Crear nuevos movimientos de stock
+    lineas.forEach(l=>{
+      DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha,ref:numero,cliente});
+    });
+    document.getElementById('g-edit-id').value='';
+    save();cerrarModal('modal-guia');renderGuias();renderCatalogo();renderStockReport();
+    toast('Guía '+numero+' actualizada correctamente','ok');
+  } else {
+    // MODO NUEVO
+    const guia={id:uid(),numero,fecha,cliente,
+      factura:document.getElementById('g-fact').value,
+      observacion:document.getElementById('g-obs').value,
+      lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
+    DB.guias.push(guia);
+    lineas.forEach(l=>{
+      DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha:guia.fecha,ref:guia.numero,cliente});
+    });
+    save();cerrarModal('modal-guia');renderGuias();renderCatalogo();renderStockReport();
+    toast('Guía '+guia.numero+' registrada. Stock actualizado.','ok');
+  }
 }
 
 function renderGuias(){
@@ -2472,7 +2525,7 @@ function renderGuias(){
       <td style="max-width:180px;font-size:11px">${prods}</td>
       <td>${totalUnd}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(g.total)}</td>
-      <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
+      <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button><button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button><button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`;
   }).join('');
 }
