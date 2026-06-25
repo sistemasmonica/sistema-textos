@@ -2453,7 +2453,8 @@ function actualizarResumenGuia(){
     const stock=parseInt(sel.selectedOptions[0]?.dataset.stock)||0;
     const pv=parseFloat(sel.selectedOptions[0]?.dataset.pventa)||0;
     total+=cant*pv;items+=cant;
-    if(cant>stock)alertas.push(`⚠ ${sel.selectedOptions[0]?.text?.split('—')[0]}: pedido ${cant}, stock ${stock}`);
+    const esHist=(sel.selectedOptions[0]?.text||'').includes('[hist.]');
+    if(cant>stock&&!esHist)alertas.push(`⚠ ${sel.selectedOptions[0]?.text?.split('—')[0]}: pedido ${cant}, stock ${stock}`);
   });
   const res=document.getElementById('g-resumen');
   res.style.display='block';
