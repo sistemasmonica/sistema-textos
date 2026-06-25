@@ -475,6 +475,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-p btn-sm" onclick="abrirModalGuia()"><i class="ti ti-plus"></i> Nueva guía</button>
         <button class="btn btn-s btn-sm" onclick="exportarGuiasCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirGuias()"><i class="ti ti-printer"></i> Imprimir reporte</button>
+        <button class="btn btn-sm" style="background:#f57c00;color:#fff" onclick="migrarPreciosGuias()" title="Busca el precio en el catálogo actual para guías que muestran $0.00"><i class="ti ti-currency-dollar"></i> Actualizar precios</button>
       </div>
     </div>
     <div class="filters">
@@ -3000,6 +3001,27 @@ function limpiarProductos(){
   DB.productos=DEFAULT_PRODUCTOS.map(p=>({...p}));
   save();renderCatalogo();updateCount();
   toast('Lista restaurada: '+DB.productos.length+' productos del Kardex pre-cargado.','ok');
+}
+
+function migrarPreciosGuias(){
+  const actual=DB.productos.filter(p=>p.editorial!=='Hist.');
+  const precioMap={};
+  actual.forEach(p=>{if(p.precioVenta>0)precioMap[(p.nombre||'').trim().toUpperCase()]=p.precioVenta;});
+  let lineasFixed=0,guiasFixed=0;
+  DB.guias=DB.guias.map(g=>{
+    let changed=false;
+    const lineas=g.lineas.map(l=>{
+      if(l.precioVenta>0)return l;
+      const pv=precioMap[(l.nombre||'').trim().toUpperCase()]||0;
+      if(pv>0){changed=true;lineasFixed++;return{...l,precioVenta:pv};}
+      return l;
+    });
+    if(changed){guiasFixed++;const total=lineas.reduce((s,l)=>s+(l.cantidad*l.precioVenta),0);return{...g,lineas,total};}
+    return g;
+  });
+  if(!lineasFixed)return toast('No hay líneas por actualizar (ya tienen precio o no se encontró equivalente)','ok');
+  save();renderGuias();
+  toast('✅ '+lineasFixed+' líneas actualizadas en '+guiasFixed+' guías','ok');
 }
 
 function exportProductosCSV(){
