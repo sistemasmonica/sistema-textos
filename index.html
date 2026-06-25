@@ -406,6 +406,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
         <button class="btn btn-d btn-sm" onclick="limpiarProductos()"><i class="ti ti-refresh"></i> Restaurar lista original</button>
+        <button class="btn btn-sm" style="background:#b71c1c;color:#fff" onclick="eliminarHistoricos()" title="Elimina los productos marcados como Hist. (duplicados del backup antiguo)"><i class="ti ti-trash"></i> Limpiar productos Hist.</button>
       </div>
     </div>
     <input type="file" id="fi-excel" accept=".csv,.xls,.xlsx" style="display:none" onchange="importarExcelProductos(this)">
@@ -2972,6 +2973,17 @@ function importarExcelProductos(input){
   input.value='';
 }
 
+function eliminarHistoricos(){
+  const hist=DB.productos.filter(p=>p.editorial==='Hist.');
+  if(!hist.length)return toast('No hay productos históricos para eliminar','ok');
+  if(!confirm(`¿Eliminar ${hist.length} productos históricos (Hist.) y sus movimientos?\nEstos son duplicados del backup antiguo.`))return;
+  const ids=new Set(hist.map(p=>p.id));
+  DB.productos=DB.productos.filter(p=>p.editorial!=='Hist.');
+  DB.movInv=DB.movInv.filter(m=>!ids.has(m.prodId));
+  DB.guias=DB.guias.map(g=>({...g,lineas:g.lineas.filter(l=>!ids.has(l.prodId))})).filter(g=>g.lineas.length>0);
+  save();renderCatalogo();renderStockReport();renderGuias();updateCount();
+  toast(`✅ Eliminados ${hist.length} productos históricos. Catálogo limpio.`,'ok');
+}
 function limpiarProductos(){
   if(!confirm('¿Restaurar la lista original de precios? Esto reemplaza tu lista actual con el Kardex pre-cargado.'))return;
   DB.movInv=[];
