@@ -1848,8 +1848,9 @@ function parsearCSVBanco(txt){
 }
 function parsearExcelBanco(ab){
   try{
-    const wb=XLSX.read(ab,{type:'array'});
+    const wb=XLSX.read(ab,{type:'array',cellText:true,cellDates:false});
     const ws=wb.Sheets[wb.SheetNames[0]];
+    // raw:false usa el texto formateado (w) cuando existe, igual que Excel muestra
     const data=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
     return _parsearFilasBanco(data);
   }catch(e){return[]}
@@ -1866,7 +1867,8 @@ document.getElementById('fi-banco').addEventListener('change',function(e){
     }else{
       rows=parsearExcelBanco(new Uint8Array(ev.target.result));
     }
-    if(!rows.length)return toast('No se pudieron leer filas del estado de cuenta','err');
+    console.log('[BANCO] filas extraídas:',rows.length, rows.slice(0,3));
+    if(!rows.length)return toast('No se pudieron leer filas del estado de cuenta — abre F12 → Consola para ver el diagnóstico','err');
     DB.banco=rows;
     DB.conciliaciones=[];
     save();
