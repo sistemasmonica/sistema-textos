@@ -1130,8 +1130,6 @@ async function guardarProductosNube(prods){
 }
 
 async function saveToCloud(data){
-  // No escribir arrays vacíos a la nube antes de completar el sync inicial.
-  // Esto previene que un navegador sin datos borre datos reales guardados en la nube.
   if(!syncCompleted){
     const hasData=(data.regs?.length||0)+(data.banco?.length||0)+
                   (data.movInv?.length||0)+(data.guias?.length||0)+
@@ -1141,25 +1139,15 @@ async function saveToCloud(data){
   try{
     setSyncStatus('sync');
     const ts=new Date().toISOString();
-    const saves=[
-      sb.from('txe_registros').upsert({version:'v1',data:data.regs,updated_at:ts}),
-      sb.from('txe_banco').upsert({version:'v1',data:data.banco,updated_at:ts}),
-      sb.from('txe_conciliaciones').upsert({version:'v1',data:data.conciliaciones,updated_at:ts}),
-      sb.from('txe_movinventario').upsert({version:'v1',data:data.movInv,updated_at:ts}),
-      sb.from('txe_guias').upsert({version:'v1',data:data.guias,updated_at:ts}),
-      sb.from('txe_colegios').upsert({version:'v1',data:data.colegios,updated_at:ts}),
-      sb.from('txe_coldata').upsert({version:'v1',data:data.colData,updated_at:ts})
-    ];
-    // Guardar productos en nube solo si hay productos importados
-    if(data.productos?.length>0)
-      saves.push(sb.from('txe_config').upsert({key:'productos',value:{data:data.productos},updated_at:ts}));
-    // Solo guardar tablas nuevas una vez que syncFromCloud haya cargado la data real
-    if(syncCompleted){
-      saves.push(sb.from('txe_notascredito').upsert({version:'v1',data:data.notasCredito,updated_at:ts}));
-      saves.push(sb.from('txe_comisiones').upsert({version:'v1',data:data.comisiones,updated_at:ts}));
-      saves.push(sb.from('txe_deudas').upsert({version:'v1',data:data.deudas,updated_at:ts}));
-    }
-    await Promise.all(saves);
+    const payload={
+      regs:data.regs||[],banco:data.banco||[],
+      conciliaciones:data.conciliaciones||[],movInv:data.movInv||[],
+      guias:data.guias||[],colegios:data.colegios||[],colData:data.colData||{},
+      notasCredito:data.notasCredito||[],comisiones:data.comisiones||[],
+      deudas:data.deudas||[],productos:data.productos||[]
+    };
+    const{error}=await sb.from('app_data').upsert({key:'txe_main',value:payload,updated_at:ts});
+    if(error)throw error;
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err');console.warn('Cloud save error:',e);}
 }
@@ -1167,57 +1155,31 @@ async function saveToCloud(data){
 async function syncFromCloud(){
   try{
     setSyncStatus('load');
-    const[r0,r1,r2,r3,r4,r5,r6,r7,r8,r9]=await Promise.all([
-      sb.from('txe_registros').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_banco').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_conciliaciones').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_movinventario').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_guias').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_colegios').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_coldata').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_notascredito').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_comisiones').select('data').eq('version','v1').maybeSingle(),
-      sb.from('txe_deudas').select('data').eq('version','v1').maybeSingle()
-    ]);
-    const tablesOk=!r0.error;
-    if(tablesOk){
-      // Solo sobreescribir datos locales si la nube tiene datos reales (length > 0).
-      // Esto protege contra que arrays vacíos [] de la nube borren datos del localStorage.
-      if(r0.data?.data?.length>0)DB.regs=r0.data.data;
-      if(r1.data?.data?.length>0)DB.banco=r1.data.data;
-      if(r2.data?.data?.length>0)DB.conciliaciones=r2.data.data;
-      if(r3.data?.data?.length>0)DB.movInv=r3.data.data;
-      if(r4.data?.data?.length>0)DB.guias=r4.data.data;
-      if(r5.data?.data?.length>0)DB.colegios=r5.data.data;
-      if(r6.data?.data!=null&&Object.keys(r6.data.data).length>0)DB.colData=r6.data.data;
-      if(r7.data?.data?.length>0)DB.notasCredito=r7.data.data;
-      if(r8.data?.data?.length>0)DB.comisiones=r8.data.data;
-      if(r9.data?.data?.length>0)DB.deudas=r9.data.data;
-      const empty=!r0.data&&!r1.data&&!r2.data&&!r3.data&&!r4.data&&!r5.data&&!r6.data;
-      if(empty){
-        const{data:old}=await sb.from('app_data').select('value').eq('key','txe_v4').maybeSingle();
-        if(old?.value){
-          const v=old.value;
-          if(v.regs)DB.regs=v.regs;
-          if(v.banco)DB.banco=v.banco;
-          if(v.conciliaciones)DB.conciliaciones=v.conciliaciones;
-          if(v.movInv)DB.movInv=v.movInv;
-          if(v.guias)DB.guias=v.guias;
-          if(v.colegios)DB.colegios=v.colegios;
-          if(v.colData)DB.colData=v.colData;
-          saveToCloud({regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,notasCredito:DB.notasCredito,comisiones:DB.comisiones,deudas:DB.deudas});
-        }
-      }
+    const{data:main,error:mainErr}=await sb.from('app_data').select('value,updated_at').eq('key','txe_main').maybeSingle();
+    if(!mainErr&&main?.value){
+      const v=main.value;
+      if(v.regs?.length>0)DB.regs=v.regs;
+      if(v.banco?.length>0)DB.banco=v.banco;
+      if(v.conciliaciones?.length>0)DB.conciliaciones=v.conciliaciones;
+      if(v.movInv?.length>0)DB.movInv=v.movInv;
+      if(v.guias?.length>0)DB.guias=v.guias;
+      if(v.colegios?.length>0)DB.colegios=v.colegios;
+      if(v.colData!=null&&Object.keys(v.colData).length>0)DB.colData=v.colData;
+      if(v.notasCredito?.length>0)DB.notasCredito=v.notasCredito;
+      if(v.comisiones?.length>0)DB.comisiones=v.comisiones;
+      if(v.deudas?.length>0)DB.deudas=v.deudas;
+      if(v.productos?.length>0){DB.productos=v.productos;localStorage.setItem('txe_productos',JSON.stringify(DB.productos));}
     } else {
+      // Fallback: tabla antigua app_data key txe_v4
       const{data:old}=await sb.from('app_data').select('value').eq('key','txe_v4').maybeSingle();
       if(old?.value){
         const v=old.value;
-        if(v.regs)DB.regs=v.regs;
-        if(v.banco)DB.banco=v.banco;
-        if(v.conciliaciones)DB.conciliaciones=v.conciliaciones;
-        if(v.movInv)DB.movInv=v.movInv;
-        if(v.guias)DB.guias=v.guias;
-        if(v.colegios)DB.colegios=v.colegios;
+        if(v.regs?.length>0)DB.regs=v.regs;
+        if(v.banco?.length>0)DB.banco=v.banco;
+        if(v.conciliaciones?.length>0)DB.conciliaciones=v.conciliaciones;
+        if(v.movInv?.length>0)DB.movInv=v.movInv;
+        if(v.guias?.length>0)DB.guias=v.guias;
+        if(v.colegios?.length>0)DB.colegios=v.colegios;
         if(v.colData)DB.colData=v.colData;
       }
     }
@@ -1327,27 +1289,48 @@ function load(){
     }
   }catch(e){console.warn('Error cargando DB:',e)}
 }
+let _opCount=0;
 function save(){
   try{
-    // Productos en clave propia — nunca se mezclan con el resto
     if(DB.productos.length>0)
       localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
     const toSave={
-      regs:DB.regs,
-      banco:DB.banco,
-      conciliaciones:DB.conciliaciones,
-      movInv:DB.movInv,
-      guias:DB.guias,
-      colegios:DB.colegios,
-      colData:DB.colData,
-      notasCredito:DB.notasCredito,
-      comisiones:DB.comisiones,
-      deudas:DB.deudas
+      regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,
+      movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,
+      notasCredito:DB.notasCredito,comisiones:DB.comisiones,deudas:DB.deudas
     };
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     saveToCloud({...toSave,productos:DB.productos});
+    // Backup automático cada 15 operaciones
+    _opCount++;
+    if(_opCount>=15){_opCount=0;backupSilencioso();}
   }catch(e){toast('Error guardando datos','err')}
 }
+
+function backupSilencioso(){
+  try{
+    const fecha=new Date().toISOString().split('T')[0];
+    const hora=new Date().toTimeString().split(' ')[0].replace(/:/g,'-');
+    const toSave={version:'backup_v2',fecha_backup:new Date().toISOString(),
+      productos:DB.productos,regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,
+      movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,
+      notasCredito:DB.notasCredito||[],comisiones:DB.comisiones||[],deudas:DB.deudas||[]};
+    const a=document.createElement('a');
+    a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(toSave));
+    a.download='backup_textos_'+fecha+'_'+hora+'.json';
+    a.click();
+  }catch(e){}
+}
+
+// Backup automático al cerrar la ventana
+window.addEventListener('beforeunload',()=>{
+  try{
+    const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,
+      movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,
+      notasCredito:DB.notasCredito,comisiones:DB.comisiones,deudas:DB.deudas};
+    localStorage.setItem('txe_v4',JSON.stringify(toSave));
+  }catch(e){}
+});
 
 // ===================================================
 // UTILIDADES
@@ -4199,8 +4182,12 @@ function restoreData(input){
       DB.colData=restored.colData||{};
       DB.notasCredito=restored.notasCredito||[];
       DB.comisiones=restored.comisiones||[];
+      DB.deudas=restored.deudas||[];
       save();updateCount();renderDash();
-      toast('✅ Datos restaurados: '+DB.regs.length+' registros','ok');
+      if(typeof renderCatalogo==='function')renderCatalogo();
+      if(typeof renderStockReport==='function')renderStockReport();
+      if(typeof renderGuias==='function')renderGuias();
+      toast('✅ Datos restaurados: '+DB.regs.length+' registros, '+DB.guias.length+' guías, '+DB.productos.length+' productos','ok');
     }catch(e){toast('Error leyendo backup: '+e.message,'err')}
   };
   r.readAsText(f,'UTF-8');
