@@ -1767,29 +1767,38 @@ function renderUtilidad(){
 // BANCO — CONCILIACIÓN
 // ===================================================
 function parsearCSVBanco(txt){
-  // Detectar separador
   const sep=txt.indexOf(';')>-1?';':',';
   const lines=txt.split('\n').map(l=>l.trim()).filter(Boolean);
   if(lines.length<2)return[];
-  // Intentar detectar cabecera
-  const hdrs=lines[0].split(sep).map(h=>h.replace(/"/g,'').toLowerCase().trim());
-  const iDate=hdrs.findIndex(h=>/fecha|date/.test(h));
-  const iDesc=hdrs.findIndex(h=>/descri|concepto|detalle|referencia|detail/.test(h));
-  const iDeb=hdrs.findIndex(h=>/débito|debito|cargo|debit|egreso/.test(h));
-  const iCred=hdrs.findIndex(h=>/crédito|credito|abono|credit|ingreso/.test(h));
-  const iSal=hdrs.findIndex(h=>/saldo|balance/.test(h));
+  // Buscar la fila de cabecera real en las primeras 20 líneas
+  let hdrIdx=0;
+  let iDate=-1,iDesc=-1,iDeb=-1,iCred=-1,iSal=-1;
+  for(let h=0;h<Math.min(20,lines.length);h++){
+    const hdrs=lines[h].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
+    const d=hdrs.findIndex(c=>/fecha|date/.test(c));
+    const de=hdrs.findIndex(c=>/descri|concepto|detalle|referencia|detail|transacc/.test(c));
+    const db=hdrs.findIndex(c=>/d[eé]bito|cargo|debit|egreso/.test(c));
+    const cr=hdrs.findIndex(c=>/cr[eé]dito|abono|credit|ingreso/.test(c));
+    const sl=hdrs.findIndex(c=>/saldo|balance/.test(c));
+    // La cabecera real tiene al menos fecha o (debito y credito)
+    if(d>=0||(db>=0&&cr>=0)){
+      hdrIdx=h;iDate=d;iDesc=de;iDeb=db;iCred=cr;iSal=sl;break;
+    }
+  }
   const rows=[];
-  for(let i=1;i<lines.length;i++){
+  for(let i=hdrIdx+1;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
     if(cols.length<2)continue;
-    const fraw=iDate>=0?cols[iDate]:'';
+    const fraw=iDate>=0?cols[iDate]:cols[0]||'';
+    // Saltar filas sin fecha válida (pie de página, totales, etc.)
+    if(!fraw||!/\d/.test(fraw))continue;
     let fecha=fraw;
-    // Intentar normalizar fecha
     if(fraw.includes('/')){const p=fraw.split('/');if(p.length===3){fecha=p[2].length===4?p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'):p[0]+'-'+p[1].padStart(2,'0')+'-'+p[2].padStart(2,'0');}}
+    else if(fraw.includes('-')&&fraw.split('-')[0].length===2){const p=fraw.split('-');fecha=p[2]+'-'+p[1]+'-'+p[0];}
     const desc=iDesc>=0?cols[iDesc]:cols[1]||'';
-    const deb=parseFloat((iDeb>=0?cols[iDeb]:'0').replace(/[,$]/g,''))||0;
-    const cred=parseFloat((iCred>=0?cols[iCred]:'0').replace(/[,$]/g,''))||0;
-    const sal=parseFloat((iSal>=0?cols[iSal]:'0').replace(/[,$]/g,''))||0;
+    const deb=parseFloat((iDeb>=0?cols[iDeb]:'0').replace(/[,\s$]/g,''))||0;
+    const cred=parseFloat((iCred>=0?cols[iCred]:'0').replace(/[,\s$]/g,''))||0;
+    const sal=parseFloat((iSal>=0?cols[iSal]:'0').replace(/[,\s$]/g,''))||0;
     if(!desc&&!deb&&!cred)continue;
     rows.push({id:uid(),fecha,descripcion:desc,debito:deb,credito:cred,saldo:sal,conciliado:false,regId:null});
   }
