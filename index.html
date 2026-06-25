@@ -2477,7 +2477,16 @@ function editarGuia(id){
     const lastLine=document.getElementById('g-lineas').lastElementChild;
     const sel=lastLine.querySelector('select');
     const cantInput=lastLine.querySelector('[id$="-cant"]');
-    if(sel)sel.value=l.prodId;
+    if(sel){
+      if(!sel.querySelector(`option[value="${l.prodId}"]`)){
+        const opt=document.createElement('option');
+        const st=stockActual(l.prodId);
+        opt.value=l.prodId;opt.textContent=(l.nombre||l.prodId)+' [hist.] — Stock: '+st;
+        opt.dataset.stock=st;opt.dataset.pventa=l.precioVenta||0;
+        sel.appendChild(opt);
+      }
+      sel.value=l.prodId;
+    }
     if(cantInput)cantInput.value=l.cantidad;
   });
   actualizarResumenGuia();
