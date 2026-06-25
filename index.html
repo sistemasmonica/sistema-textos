@@ -2434,7 +2434,7 @@ function agregarLineaGuia(){
     <div class="fg" style="margin:0"><label>Producto</label>
       <select onchange="actualizarResumenGuia()">
         <option value="">— seleccionar —</option>
-        ${DB.productos.map(p=>{const st=stockActual(p.id);return`<option value="${p.id}" data-stock="${st}" data-pventa="${p.precioVenta||0}">${p.nombre}${p.editorial?' ('+p.editorial+')':''} — Stock: ${st}</option>`}).join('')}
+        ${DB.productos.filter(p=>p.editorial!=='Hist.').sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).map(p=>{const st=stockActual(p.id);return`<option value="${p.id}" data-stock="${st}" data-pventa="${p.precioVenta||0}">${p.nombre}${p.editorial?' ('+p.editorial+')':''} — Stock: ${st}</option>`}).join('')}
       </select>
     </div>
     <div class="fg" style="margin:0"><label>Cantidad</label><input type="number" id="${id}-cant" min="1" placeholder="1" value="1" oninput="actualizarResumenGuia()"></div>
@@ -2975,14 +2975,15 @@ function importarExcelProductos(input){
 
 function eliminarHistoricos(){
   const hist=DB.productos.filter(p=>p.editorial==='Hist.');
-  if(!hist.length)return toast('No hay productos históricos para eliminar','ok');
-  if(!confirm(`¿Eliminar ${hist.length} productos históricos (Hist.) y sus movimientos?\nEstos son duplicados del backup antiguo.`))return;
+  if(!hist.length)return toast('No hay productos históricos en el catálogo','ok');
   const ids=new Set(hist.map(p=>p.id));
+  const guiasAfectadas=DB.guias.filter(g=>g.lineas?.some(l=>ids.has(l.prodId))).length;
+  if(!confirm(`¿Eliminar ${hist.length} productos históricos (Hist.) del catálogo?\n\n• Se eliminarán sus movimientos de inventario\n• Las ${guiasAfectadas} guías que los referencian se conservan como historial\n• Esta acción NO se puede deshacer (haz backup primero)\n\n¿Continuar?`))return;
   DB.productos=DB.productos.filter(p=>p.editorial!=='Hist.');
   DB.movInv=DB.movInv.filter(m=>!ids.has(m.prodId));
-  DB.guias=DB.guias.map(g=>({...g,lineas:g.lineas.filter(l=>!ids.has(l.prodId))})).filter(g=>g.lineas.length>0);
+  // Las guías se conservan como registro histórico (NO se eliminan)
   save();renderCatalogo();renderStockReport();renderGuias();updateCount();
-  toast(`✅ Eliminados ${hist.length} productos históricos. Catálogo limpio.`,'ok');
+  toast(`✅ Eliminados ${hist.length} productos Hist. del catálogo. Las guías históricas se conservaron.`,'ok');
 }
 function limpiarProductos(){
   if(!confirm('¿Restaurar la lista original de precios? Esto reemplaza tu lista actual con el Kardex pre-cargado.'))return;
