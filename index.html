@@ -423,6 +423,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <option value="low">Stock bajo (≤5)</option>
         <option value="zero">Agotado</option>
       </select>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="inv-show-hist" onchange="renderCatalogo()"> Ver históricos</label>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -2051,8 +2052,10 @@ function renderCatalogo(){
   const edits=[...new Set(DB.productos.map(p=>p.editorial).filter(Boolean))].sort();
   const selEdit=document.getElementById('inv-edit');
   if(selEdit){const prev=selEdit.value;selEdit.innerHTML='<option value="">Todas las editoriales</option>'+edits.map(e=>`<option${e===prev?' selected':''}>${e}</option>`).join('');}
+  const mostrarHist=document.getElementById('inv-show-hist')?.checked||false;
   let prods=DB.productos.filter(p=>{
-    if(q&&!p.nombre.toLowerCase().includes(q)&&!p.codigo.toLowerCase().includes(q)&&!p.editorial.toLowerCase().includes(q))return false;
+    if(!mostrarHist&&p.editorial==='Hist.')return false;
+    if(q&&!p.nombre.toLowerCase().includes(q)&&!p.codigo.toLowerCase().includes(q)&&!(p.editorial||'').toLowerCase().includes(q))return false;
     if(edit&&p.editorial!==edit)return false;
     const st=stockActual(p.id);
     if(stockFilter==='ok'&&st<=5)return false;
@@ -2757,7 +2760,7 @@ function renderStockReport(){
   let totalCosto=0;let totalVenta=0;
   const tb=document.getElementById('tb-rep-stock');
   if(!DB.productos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos en inventario</div></td></tr>';return}
-  const prodsConEntradas=DB.productos;
+  const prodsConEntradas=DB.productos.filter(p=>p.editorial!=='Hist.');
   const rows=prodsConEntradas.map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
@@ -2768,7 +2771,7 @@ function renderStockReport(){
     return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700">${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
   tb.innerHTML=rows+`<tr class="total-row"><td colspan="8" style="text-align:right">TOTAL VALOR INVENTARIO:</td><td style="font-family:monospace">${fmt(totalCosto)}</td></tr>`;
-  document.getElementById('rep-nprod').textContent=DB.productos.length;
+  document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
 }
@@ -2787,7 +2790,7 @@ function imprimirInventario(){
   const win=window.open('','_blank');
   const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
   let totalCosto=0,totalVenta=0;
-  const filas=DB.productos.map(p=>{
+  const filas=DB.productos.filter(p=>p.editorial!=='Hist.').map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
@@ -3032,7 +3035,7 @@ function exportProductosCSV(){
 
 function exportStockCSV(){
   const rows=[['Codigo','Nombre','Editorial','Nivel','Stock Inicial','Entradas','Salidas','Stock Actual','P.Costo','P.Venta','Valor Costo']];
-  DB.productos.forEach(p=>{
+  DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
@@ -3059,9 +3062,10 @@ function renderDash(){
   document.getElementById('svn').textContent=rv.length+' ventas';
   document.getElementById('snn').textContent=rn.length+' facturas';
   document.getElementById('spn').textContent=rp.length+' registros';
-  // inventario stats
-  const stockBajo=DB.productos.filter(p=>stockActual(p.id)<=5).length;
-  document.getElementById('d-nprod').textContent=DB.productos.length;
+  // inventario stats (solo productos actuales, sin Hist.)
+  const prodsActuales=DB.productos.filter(p=>p.editorial!=='Hist.');
+  const stockBajo=prodsActuales.filter(p=>stockActual(p.id)<=5).length;
+  document.getElementById('d-nprod').textContent=prodsActuales.length;
   document.getElementById('d-stockbajo').textContent=stockBajo;
   const bancoPend=DB.banco.filter(b=>!b.conciliado).length;
   document.getElementById('d-bancopend').textContent=bancoPend;
