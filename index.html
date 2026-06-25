@@ -2489,7 +2489,7 @@ function guardarGuia(){
   if(!cliente)return toast('Ingresa el cliente o colegio','err');
   const lineasEls=[...document.getElementById('g-lineas').children];
   const lineas=[];
-  let stockError=false;
+  let stockWarn=[];
   lineasEls.forEach(el=>{
     const sel=el.querySelector('select');
     const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
@@ -2501,11 +2501,11 @@ function guardarGuia(){
       const lOrig=gOrig?.lineas.find(l=>l.prodId===sel.value);
       if(lOrig)stockDisp+=lOrig.cantidad;
     }
-    if(cant>stockDisp){stockError=true;toast(`Stock insuficiente para ${sel.selectedOptions[0]?.text?.split('—')[0]}. Disponible: ${stockDisp}`,'err');return;}
+    if(cant>stockDisp)stockWarn.push(`• ${sel.selectedOptions[0]?.text?.split('—')[0].trim()} (disponible: ${stockDisp})`);
     const prod=DB.productos.find(p=>p.id===sel.value);
     lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',cantidad:cant,precioVenta:prod?.precioVenta||0});
   });
-  if(stockError)return;
+  if(stockWarn.length&&!confirm(`⚠️ Stock insuficiente en:\n${stockWarn.join('\n')}\n\n¿Registrar la guía de todas formas?`))return;
   if(!lineas.length)return toast('Agrega al menos un producto','err');
   const numero=document.getElementById('g-num').value;
   const fecha=document.getElementById('g-fecha').value||today();
