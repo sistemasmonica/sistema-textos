@@ -1766,51 +1766,92 @@ function renderUtilidad(){
 // ===================================================
 // BANCO — CONCILIACIÓN
 // ===================================================
-function parsearCSVBanco(txt){
-  const sep=txt.indexOf(';')>-1?';':',';
-  const lines=txt.split('\n').map(l=>l.trim()).filter(Boolean);
-  if(lines.length<2)return[];
-  // Buscar la fila de cabecera real en las primeras 20 líneas
-  let hdrIdx=0;
-  let iDate=-1,iDesc=-1,iDeb=-1,iCred=-1,iSal=-1;
-  for(let h=0;h<Math.min(20,lines.length);h++){
-    const hdrs=lines[h].split(sep).map(c=>c.replace(/"/g,'').toLowerCase().trim());
-    const d=hdrs.findIndex(c=>/fecha|date/.test(c));
-    const de=hdrs.findIndex(c=>/descri|concepto|detalle|referencia|detail|transacc/.test(c));
-    const db=hdrs.findIndex(c=>/d[eé]bito|cargo|debit|egreso/.test(c));
-    const cr=hdrs.findIndex(c=>/cr[eé]dito|abono|credit|ingreso/.test(c));
-    const sl=hdrs.findIndex(c=>/saldo|balance/.test(c));
-    // La cabecera real tiene al menos fecha o (debito y credito)
-    if(d>=0||(db>=0&&cr>=0)){
-      hdrIdx=h;iDate=d;iDesc=de;iDeb=db;iCred=cr;iSal=sl;break;
+function _parseNum(s){
+  if(s===null||s===undefined||s==='')return 0;
+  if(typeof s==='number')return s;
+  let n=String(s).replace(/[$\s]/g,'');
+  // Formato EC: 1.234,56 (punto=miles, coma=decimal)
+  if(/\d+\.\d{3}[,\d]/.test(n)){n=n.replace(/\./g,'').replace(',','.');}
+  // Coma como decimal sin punto: 2,00 → 2.00
+  else if(n.includes(',')&&!n.includes('.')){n=n.replace(',','.');}
+  // Coma como miles con punto decimal: 1,000.00 → 1000.00
+  else if(n.includes(',')&&n.includes('.')){n=n.replace(/,/g,'');}
+  return parseFloat(n)||0;
+}
+function _normFecha(s){
+  if(!s)return'';
+  // Quitar hora si existe: "2026-5-29, 5:41 PM" → "2026-5-29"
+  let f=String(s).split(/,\s*\d|\s+\d{1,2}:\d{2}/)[0].trim();
+  if(f.includes('/')){const p=f.split('/');if(p.length===3){return p[2].length===4?p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'):p[0]+'-'+p[1].padStart(2,'0')+'-'+p[2].padStart(2,'0');}}
+  if(f.includes('-')&&f.split('-')[0].length===2){const p=f.split('-');return p[2]+'-'+p[1]+'-'+p[0];}
+  // YYYY-M-D → YYYY-MM-DD
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(f)){const p=f.split('-');return p[0]+'-'+p[1].padStart(2,'0')+'-'+p[2].padStart(2,'0');}
+  return f;
+}
+function _parsearFilasBanco(data){
+  // data = array de arrays (filas x columnas)
+  if(!data||data.length<2)return[];
+  let hdrIdx=0,iDate=-1,iDesc=-1,iDeb=-1,iCred=-1,iSal=-1,iMonto=-1,iTipo=-1;
+  for(let h=0;h<Math.min(20,data.length);h++){
+    const hdrs=(data[h]||[]).map(c=>String(c||'').toLowerCase().trim());
+    const d=hdrs.findIndex(c=>/^fecha$|^date$/.test(c)||(/fecha|date/.test(c)&&c.length<15));
+    const de=hdrs.findIndex(c=>/descri|concepto|detalle|referencia|transacc/.test(c));
+    const db=hdrs.findIndex(c=>/d[eé]bito|^cargo$|^debit/.test(c));
+    const cr=hdrs.findIndex(c=>/cr[eé]dito|^abono$|^credit/.test(c));
+    const sl=hdrs.findIndex(c=>/^saldo$|^balance$/.test(c));
+    const mo=hdrs.findIndex(c=>/^monto$|^importe$|^valor$/.test(c));
+    const ti=hdrs.findIndex(c=>/^tipo$/.test(c));
+    if(d>=0||(db>=0&&cr>=0)||mo>=0){
+      hdrIdx=h;iDate=d;iDesc=de;iDeb=db;iCred=cr;iSal=sl;iMonto=mo;iTipo=ti;break;
     }
   }
   const rows=[];
-  for(let i=hdrIdx+1;i<lines.length;i++){
-    const cols=lines[i].split(sep).map(c=>c.replace(/"/g,'').trim());
-    if(cols.length<2)continue;
-    const fraw=iDate>=0?cols[iDate]:cols[0]||'';
-    // Saltar filas sin fecha válida (pie de página, totales, etc.)
+  for(let i=hdrIdx+1;i<data.length;i++){
+    const cols=data[i]||[];
+    const fraw=String(cols[iDate>=0?iDate:0]||'');
     if(!fraw||!/\d/.test(fraw))continue;
-    let fecha=fraw;
-    if(fraw.includes('/')){const p=fraw.split('/');if(p.length===3){fecha=p[2].length===4?p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'):p[0]+'-'+p[1].padStart(2,'0')+'-'+p[2].padStart(2,'0');}}
-    else if(fraw.includes('-')&&fraw.split('-')[0].length===2){const p=fraw.split('-');fecha=p[2]+'-'+p[1]+'-'+p[0];}
-    const desc=iDesc>=0?cols[iDesc]:cols[1]||'';
-    const deb=parseFloat((iDeb>=0?cols[iDeb]:'0').replace(/[,\s$]/g,''))||0;
-    const cred=parseFloat((iCred>=0?cols[iCred]:'0').replace(/[,\s$]/g,''))||0;
-    const sal=parseFloat((iSal>=0?cols[iSal]:'0').replace(/[,\s$]/g,''))||0;
+    const fecha=_normFecha(fraw);
+    if(!fecha)continue;
+    const desc=String(cols[iDesc>=0?iDesc:1]||'').trim();
+    let deb=0,cred=0;
+    if(iMonto>=0){
+      const monto=_parseNum(cols[iMonto]);
+      const tipo=String(cols[iTipo>=0?iTipo:iMonto-4]||'').toLowerCase();
+      if(monto<0||tipo.includes('deb')||tipo.includes('bito')||tipo.includes('cargo')){deb=Math.abs(monto);}
+      else{cred=Math.abs(monto);}
+    }else{
+      deb=_parseNum(cols[iDeb>=0?iDeb:2]);
+      cred=_parseNum(cols[iCred>=0?iCred:3]);
+    }
+    const sal=_parseNum(iSal>=0?cols[iSal]:'');
     if(!desc&&!deb&&!cred)continue;
     rows.push({id:uid(),fecha,descripcion:desc,debito:deb,credito:cred,saldo:sal,conciliado:false,regId:null});
   }
   return rows;
 }
-
+function parsearCSVBanco(txt){
+  const sep=txt.indexOf(';')>-1?';':',';
+  // Parser CSV que respeta campos entre comillas
+  const parseLinea=line=>{
+    const cols=[];let cur='';let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){inQ=!inQ;}
+      else if(c===sep&&!inQ){cols.push(cur.trim());cur='';}
+      else{cur+=c;}
+    }
+    cols.push(cur.trim());
+    return cols;
+  };
+  const data=txt.split('\n').filter(l=>l.trim()).map(parseLinea);
+  return _parsearFilasBanco(data);
+}
 function parsearExcelBanco(ab){
   try{
     const wb=XLSX.read(ab,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
-    const csv=XLSX.utils.sheet_to_csv(ws);
-    return parsearCSVBanco(csv);
+    const data=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+    return _parsearFilasBanco(data);
   }catch(e){return[]}
 }
 
