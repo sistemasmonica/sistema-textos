@@ -2565,9 +2565,11 @@ function renderGuias(){
   guias.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const tb=document.getElementById('tb-guias');
   if(!guias.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Sin guías registradas</div></td></tr>`;return}
-  tb.innerHTML=guias.map(g=>{
+  let totalUnidadesAll=0;let totalValorAll=0;
+  const rows=guias.map(g=>{
     const prods=g.lineas.map(l=>`${l.nombre} (${l.cantidad})`).join(', ');
     const totalUnd=g.lineas.reduce((a,l)=>a+l.cantidad,0);
+    totalUnidadesAll+=totalUnd;totalValorAll+=g.total||0;
     const esHistorica=g.lineas.some(l=>DB.productos.find(p=>p.id===l.prodId)?.editorial==='Hist.'||!DB.productos.find(p=>p.id===l.prodId));
     const btnEditar=esHistorica?`<span title="Guía histórica (catálogo anterior)" style="color:var(--mu);font-size:10px;padding:2px 4px">hist.</span>`:`<button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button>`;
     return`<tr>
@@ -2580,6 +2582,7 @@ function renderGuias(){
       <td style="display:flex;gap:4px;align-items:center"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button>${btnEditar}<button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`;
   }).join('');
+  tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTAL ${guias.length} GUÍAS:</td><td style="font-weight:700;color:var(--r1)">${totalUnidadesAll} und</td><td style="font-family:monospace;font-weight:700;color:var(--g1)">${fmt(totalValorAll)}</td><td></td></tr>`;
 }
 
 function verGuia(id){
@@ -2759,7 +2762,7 @@ function imprimirGuia(id){
 }
 
 function renderStockReport(){
-  let totalCosto=0;let totalVenta=0;
+  let totalCosto=0;let totalVenta=0;let totalSalidas=0;let totalStock=0;
   const tb=document.getElementById('tb-rep-stock');
   if(!DB.productos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos en inventario</div></td></tr>';return}
   const prodsConEntradas=DB.productos.filter(p=>p.editorial!=='Hist.');
@@ -2768,11 +2771,11 @@ function renderStockReport(){
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
     const valC=st*p.precioCosto;const valV=st*p.precioVenta;
-    totalCosto+=valC;totalVenta+=valV;
+    totalCosto+=valC;totalVenta+=valV;totalSalidas+=sal;totalStock+=st;
     const rc=st===0?'stock-zero':st<=5?'stock-low':'';
     return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700">${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
-  tb.innerHTML=rows+`<tr class="total-row"><td colspan="8" style="text-align:right">TOTAL VALOR INVENTARIO:</td><td style="font-family:monospace">${fmt(totalCosto)}</td></tr>`;
+  tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="3" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
