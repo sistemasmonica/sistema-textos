@@ -2568,6 +2568,8 @@ function renderGuias(){
   tb.innerHTML=guias.map(g=>{
     const prods=g.lineas.map(l=>`${l.nombre} (${l.cantidad})`).join(', ');
     const totalUnd=g.lineas.reduce((a,l)=>a+l.cantidad,0);
+    const esHistorica=g.lineas.some(l=>DB.productos.find(p=>p.id===l.prodId)?.editorial==='Hist.'||!DB.productos.find(p=>p.id===l.prodId));
+    const btnEditar=esHistorica?`<span title="Guía histórica (catálogo anterior)" style="color:var(--mu);font-size:10px;padding:2px 4px">hist.</span>`:`<button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button>`;
     return`<tr>
       <td style="font-family:monospace;font-weight:600">${g.numero}</td>
       <td style="font-family:monospace">${g.fecha}</td>
@@ -2575,7 +2577,7 @@ function renderGuias(){
       <td style="max-width:180px;font-size:11px">${prods}</td>
       <td>${totalUnd}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(g.total)}</td>
-      <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button><button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button><button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
+      <td style="display:flex;gap:4px;align-items:center"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button>${btnEditar}<button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`;
   }).join('');
 }
