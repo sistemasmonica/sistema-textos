@@ -2605,8 +2605,11 @@ function verGuia(id){
 
 function exportarGuiasCSV(){
   if(!DB.guias.length)return toast('No hay guías registradas','err');
+  const guiasOrden=DB.guias.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+
+  // Hoja 1 — detalle completo
   const filas=[['N° Guía','Fecha','Cliente / Colegio','Factura Venta','Producto','Cantidad','Precio Venta','Subtotal','Total Guía','Observación']];
-  DB.guias.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(g=>{
+  guiasOrden.forEach(g=>{
     g.lineas.forEach((l,i)=>{
       filas.push([
         g.numero, g.fecha, g.cliente, g.factura||'',
@@ -2618,10 +2621,34 @@ function exportarGuiasCSV(){
       ]);
     });
   });
-  const ws=XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols']=[{wch:10},{wch:12},{wch:30},{wch:14},{wch:45},{wch:10},{wch:13},{wch:12},{wch:12},{wch:20}];
+  const ws1=XLSX.utils.aoa_to_sheet(filas);
+  ws1['!cols']=[{wch:10},{wch:12},{wch:30},{wch:14},{wch:45},{wch:10},{wch:13},{wch:12},{wch:12},{wch:20}];
+
+  // Hoja 2 — resumen por producto
+  const porProd={};
+  guiasOrden.forEach(g=>{
+    g.lineas.forEach(l=>{
+      if(!porProd[l.nombre])porProd[l.nombre]=[];
+      porProd[l.nombre].push({guia:g.numero,fecha:g.fecha,cliente:g.cliente,cantidad:l.cantidad,precio:l.precioVenta});
+    });
+  });
+  const filas2=[['Producto','N° Guía','Fecha','Cliente / Colegio','Cantidad','Precio Venta','Subtotal']];
+  Object.keys(porProd).sort().forEach(prod=>{
+    let totalUnid=0, totalVal=0;
+    porProd[prod].forEach((r,i)=>{
+      const sub=parseFloat((r.cantidad*r.precio).toFixed(2));
+      totalUnid+=r.cantidad; totalVal+=sub;
+      filas2.push([i===0?prod:'', r.guia, r.fecha, r.cliente, r.cantidad, parseFloat(r.precio.toFixed(2)), sub]);
+    });
+    filas2.push(['','','','TOTAL '+prod, totalUnid,'', parseFloat(totalVal.toFixed(2))]);
+    filas2.push([]);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(filas2);
+  ws2['!cols']=[{wch:45},{wch:10},{wch:12},{wch:30},{wch:10},{wch:13},{wch:12}];
+
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Guías de Retiro');
+  XLSX.utils.book_append_sheet(wb,ws1,'Guías de Retiro');
+  XLSX.utils.book_append_sheet(wb,ws2,'Resumen por Producto');
   XLSX.writeFile(wb,'guias_retiro_'+today()+'.xlsx');
   toast('Archivo Excel descargado','ok');
 }
