@@ -2449,11 +2449,14 @@ function agregarLineaGuia(){
 function actualizarResumenGuia(){
   const lineasEls=[...document.getElementById('g-lineas').children];
   let total=0;let items=0;let alertas=[];
+  const editId=document.getElementById('g-edit-id')?.value||'';
+  const guiaOrig=editId?DB.guias.find(g=>g.id===editId):null;
   lineasEls.forEach(el=>{
     const sel=el.querySelector('select');
     const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
     if(!sel?.value||!cant)return;
-    const stock=parseInt(sel.selectedOptions[0]?.dataset.stock)||0;
+    let stock=parseInt(sel.selectedOptions[0]?.dataset.stock)||0;
+    if(guiaOrig){const lo=guiaOrig.lineas.find(l=>l.prodId===sel.value);if(lo)stock+=lo.cantidad;}
     const pv=parseFloat(sel.selectedOptions[0]?.dataset.pventa)||0;
     total+=cant*pv;items+=cant;
     const esHist=(sel.selectedOptions[0]?.text||'').includes('[hist.]');
