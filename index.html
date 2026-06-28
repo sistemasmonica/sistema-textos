@@ -2610,19 +2610,19 @@ function exportarGuiasCSV(){
     g.lineas.forEach((l,i)=>{
       filas.push([
         g.numero, g.fecha, g.cliente, g.factura||'',
-        l.nombre, l.cantidad, l.precioVenta.toFixed(2),
-        (l.cantidad*l.precioVenta).toFixed(2),
-        i===0?g.total.toFixed(2):'',
+        l.nombre, l.cantidad,
+        parseFloat(l.precioVenta.toFixed(2)),
+        parseFloat((l.cantidad*l.precioVenta).toFixed(2)),
+        i===0?parseFloat(g.total.toFixed(2)):'',
         i===0?(g.observacion||''):''
       ]);
     });
   });
-  const csv=filas.map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}"`).join(',')).join('\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='guias_retiro_'+today()+'.csv';
-  a.click();
+  const ws=XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols']=[{wch:10},{wch:12},{wch:30},{wch:14},{wch:45},{wch:10},{wch:13},{wch:12},{wch:12},{wch:20}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Guías de Retiro');
+  XLSX.writeFile(wb,'guias_retiro_'+today()+'.xlsx');
   toast('Archivo Excel descargado','ok');
 }
 
