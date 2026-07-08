@@ -1949,7 +1949,7 @@ dzBanco.addEventListener('drop',e=>{
 });
 
 // ===== Motor de conciliación =====
-const CLASIFICACIONES={transferencia:'🔁 Transferencia entre cuentas',prestamo:'💰 Préstamo',aporte:'📥 Aporte',devolucion:'↩️ Devolución',otro:'🏷️ Otro'};
+const CLASIFICACIONES={transferencia:'🔁 Transferencia entre cuentas',pago:'💵 Pago a proveedor/trabajador',cobro:'💰 Cobro a cliente',prestamo:'🏦 Préstamo',aporte:'📥 Aporte',devolucion:'↩️ Devolución',otro:'🏷️ Otro'};
 
 function _normTxt(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
 
