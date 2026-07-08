@@ -514,7 +514,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="sh" style="margin-top:4px">
       <h2>Historial de respaldos</h2>
-      <button class="btn btn-s btn-sm" onclick="exportarRespaldosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="exportarRespaldosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+        <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirRespaldos()"><i class="ti ti-printer"></i> Imprimir listado</button>
+      </div>
     </div>
     <div class="filters">
       <input type="search" id="rv-q" placeholder="Buscar vendedor..." oninput="renderRespaldosVendedor()" style="min-width:180px">
@@ -2543,7 +2546,10 @@ function renderRespaldosVendedor(){
     <td>${escH(r.ref||'—')}</td>
     <td style="max-width:280px;white-space:pre-wrap">${escH(r.detalle)}</td>
     <td style="color:var(--mu)">${escH(r.nota||'')}</td>
-    <td><button class="btn btn-d btn-sm" onclick="eliminarRespaldoVendedor('${r.id}')"><i class="ti ti-trash"></i></button></td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-s btn-sm" onclick="imprimirRespaldoVendedor('${r.id}')" title="Imprimir"><i class="ti ti-printer"></i></button>
+      <button class="btn btn-d btn-sm" onclick="eliminarRespaldoVendedor('${r.id}')"><i class="ti ti-trash"></i></button>
+    </td>
   </tr>`).join('');
 }
 
@@ -3023,6 +3029,92 @@ function imprimirGuia(id){
     <div class="firma"><div class="firma-linea">CLIENTE</div></div>
   </div>
   </body></html>`);
+  win.document.close();
+}
+
+function imprimirRespaldoVendedor(id){
+  const r=(DB.respaldosVendedor||[]).find(x=>x.id===id);if(!r)return;
+  let logoSrc='';
+  try{const bStr=atob(LOGO_B64);const arr=new Uint8Array(bStr.length);for(let i=0;i<bStr.length;i++)arr[i]=bStr.charCodeAt(i);logoSrc=URL.createObjectURL(new Blob([arr],{type:'image/jpeg'}));}catch(ex){logoSrc='';}
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Respaldo de retiro ${r.ref||r.id}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#111;max-width:780px;margin:0 auto}
+    .hdr-t{width:100%;border-collapse:collapse;margin-bottom:10px}
+    .empresa h1{font-size:28px;font-weight:900;letter-spacing:4px;color:#111;text-align:center}
+    .info-co{font-size:11px;line-height:1.9;color:#333;text-align:right}
+    .titulo-doc{background:#383838;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:9px 18px;font-size:16px;font-weight:800;letter-spacing:2px;margin-bottom:10px}
+    .aviso{background:#fff3cd;border:1px solid #ffe08a;color:#7a5b00;font-size:11px;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-weight:600;text-align:center}
+    .campos{border:1px solid #bbb;padding:8px 14px;margin-bottom:12px;font-size:12px}
+    .campo-fila{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+    .campo-fila.full{grid-template-columns:1fr}
+    .campo{display:flex;gap:6px;align-items:baseline;padding-bottom:3px;border-bottom:1px dashed #ccc}
+    .campo b{min-width:70px;color:#222;white-space:nowrap}
+    .campo span{flex:1;border-bottom:1px solid #666;min-height:14px}
+    .detalle-box{border:1px solid #bbb;border-radius:6px;padding:12px 14px;margin-bottom:24px;font-size:12px;white-space:pre-wrap;min-height:80px}
+    .firmas{display:flex;justify-content:space-between;margin-top:44px}
+    .firma{text-align:center;width:42%}
+    .firma-linea{border-top:1px solid #333;padding-top:5px;font-size:11px;font-weight:700;letter-spacing:2px}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
+    @media print{.btn-print{display:none!important}body{padding:10px}}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+  <table class="hdr-t">
+    <tr>
+      <td style="width:90px;vertical-align:middle">${logoSrc?`<img src="${logoSrc}" style="width:80px;height:auto" alt="Logo">`:'&nbsp;'}</td>
+      <td class="empresa"><h1>D&amp;M BOOKS</h1></td>
+      <td class="info-co">Sector: Llano Grande<br>Correo: maricelaalvarado5@hotmail.com<br>Teléfono: 0997594528</td>
+    </tr>
+  </table>
+  <div class="titulo-doc"><span>RESPALDO DE RETIRO</span><span>${r.ref?'N° '+r.ref:''}</span></div>
+  <div class="aviso">⚠️ Este documento es solo un comprobante informal — no afecta el inventario del sistema.</div>
+  <div class="campos">
+    <div class="campo-fila">
+      <div class="campo"><b>Vendedor:</b><span>${r.vendedor}</span></div>
+      <div class="campo"><b>Fecha:</b><span>${r.fecha}</span></div>
+    </div>
+    ${r.nota?`<div class="campo-fila full"><div class="campo"><b>Nota:</b><span>${r.nota}</span></div></div>`:''}
+  </div>
+  <div class="detalle-box">${r.detalle}</div>
+  <div class="firmas">
+    <div class="firma"><div class="firma-linea">VENDEDOR</div></div>
+    <div class="firma"><div class="firma-linea">RESPONSABLE</div></div>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
+function imprimirRespaldos(){
+  const lista=[...(DB.respaldosVendedor||[])].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!lista.length)return toast('No hay respaldos registrados','err');
+  const filas=lista.map(r=>`<tr>
+    <td>${r.fecha}</td><td>${r.vendedor}</td><td>${r.ref||'—'}</td>
+    <td style="font-size:11px;white-space:pre-wrap">${r.detalle}</td>
+    <td style="font-size:11px">${r.nota||''}</td>
+  </tr>`).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Reporte Respaldos de Vendedor</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+      h2{color:#1a6b3c;margin-bottom:4px}
+      p{color:#666;font-size:11px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1a6b3c;color:#fff;padding:7px 8px;text-align:left;font-size:11px}
+      td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+      tr:nth-child(even) td{background:#f5faf7}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h2>Reporte de Respaldos de Vendedor</h2>
+    <p>Generado el ${today()} &nbsp;|&nbsp; Total respaldos: ${lista.length} &nbsp;|&nbsp; Solo comprobante — no afecta inventario</p>
+    <table>
+      <thead><tr><th>Fecha</th><th>Vendedor</th><th>Ref.</th><th>Detalle</th><th>Nota</th></tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+    <br><button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+    </body></html>`);
   win.document.close();
 }
 
