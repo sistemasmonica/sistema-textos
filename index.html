@@ -2023,16 +2023,19 @@ function _quitarVinculo(b){
 // deja como sugerencia las aproximadas para que las revises tú.
 function autoConciliar(){
   if(!DB.banco.length)return toast('No hay movimientos bancarios cargados','err');
-  let exactos=0,sugeridos=0;
+  let exactos=0,sugeridos=0,limpiadas=0;
   DB.banco.forEach(b=>{
     if(b.regId||b.clasificacion)return;
     const match=buscarMejorCandidato(b);
-    if(!match)return;
+    if(!match){
+      if(b.sugerido){b.sugerido=null;limpiadas++;} // limpiar sugerencias viejas que ya no aplican
+      return;
+    }
     if(match.tipo==='exacto'){_aplicarVinculo(b,match.reg.id);exactos++;}
     else{if(b.sugerido!==match.reg.id){b.sugerido=match.reg.id;sugeridos++;}}
   });
   save();renderBanco();
-  toast(`${exactos} conciliados automáticamente · ${sugeridos} sugerencias nuevas para revisar`,'ok');
+  toast(`${exactos} conciliados automáticamente · ${sugeridos} sugerencias nuevas · ${limpiadas} sugerencias viejas quitadas`,'ok');
 }
 
 function confirmarSugerencia(bId){
