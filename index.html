@@ -1989,20 +1989,14 @@ function buscarMejorCandidato(b,excluirRegId){
     return{reg:lista[0],tipo:'exacto'};
   }
 
+  // Solo sugerir por monto aproximado cuando el nombre del cliente/proveedor
+  // también aparece en la descripción — nunca por monto parecido "a ciegas",
+  // porque con muchos movimientos sin relación (otros negocios, gastos varios)
+  // eso genera coincidencias falsas (ej: $1.00 sugerido como si fuera $0.98 de otra persona).
   const porNombre=candidatos.filter(r=>nombreEnDescripcion(r.proveedor,b.descripcion));
   if(porNombre.length){
     porNombre.sort((a,c)=>Math.abs(saldoPendiente(a)-monto)-Math.abs(saldoPendiente(c)-monto));
     return{reg:porNombre[0],tipo:'aproximado'};
-  }
-
-  const cercanos=candidatos.filter(r=>{
-    const diff=Math.abs(saldoPendiente(r)-monto);
-    const dias=Math.abs((new Date(r.fecha)-bDate)/(1000*60*60*24));
-    return diff<=0.10&&dias<=10;
-  });
-  if(cercanos.length){
-    cercanos.sort((a,c)=>Math.abs(saldoPendiente(a)-monto)-Math.abs(saldoPendiente(c)-monto));
-    return{reg:cercanos[0],tipo:'aproximado'};
   }
   return null;
 }
