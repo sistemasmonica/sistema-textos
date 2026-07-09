@@ -517,7 +517,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <div class="fg"><label>Vendedor</label><input type="text" id="rv-vendedor" placeholder="Nombre del vendedor"></div>
         <div class="fg"><label>N° referencia (opcional)</label><input type="text" id="rv-ref" placeholder="Ej: RV-001"></div>
       </div>
-      <div class="fg"><label>Detalle de lo que se lleva</label><textarea id="rv-detalle" rows="3" placeholder="Ej: 10 Matemáticas 5to Santillana, 5 Lenguaje 3ro Norma..."></textarea></div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:6px;display:block">Productos que se lleva</label>
+        <div id="rv-lineas"></div>
+        <button class="btn btn-s btn-sm" onclick="agregarLineaRespaldo()"><i class="ti ti-plus"></i> Agregar producto</button>
+        <div id="rv-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-top:8px;display:none"></div>
+      </div>
+      <div class="fg"><label>Detalle adicional (opcional)</label><input type="text" id="rv-detalle-extra" placeholder="Algo que no está en el catálogo, o una aclaración extra..."></div>
       <div class="fg"><label>Nota (opcional)</label><input type="text" id="rv-nota" placeholder="Observaciones"></div>
       <div class="btn-row">
         <button class="btn btn-p" onclick="guardarRespaldoVendedor()"><i class="ti ti-check"></i> Guardar respaldo</button>
@@ -2806,21 +2812,67 @@ function imprimirEntrada(key){
 // ===================================================
 // RESPALDO DE VENDEDOR (solo comprobante, no afecta inventario)
 // ===================================================
+function agregarLineaRespaldo(){
+  respaldoLineas++;
+  const id='rvl-'+respaldoLineas;
+  const div=document.createElement('div');
+  div.id=id;
+  div.style.cssText='display:grid;grid-template-columns:3fr 1fr auto;gap:6px;margin-bottom:6px;align-items:end';
+  div.innerHTML=`
+    <div class="fg" style="margin:0"><label>Producto</label>
+      <select onchange="actualizarResumenRespaldo()">
+        <option value="">— seleccionar —</option>
+        ${DB.productos.filter(p=>p.editorial!=='Hist.').sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).map(p=>{const st=stockActual(p.id);return`<option value="${p.id}" data-stock="${st}">${p.nombre}${p.editorial?' ('+p.editorial+')':''} — Stock: ${st}</option>`}).join('')}
+      </select>
+    </div>
+    <div class="fg" style="margin:0"><label>Cantidad</label><input type="number" id="${id}-cant" min="1" placeholder="1" value="1" oninput="actualizarResumenRespaldo()"></div>
+    <button class="btn btn-d btn-sm" style="margin-bottom:10px" onclick="document.getElementById('${id}').remove();actualizarResumenRespaldo()"><i class="ti ti-x"></i></button>`;
+  document.getElementById('rv-lineas').appendChild(div);
+}
+
+function actualizarResumenRespaldo(){
+  const lineasEls=[...document.getElementById('rv-lineas').children];
+  let items=0,nprod=0;
+  lineasEls.forEach(el=>{
+    const sel=el.querySelector('select');
+    const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
+    if(!sel?.value||!cant)return;
+    items+=cant;nprod++;
+  });
+  const res=document.getElementById('rv-resumen');
+  if(!nprod){res.style.display='none';return;}
+  res.style.display='block';
+  res.innerHTML=`<b>Productos distintos:</b> ${nprod} &nbsp;|&nbsp; <b>Total unidades:</b> ${items}`;
+}
+
 function guardarRespaldoVendedor(){
   const fecha=document.getElementById('rv-fecha').value||today();
   const vendedor=document.getElementById('rv-vendedor').value.trim();
   const ref=document.getElementById('rv-ref').value.trim();
-  const detalle=document.getElementById('rv-detalle').value.trim();
+  const extra=document.getElementById('rv-detalle-extra').value.trim();
   const nota=document.getElementById('rv-nota').value.trim();
   if(!vendedor)return toast('Ingresa el nombre del vendedor','err');
-  if(!detalle)return toast('Ingresa el detalle de lo que se lleva','err');
+  const lineasEls=[...document.getElementById('rv-lineas').children];
+  const lineas=[];
+  lineasEls.forEach(el=>{
+    const sel=el.querySelector('select');
+    const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
+    if(!sel?.value||!cant)return;
+    const prod=DB.productos.find(p=>p.id===sel.value);
+    lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',editorial:prod?.editorial||'',cantidad:cant});
+  });
+  if(!lineas.length&&!extra)return toast('Agrega al menos un producto o un detalle adicional','err');
+  const detalle=lineas.map(l=>`${l.cantidad} x ${l.nombre}${l.editorial?' ('+l.editorial+')':''}`).join('\n')+(extra?(lineas.length?'\n':'')+extra:'');
   DB.respaldosVendedor=DB.respaldosVendedor||[];
-  DB.respaldosVendedor.push({id:uid(),fecha,vendedor,ref,detalle,nota});
+  DB.respaldosVendedor.push({id:uid(),fecha,vendedor,ref,detalle,nota,lineas});
+  logHistorial('Respaldo de retiro registrado',`${vendedor} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades (sin afectar inventario)`);
   save();
   document.getElementById('rv-vendedor').value='';
   document.getElementById('rv-ref').value='';
-  document.getElementById('rv-detalle').value='';
+  document.getElementById('rv-lineas').innerHTML='';
+  document.getElementById('rv-detalle-extra').value='';
   document.getElementById('rv-nota').value='';
+  document.getElementById('rv-resumen').style.display='none';
   renderRespaldosVendedor();
   toast('Respaldo guardado (no afecta el inventario)','ok');
 }
@@ -3125,6 +3177,7 @@ function imprimirEntradas(){
 // INVENTARIO — GUÍAS DE RETIRO
 // ===================================================
 let guiaLineas=0;
+let respaldoLineas=0;
 function abrirModalGuia(){
   document.getElementById('g-lineas').innerHTML='';
   document.getElementById('g-cliente').value='';
