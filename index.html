@@ -520,8 +520,8 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div style="margin-bottom:10px">
         <label style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:6px;display:block">Productos que se lleva</label>
         <div style="position:relative;margin-bottom:8px">
-          <input type="text" id="rv-buscar-prod" placeholder="🔍 Escribe el nombre del producto y haz clic para agregarlo..." autocomplete="off" oninput="renderBusquedaRespaldo()" onblur="setTimeout(()=>{const c=document.getElementById('rv-buscar-resultados');if(c)c.style.display='none';},150)">
-          <div id="rv-buscar-resultados" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-height:240px;overflow-y:auto;width:100%;margin-top:2px"></div>
+          <input type="text" id="rv-buscar-prod" placeholder="🔍 Escribe el nombre del producto — marca todos los que quieras y luego 'Agregar seleccionados'..." autocomplete="off" oninput="renderBusquedaRespaldo()">
+          <div id="rv-buscar-resultados" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;width:100%;margin-top:2px"></div>
         </div>
         <div id="rv-lineas"></div>
         <button class="btn btn-s btn-sm" onclick="agregarLineaRespaldo()"><i class="ti ti-plus"></i> Agregar línea manual</button>
@@ -2822,13 +2822,31 @@ function renderBusquedaRespaldo(){
   if(!q){cont.style.display='none';cont.innerHTML='';return;}
   const matches=DB.productos.filter(p=>p.editorial!=='Hist.'&&(
     (p.nombre||'').toLowerCase().includes(q)||(p.editorial||'').toLowerCase().includes(q)||(p.codigo||'').toLowerCase().includes(q)
-  )).slice(0,15);
+  )).slice(0,25);
   if(!matches.length){cont.innerHTML='<div style="padding:8px 12px;font-size:12px;color:var(--mu)">Sin resultados</div>';cont.style.display='block';return;}
-  cont.innerHTML=matches.map(p=>{
-    const st=stockActual(p.id);
-    return`<div onmousedown="agregarProductoRespaldo('${p.id}')" style="padding:7px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f1f1">${escH(p.nombre)}${p.editorial?' <span style="color:var(--mu)">('+escH(p.editorial)+')</span>':''} — Stock: ${st}</div>`;
-  }).join('');
+  cont.innerHTML=`
+    <div>${matches.map(p=>{
+      const st=stockActual(p.id);
+      return`<label style="display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f1f1">
+        <input type="checkbox" class="rv-check-prod" value="${p.id}">
+        <span>${escH(p.nombre)}${p.editorial?' <span style="color:var(--mu)">('+escH(p.editorial)+')</span>':''} — Stock: ${st}</span>
+      </label>`;
+    }).join('')}</div>
+    <div style="position:sticky;bottom:0;background:#fff;border-top:1px solid var(--bd);padding:8px 12px;text-align:right">
+      <button type="button" class="btn btn-p btn-sm" onclick="agregarSeleccionadosRespaldo()"><i class="ti ti-check"></i> Agregar seleccionados</button>
+    </div>`;
   cont.style.display='block';
+}
+
+function agregarSeleccionadosRespaldo(){
+  const checks=[...document.querySelectorAll('.rv-check-prod:checked')];
+  if(!checks.length){toast('Marca al menos un producto de la lista','err');return;}
+  checks.forEach(ch=>agregarProductoRespaldo(ch.value));
+  document.getElementById('rv-buscar-prod').value='';
+  document.getElementById('rv-buscar-resultados').style.display='none';
+  document.getElementById('rv-buscar-resultados').innerHTML='';
+  document.getElementById('rv-buscar-prod').focus();
+  toast(checks.length+' producto'+(checks.length===1?'':'s')+' agregado'+(checks.length===1?'':'s'),'ok');
 }
 
 function agregarProductoRespaldo(prodId){
@@ -2839,9 +2857,6 @@ function agregarProductoRespaldo(prodId){
       const cantEl=el.querySelector('[id$="-cant"]');
       cantEl.value=(parseInt(cantEl.value)||0)+1;
       actualizarResumenRespaldo();
-      document.getElementById('rv-buscar-prod').value='';
-      document.getElementById('rv-buscar-resultados').style.display='none';
-      document.getElementById('rv-buscar-prod').focus();
       return;
     }
   }
@@ -2850,9 +2865,6 @@ function agregarProductoRespaldo(prodId){
   const sel=lastLine.querySelector('select');
   if(sel)sel.value=prodId;
   actualizarResumenRespaldo();
-  document.getElementById('rv-buscar-prod').value='';
-  document.getElementById('rv-buscar-resultados').style.display='none';
-  document.getElementById('rv-buscar-prod').focus();
 }
 
 function agregarLineaRespaldo(){
