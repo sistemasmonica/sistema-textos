@@ -3707,14 +3707,20 @@ function imprimirRespaldoVendedor(id){
     .campo{display:flex;gap:6px;align-items:baseline;padding-bottom:3px;border-bottom:1px dashed #ccc}
     .campo b{min-width:70px;color:#222;white-space:nowrap}
     .campo span{flex:1;border-bottom:1px solid #666;min-height:14px}
-    .detalle-box{border:1px solid #bbb;border-radius:6px;padding:12px 14px;margin-bottom:24px;font-size:12px;white-space:pre-wrap;min-height:80px}
+    .detalle-box{border:1px solid #bbb;border-radius:6px;padding:12px 14px;margin-bottom:24px;font-size:12px;white-space:pre-wrap;line-height:1.9;min-height:80px}
+    .tbl-prod{width:100%;border-collapse:collapse;margin-bottom:24px}
+    .tbl-prod th{text-align:left;padding:8px 10px;border:1px solid #bbb;font-size:11px;background:#f0f0f0}
+    .tbl-prod td{padding:7px 10px;border:1px solid #ddd;font-size:12px}
+    .tbl-prod tr:last-child{background:#f7f7f7;font-weight:700}
     .firmas{display:flex;justify-content:space-between;margin-top:44px}
     .firma{text-align:center;width:42%}
     .firma-linea{border-top:1px solid #333;padding-top:5px;font-size:11px;font-weight:700;letter-spacing:2px}
-    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
-    @media print{.btn-print{display:none!important}body{padding:10px}}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+    .tip-pdf{background:#e3f2fd;border:1px solid #90caf9;color:#1565c0;font-size:11px;padding:8px 12px;border-radius:6px;margin:10px 0 16px;max-width:600px}
+    @media print{.btn-print,.tip-pdf{display:none!important}body{padding:10px}}
   </style></head><body>
-  <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Descargar PDF</button>
+  <div class="tip-pdf">💡 Para <b>descargar</b> este documento y enviarlo por WhatsApp o correo: al presionar el botón de arriba, en la ventana que aparece elige como <b>Destino</b> la opción <b>"Guardar como PDF"</b> y dale Guardar.</div>
   <table class="hdr-t">
     <tr>
       <td style="width:90px;vertical-align:middle">${logoSrc?`<img src="${logoSrc}" style="width:80px;height:auto" alt="Logo">`:'&nbsp;'}</td>
@@ -3722,16 +3728,23 @@ function imprimirRespaldoVendedor(id){
       <td class="info-co">Sector: Llano Grande<br>Correo: maricelaalvarado5@hotmail.com<br>Teléfono: 0997594528</td>
     </tr>
   </table>
-  <div class="titulo-doc"><span>RESPALDO DE RETIRO</span><span>${r.ref?'N° '+r.ref:''}</span></div>
+  <div class="titulo-doc"><span>RESPALDO DE RETIRO</span><span>${r.ref?'N° '+escH(r.ref):''}</span></div>
   <div class="aviso">⚠️ Este documento es solo un comprobante informal — no afecta el inventario del sistema.</div>
   <div class="campos">
     <div class="campo-fila">
-      <div class="campo"><b>Vendedor:</b><span>${r.vendedor}</span></div>
-      <div class="campo"><b>Fecha:</b><span>${r.fecha}</span></div>
+      <div class="campo"><b>Vendedor:</b><span>${escH(r.vendedor)}</span></div>
+      <div class="campo"><b>Fecha:</b><span>${escH(r.fecha)}</span></div>
     </div>
-    ${r.nota?`<div class="campo-fila full"><div class="campo"><b>Nota:</b><span>${r.nota}</span></div></div>`:''}
+    ${r.nota?`<div class="campo-fila full"><div class="campo"><b>Nota:</b><span>${escH(r.nota)}</span></div></div>`:''}
   </div>
-  <div class="detalle-box">${r.detalle}</div>
+  ${(r.lineas&&r.lineas.length)?`
+  <table class="tbl-prod">
+    <thead><tr><th>Producto</th><th style="text-align:center;width:90px">Cantidad</th></tr></thead>
+    <tbody>
+      ${r.lineas.map(l=>`<tr><td>${escH(l.nombre)}${l.editorial?' <span style="color:#777">('+escH(l.editorial)+')</span>':''}</td><td style="text-align:center;font-weight:700">${l.cantidad}</td></tr>`).join('')}
+      <tr><td>TOTAL</td><td style="text-align:center">${r.lineas.reduce((a,l)=>a+l.cantidad,0)}</td></tr>
+    </tbody>
+  </table>`:`<div class="detalle-box">${escH(r.detalle)}</div>`}
   <div class="firmas">
     <div class="firma"><div class="firma-linea">VENDEDOR</div></div>
     <div class="firma"><div class="firma-linea">RESPONSABLE</div></div>
@@ -3743,11 +3756,13 @@ function imprimirRespaldoVendedor(id){
 function imprimirRespaldos(){
   const lista=[...(DB.respaldosVendedor||[])].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   if(!lista.length)return toast('No hay respaldos registrados','err');
-  const filas=lista.map(r=>`<tr>
-    <td>${r.fecha}</td><td>${r.vendedor}</td><td>${r.ref||'—'}</td>
-    <td style="font-size:11px;white-space:pre-wrap">${r.detalle}</td>
-    <td style="font-size:11px">${r.nota||''}</td>
-  </tr>`).join('');
+  const filas=lista.map(r=>{
+    const detalleTxt=(r.lineas&&r.lineas.length)?r.lineas.map(l=>`${l.cantidad} x ${l.nombre}`).join('<br>'):escH(r.detalle).replace(/\n/g,'<br>');
+    return`<tr>
+    <td>${escH(r.fecha)}</td><td>${escH(r.vendedor)}</td><td>${escH(r.ref||'—')}</td>
+    <td style="font-size:11px">${detalleTxt}</td>
+    <td style="font-size:11px">${escH(r.nota||'')}</td>
+  </tr>`;}).join('');
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
     <title>Reporte Respaldos de Vendedor</title>
@@ -3757,17 +3772,19 @@ function imprimirRespaldos(){
       p{color:#666;font-size:11px;margin-bottom:16px}
       table{width:100%;border-collapse:collapse}
       th{background:#1a6b3c;color:#fff;padding:7px 8px;text-align:left;font-size:11px}
-      td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+      td{padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.7}
       tr:nth-child(even) td{background:#f5faf7}
-      @media print{button{display:none}}
+      .tip-pdf{background:#e3f2fd;border:1px solid #90caf9;color:#1565c0;font-size:11px;padding:8px 12px;border-radius:6px;margin-bottom:14px;max-width:600px}
+      @media print{button,.tip-pdf{display:none}}
     </style></head><body>
     <h2>Reporte de Respaldos de Vendedor</h2>
     <p>Generado el ${today()} &nbsp;|&nbsp; Total respaldos: ${lista.length} &nbsp;|&nbsp; Solo comprobante — no afecta inventario</p>
+    <div class="tip-pdf">💡 Para <b>descargar</b> este reporte: al presionar "Imprimir", en Destino elige <b>"Guardar como PDF"</b>.</div>
     <table>
       <thead><tr><th>Fecha</th><th>Vendedor</th><th>Ref.</th><th>Detalle</th><th>Nota</th></tr></thead>
       <tbody>${filas}</tbody>
     </table>
-    <br><button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+    <br><button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir / Descargar PDF</button>
     </body></html>`);
   win.document.close();
 }
