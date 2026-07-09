@@ -181,9 +181,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <button class="nt" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
   <button class="nt" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
   <button class="nt" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> Editorial</button>
+  <button class="nt" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> Por Cobrar</button>
   <button class="nt" onclick="tab('comisiones',this)"><i class="ti ti-percentage"></i> Comisiones</button>
   <button class="nt" onclick="tab('deudas',this)"><i class="ti ti-credit-card-off"></i> Deudas</button>
   <button class="nt" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
+  <button class="nt" onclick="tab('balance',this)"><i class="ti ti-scale"></i> Balance</button>
   <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> Pagos</button>
   <button class="nt" onclick="tab('ayuda',this)"><i class="ti ti-help"></i> Ayuda</button>
 </div>
@@ -861,6 +863,28 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
 </div>
 
+<!-- PANEL: POR COBRAR -->
+<div id="pn-porcobrar" class="pn">
+  <div class="card" style="background:#fffbeb;border-color:#fcd34d;padding:10px 14px;margin-bottom:12px">
+    <small style="color:#92400e"><b>ℹ️ Nota:</b> Muestra las facturas de <b>Ventas</b> que aún no han sido pagadas por completo (saldo pendiente > $0), según los pagos registrados en Conciliación bancaria.</small>
+  </div>
+  <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="sc"><div class="sc-lbl">Total por cobrar</div><div class="sc-val cr" id="pc-s-total">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Vencido (+30 días)</div><div class="sc-val cr" id="pc-s-vencido">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Por vencer</div><div class="sc-val ca" id="pc-s-porvencer">$0.00</div></div>
+  </div>
+  <div class="sh" style="margin-top:4px">
+    <h2>Clientes que me deben</h2>
+    <input type="search" id="pc-q" placeholder="Buscar cliente..." oninput="renderPorCobrar()" style="min-width:180px">
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Fecha factura</th><th>Cliente / Colegio</th><th>N° Factura</th><th>Total</th><th>Saldo pendiente</th><th>Días</th></tr></thead>
+      <tbody id="tb-porcobrar"></tbody>
+    </table>
+  </div>
+</div>
+
 <!-- PANEL: COMISIONES -->
 <div id="pn-comisiones" class="pn">
   <div class="card">
@@ -930,6 +954,45 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="card">
     <div class="card-t cp"><i class="ti ti-school"></i> Ventas y margen por colegio</div>
     <div id="liq-por-colegio"></div>
+  </div>
+</div>
+
+<!-- PANEL: BALANCE -->
+<div id="pn-balance" class="pn">
+  <div class="card" style="background:#e3f2fd;border-color:#90caf9;padding:10px 14px;margin-bottom:12px">
+    <small style="color:#1565c0"><b>ℹ️ Nota:</b> El Balance es una fotografía de lo que tienes (Activos) y lo que debes (Pasivos) en este momento. El saldo bancario se toma del último movimiento importado en <b>Conciliación bancaria</b> — si no has importado el extracto más reciente, el número puede no estar 100% al día.</small>
+  </div>
+  <div class="two">
+    <div class="card">
+      <div class="card-t cg"><i class="ti ti-wallet"></i> Activos</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:6px 0">Saldo bancario</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-banco">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Inventario a costo</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-inv">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Cuentas por cobrar</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-cxc">$0.00</td></tr>
+        <tr style="border-top:2px solid var(--bd);font-weight:700"><td style="padding:8px 0">Total activos</td><td style="padding:8px 0;text-align:right;font-family:monospace;color:var(--g1)" id="bal-a-total">$0.00</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-t cr"><i class="ti ti-credit-card"></i> Pasivos</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:6px 0">Deuda editorial pendiente</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-edit">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Deudas personales/negocio</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-deu">$0.00</td></tr>
+        <tr style="border-top:2px solid var(--bd);font-weight:700"><td style="padding:8px 0">Total pasivos</td><td style="padding:8px 0;text-align:right;font-family:monospace;color:var(--r1)" id="bal-p-total">$0.00</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="sc-grid" style="grid-template-columns:repeat(1,1fr);margin-top:4px">
+    <div class="sc"><div class="sc-lbl">Patrimonio (Activos − Pasivos)</div><div class="sc-val" id="bal-patrimonio">$0.00</div></div>
+  </div>
+
+  <div class="sh" style="margin-top:16px"><h2>Flujo de caja (Pagos/Cobros)</h2></div>
+  <div class="filters" style="margin-bottom:12px">
+    <select id="bal-mes" onchange="renderBalance()"><option value="">Todos los meses</option></select>
+  </div>
+  <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="sc"><div class="sc-lbl">Entradas (cobros)</div><div class="sc-val cg" id="bal-f-cobros">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Salidas (pagos)</div><div class="sc-val cr" id="bal-f-pagos">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Flujo neto</div><div class="sc-val" id="bal-f-neto">$0.00</div></div>
   </div>
 </div>
 
@@ -1552,6 +1615,8 @@ function tab(id,el){
     const pf=document.getElementById('pago-fecha');if(pf&&!pf.value)pf.value=today();
     renderPagos();
   }
+  if(id==='porcobrar')renderPorCobrar();
+  if(id==='balance')renderBalance();
 }
 function invTab(id,el){
   document.querySelectorAll('.inv-pn').forEach(p=>p.style.display='none');
@@ -2753,6 +2818,91 @@ function exportarPagosCSV(){
     rows.push([p.fecha,p.tipo==='cobro'?'Cobro':'Pago',p.nombre,p.forma,p.valor,p.nota||'']);
   });
   dlCSV(rows,'pagos_cobros_'+today()+'.csv');
+}
+
+function renderPorCobrar(){
+  const q=(document.getElementById('pc-q')?.value||'').toLowerCase();
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const pendientes=DB.regs.filter(r=>r.tipo==='venta'&&saldoPendiente(r)>0.01)
+    .filter(r=>!q||(r.proveedor||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  let total=0,vencido=0,porVencer=0;
+  const tb=document.getElementById('tb-porcobrar');
+  if(!pendientes.length){
+    tb.innerHTML='<tr><td colspan="6"><div class="empty">No hay cuentas por cobrar pendientes.</div></td></tr>';
+  }else{
+    tb.innerHTML=pendientes.map(r=>{
+      const saldo=saldoPendiente(r);
+      total+=saldo;
+      const dias=Math.floor((hoy-parseLocalDate(r.fecha))/(1000*60*60*24));
+      if(dias>30)vencido+=saldo;else porVencer+=saldo;
+      const bdg=dias>30?'bdg-err':dias>0?'bdg-warn':'bdg-ok';
+      return`<tr>
+        <td style="font-family:monospace;white-space:nowrap">${escH(r.fecha||'-')}</td>
+        <td>${escH(r.proveedor)}</td>
+        <td><span class="chip">${escH(r.numFact||'-')}</span></td>
+        <td style="font-family:monospace">${fmt(r.total)}</td>
+        <td style="font-family:monospace;font-weight:700;color:var(--r1)">${fmt(saldo)}</td>
+        <td><span class="bdg ${bdg}">${dias} días</span></td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('pc-s-total').textContent=fmt(total);
+  document.getElementById('pc-s-vencido').textContent=fmt(vencido);
+  document.getElementById('pc-s-porvencer').textContent=fmt(porVencer);
+}
+
+function renderBalance(){
+  // Activos
+  const bancoOrd=[...DB.banco].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  const saldoBanco=bancoOrd.length?(bancoOrd[bancoOrd.length-1].saldo||0):0;
+  let invCosto=0;
+  DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
+    const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
+    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
+    const st=p.stockInicial+ent-sal;
+    invCosto+=st*p.precioCosto;
+  });
+  const cxc=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+saldoPendiente(r),0);
+  const totalActivos=saldoBanco+invCosto+cxc;
+
+  // Pasivos
+  const deudaEditorial=DB.regs.filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares'&&!r.pagadaEditorial).reduce((a,r)=>a+r.total,0);
+  const deudasPend=DB.deudas.filter(d=>!d.pagada).reduce((a,d)=>{
+    const pag=d.abonos.reduce((s,ab)=>s+ab.monto,0);
+    return a+Math.max(0,d.montoTotal-pag);
+  },0);
+  const totalPasivos=deudaEditorial+deudasPend;
+
+  const patrimonio=totalActivos-totalPasivos;
+
+  document.getElementById('bal-a-banco').textContent=fmt(saldoBanco);
+  document.getElementById('bal-a-inv').textContent=fmt(invCosto);
+  document.getElementById('bal-a-cxc').textContent=fmt(cxc);
+  document.getElementById('bal-a-total').textContent=fmt(totalActivos);
+  document.getElementById('bal-p-edit').textContent=fmt(deudaEditorial);
+  document.getElementById('bal-p-deu').textContent=fmt(deudasPend);
+  document.getElementById('bal-p-total').textContent=fmt(totalPasivos);
+  const patEl=document.getElementById('bal-patrimonio');
+  patEl.textContent=fmt(patrimonio);
+  patEl.className='sc-val '+(patrimonio>=0?'cg':'cr');
+
+  // Flujo de caja
+  const selMes=document.getElementById('bal-mes');
+  if(selMes&&!selMes.dataset.filled){
+    const meses=[...new Set((DB.pagos||[]).map(p=>mesAnio(p.fecha)))].sort().reverse();
+    selMes.innerHTML='<option value="">Todos los meses</option>'+meses.map(m=>`<option value="${m}">${m}</option>`).join('');
+    selMes.dataset.filled='1';
+  }
+  const mesFil=selMes?.value||'';
+  const pagosF=(DB.pagos||[]).filter(p=>!mesFil||mesAnio(p.fecha)===mesFil);
+  const cobros=pagosF.filter(p=>p.tipo==='cobro').reduce((a,p)=>a+p.valor,0);
+  const pagos=pagosF.filter(p=>p.tipo==='pago').reduce((a,p)=>a+p.valor,0);
+  document.getElementById('bal-f-cobros').textContent=fmt(cobros);
+  document.getElementById('bal-f-pagos').textContent=fmt(pagos);
+  const netoEl=document.getElementById('bal-f-neto');
+  netoEl.textContent=fmt(cobros-pagos);
+  netoEl.className='sc-val '+(cobros-pagos>=0?'cg':'cr');
 }
 
 function eliminarGuia(id){
