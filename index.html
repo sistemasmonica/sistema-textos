@@ -511,7 +511,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <b>Solo respaldo:</b> este registro es un comprobante informal de lo que un vendedor se lleva. <b>No descuenta stock ni afecta el inventario</b> — para eso usa "Guías de retiro".
     </div>
     <div class="card">
-      <div class="card-t"><i class="ti ti-clipboard-list"></i> Nuevo respaldo</div>
+      <div class="card-t" id="rv-card-titulo"><i class="ti ti-clipboard-list"></i> Nuevo respaldo</div>
       <div class="f3">
         <div class="fg"><label>Fecha</label><input type="date" id="rv-fecha"></div>
         <div class="fg"><label>Vendedor</label><input type="text" id="rv-vendedor" placeholder="Nombre del vendedor"></div>
@@ -529,8 +529,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       </div>
       <div class="fg"><label>Detalle adicional (opcional)</label><input type="text" id="rv-detalle-extra" placeholder="Algo que no está en el catálogo, o una aclaración extra..."></div>
       <div class="fg"><label>Nota (opcional)</label><input type="text" id="rv-nota" placeholder="Observaciones"></div>
+      <input type="hidden" id="rv-edit-id" value="">
       <div class="btn-row">
-        <button class="btn btn-p" onclick="guardarRespaldoVendedor()"><i class="ti ti-check"></i> Guardar respaldo</button>
+        <button class="btn btn-p" id="rv-btn-guardar" onclick="guardarRespaldoVendedor()"><i class="ti ti-check"></i> Guardar respaldo</button>
+        <button class="btn btn-s" id="rv-btn-cancelar" onclick="cancelarEdicionRespaldo()" style="display:none">Cancelar edición</button>
       </div>
     </div>
     <div class="sh" style="margin-top:4px">
@@ -2937,20 +2939,72 @@ function guardarRespaldoVendedor(){
   const nota=document.getElementById('rv-nota').value.trim();
   if(!vendedor)return toast('Ingresa el nombre del vendedor','err');
   const lineasEls=[...document.getElementById('rv-lineas').children];
+  const editId=document.getElementById('rv-edit-id').value;
+  const anterior=editId?(DB.respaldosVendedor||[]).find(x=>x.id===editId):null;
   const lineas=[];
   lineasEls.forEach(el=>{
     const sel=el.querySelector('select');
     const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
     if(!sel?.value||!cant)return;
     const prod=DB.productos.find(p=>p.id===sel.value);
-    lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',editorial:prod?.editorial||'',cantidad:cant});
+    const prev=anterior?.lineas?.find(l=>l.prodId===sel.value);
+    lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',editorial:prod?.editorial||'',cantidad:cant,devuelto:prev?Math.min(prev.devuelto||0,cant):0});
   });
   if(!lineas.length&&!extra)return toast('Agrega al menos un producto o un detalle adicional','err');
   const detalle=lineas.map(l=>`${l.cantidad} x ${l.nombre}${l.editorial?' ('+l.editorial+')':''}`).join('\n')+(extra?(lineas.length?'\n':'')+extra:'');
   DB.respaldosVendedor=DB.respaldosVendedor||[];
-  DB.respaldosVendedor.push({id:uid(),fecha,vendedor,ref,detalle,nota,lineas});
-  logHistorial('Respaldo de retiro registrado',`${vendedor} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades (sin afectar inventario)`);
+  if(editId&&anterior){
+    Object.assign(anterior,{fecha,vendedor,ref,detalle,nota,lineas});
+    logHistorial('Respaldo de retiro editado',`${vendedor} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades`);
+    toast('Respaldo actualizado','ok');
+  }else{
+    DB.respaldosVendedor.push({id:uid(),fecha,vendedor,ref,detalle,nota,lineas});
+    logHistorial('Respaldo de retiro registrado',`${vendedor} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades (sin afectar inventario)`);
+    toast('Respaldo guardado (no afecta el inventario)','ok');
+  }
   save();
+  cancelarEdicionRespaldo();
+  renderRespaldosVendedor();
+}
+
+function editarRespaldoVendedor(id){
+  const r=(DB.respaldosVendedor||[]).find(x=>x.id===id);if(!r)return;
+  document.getElementById('rv-lineas').innerHTML='';
+  respaldoLineas=0;
+  document.getElementById('rv-fecha').value=r.fecha;
+  document.getElementById('rv-vendedor').value=r.vendedor;
+  document.getElementById('rv-ref').value=r.ref||'';
+  document.getElementById('rv-nota').value=r.nota||'';
+  document.getElementById('rv-detalle-extra').value='';
+  document.getElementById('rv-edit-id').value=id;
+  document.getElementById('rv-card-titulo').innerHTML='<i class="ti ti-pencil"></i> Editando respaldo — '+escH(r.vendedor);
+  document.getElementById('rv-btn-guardar').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
+  document.getElementById('rv-btn-cancelar').style.display='';
+  (r.lineas||[]).forEach(l=>{
+    agregarLineaRespaldo();
+    const lastLine=document.getElementById('rv-lineas').lastElementChild;
+    const sel=lastLine.querySelector('select');
+    const cantInput=lastLine.querySelector('[id$="-cant"]');
+    if(sel){
+      if(!sel.querySelector(`option[value="${l.prodId}"]`)){
+        const opt=document.createElement('option');
+        const st=stockActual(l.prodId);
+        opt.value=l.prodId;opt.textContent=(l.nombre||l.prodId)+' [hist.] — Stock: '+st;
+        sel.appendChild(opt);
+      }
+      sel.value=l.prodId;
+    }
+    if(cantInput)cantInput.value=l.cantidad;
+  });
+  actualizarResumenRespaldo();
+  document.getElementById('rv-card-titulo').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function cancelarEdicionRespaldo(){
+  document.getElementById('rv-edit-id').value='';
+  document.getElementById('rv-card-titulo').innerHTML='<i class="ti ti-clipboard-list"></i> Nuevo respaldo';
+  document.getElementById('rv-btn-guardar').innerHTML='<i class="ti ti-check"></i> Guardar respaldo';
+  document.getElementById('rv-btn-cancelar').style.display='none';
   document.getElementById('rv-vendedor').value='';
   document.getElementById('rv-ref').value='';
   document.getElementById('rv-lineas').innerHTML='';
@@ -2959,8 +3013,7 @@ function guardarRespaldoVendedor(){
   document.getElementById('rv-buscar-prod').value='';
   document.getElementById('rv-buscar-resultados').style.display='none';
   document.getElementById('rv-resumen').style.display='none';
-  renderRespaldosVendedor();
-  toast('Respaldo guardado (no afecta el inventario)','ok');
+  const fe=document.getElementById('rv-fecha');if(fe)fe.value=today();
 }
 
 function eliminarRespaldoVendedor(id){
@@ -3024,6 +3077,7 @@ function renderRespaldosVendedor(){
     <td style="color:var(--mu)">${escH(r.nota||'')}</td>
     <td style="text-align:center">${pendTxt}</td>
     <td style="white-space:nowrap">
+      <button class="btn btn-s btn-sm" onclick="editarRespaldoVendedor('${r.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
       ${lineas.length?`<button class="btn btn-s btn-sm" onclick="abrirDevolucionRV('${r.id}')" title="Registrar devolución"><i class="ti ti-corner-down-left"></i></button>`:''}
       <button class="btn btn-s btn-sm" onclick="imprimirRespaldoVendedor('${r.id}')" title="Imprimir"><i class="ti ti-printer"></i></button>
       <button class="btn btn-d btn-sm" onclick="eliminarRespaldoVendedor('${r.id}')"><i class="ti ti-trash"></i></button>
