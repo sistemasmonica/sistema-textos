@@ -545,7 +545,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Fecha</th><th>Vendedor</th><th>Ref.</th><th>Detalle</th><th>Nota</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Vendedor</th><th>Ref.</th><th>Detalle</th><th>Nota</th><th>Sin devolver</th><th></th></tr></thead>
         <tbody id="tb-respaldo"></tbody>
       </table>
     </div>
@@ -855,6 +855,16 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <div class="fg"><label>Fecha</label><input type="date" id="nc-fecha"></div>
         <div class="fg"><label>Editorial</label><input type="text" id="nc-editorial" placeholder="Ej: Santillana"></div>
         <div class="fg"><label>N° Nota de crédito</label><input type="text" id="nc-num" placeholder="Ej: NC-001-001"></div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:6px;display:block">Productos que devuelves a la editorial (resta tu stock)</label>
+        <div style="position:relative;margin-bottom:8px">
+          <input type="text" id="nc-buscar-prod" placeholder="🔍 Escribe el nombre del producto — marca todos los que quieras y luego 'Agregar seleccionados'..." autocomplete="off" oninput="renderBusquedaNC()">
+          <div id="nc-buscar-resultados" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;width:100%;margin-top:2px"></div>
+        </div>
+        <div id="nc-lineas"></div>
+        <button class="btn btn-s btn-sm" onclick="agregarLineaNC()"><i class="ti ti-plus"></i> Agregar línea manual</button>
+        <div id="nc-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-top:8px;display:none"></div>
       </div>
       <div class="f2">
         <div class="fg"><label>Total nota de crédito ($)</label><input type="number" id="nc-total" step="0.01" min="0" placeholder="0.00"></div>
@@ -1391,6 +1401,25 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="btn-row">
       <button class="btn btn-p" onclick="guardarAbono()"><i class="ti ti-check"></i> Registrar pago</button>
       <button class="btn btn-s" onclick="cerrarModal('modal-abono')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DEVOLUCIÓN DE RESPALDO VENDEDOR -->
+<div class="modal-overlay" id="modal-devolucion-rv">
+  <div class="modal">
+    <div class="modal-t">
+      <span id="dv-rv-titulo"><i class="ti ti-corner-down-left" style="color:var(--g1)"></i> Devolución a bodega</span>
+      <button class="btn btn-s btn-sm" onclick="cerrarModal('modal-devolucion-rv')"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="background:var(--b2);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--b1)">
+      Anota cuánto de cada producto te devolvió a bodega. Esto no cambia tu inventario (nunca se le restó) — es solo para que compares contra las Guías de retiro que hiciste a nombre de esta persona y veas si cuadra.
+    </div>
+    <div id="dv-rv-lineas"></div>
+    <input type="hidden" id="dv-rv-id">
+    <div class="btn-row">
+      <button class="btn btn-p" onclick="guardarDevolucionRV()"><i class="ti ti-check"></i> Guardar devolución</button>
+      <button class="btn btn-s" onclick="cerrarModal('modal-devolucion-rv')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -2940,6 +2969,40 @@ function eliminarRespaldoVendedor(id){
   save();renderRespaldosVendedor();
 }
 
+function abrirDevolucionRV(id){
+  const r=(DB.respaldosVendedor||[]).find(x=>x.id===id);if(!r)return;
+  document.getElementById('dv-rv-id').value=id;
+  document.getElementById('dv-rv-titulo').innerHTML=`<i class="ti ti-corner-down-left" style="color:var(--g1)"></i> Devolución — ${escH(r.vendedor)}${r.ref?' ('+escH(r.ref)+')':''}`;
+  const lineas=r.lineas||[];
+  document.getElementById('dv-rv-lineas').innerHTML=lineas.map((l,i)=>`
+    <div class="f3" style="align-items:end;margin-bottom:4px">
+      <div class="fg" style="margin:0;grid-column:span 2"><label>${escH(l.nombre)}${l.editorial?' ('+escH(l.editorial)+')':''}</label>
+        <div style="font-size:11px;color:var(--mu)">Se llevó: ${l.cantidad}</div>
+      </div>
+      <div class="fg" style="margin:0"><label>Devuelto</label><input type="number" min="0" max="${l.cantidad}" id="dv-rv-cant-${i}" value="${l.devuelto||0}"></div>
+    </div>`).join('');
+  abrirModal('modal-devolucion-rv');
+}
+
+function guardarDevolucionRV(){
+  const id=document.getElementById('dv-rv-id').value;
+  const r=(DB.respaldosVendedor||[]).find(x=>x.id===id);if(!r)return;
+  (r.lineas||[]).forEach((l,i)=>{
+    const el=document.getElementById('dv-rv-cant-'+i);
+    if(!el)return;
+    let v=parseInt(el.value)||0;
+    if(v>l.cantidad)v=l.cantidad;
+    if(v<0)v=0;
+    l.devuelto=v;
+  });
+  const totalDevuelto=(r.lineas||[]).reduce((a,l)=>a+(l.devuelto||0),0);
+  logHistorial('Devolución a bodega registrada',`${r.vendedor} — ${totalDevuelto} unidades devueltas`);
+  save();
+  cerrarModal('modal-devolucion-rv');
+  renderRespaldosVendedor();
+  toast('Devolución registrada','ok');
+}
+
 function renderRespaldosVendedor(){
   const fe=document.getElementById('rv-fecha');
   if(fe&&!fe.value)fe.value=today();
@@ -2948,18 +3011,24 @@ function renderRespaldosVendedor(){
   lista.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const tb=document.getElementById('tb-respaldo');
   if(!tb)return;
-  if(!lista.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">Sin respaldos registrados.</div></td></tr>';return;}
-  tb.innerHTML=lista.map(r=>`<tr>
+  if(!lista.length){tb.innerHTML='<tr><td colspan="7"><div class="empty">Sin respaldos registrados.</div></td></tr>';return;}
+  tb.innerHTML=lista.map(r=>{
+    const lineas=r.lineas||[];
+    const pendiente=lineas.reduce((a,l)=>a+Math.max(0,l.cantidad-(l.devuelto||0)),0);
+    const pendTxt=lineas.length?(pendiente>0?`<span style="color:var(--r1);font-weight:700">${pendiente}</span>`:`<span style="color:var(--g1)">✓ 0</span>`):'—';
+    return`<tr>
     <td style="font-family:monospace;white-space:nowrap">${r.fecha}</td>
     <td>${escH(r.vendedor)}</td>
     <td>${escH(r.ref||'—')}</td>
     <td style="max-width:280px;white-space:pre-wrap">${escH(r.detalle)}</td>
     <td style="color:var(--mu)">${escH(r.nota||'')}</td>
+    <td style="text-align:center">${pendTxt}</td>
     <td style="white-space:nowrap">
+      ${lineas.length?`<button class="btn btn-s btn-sm" onclick="abrirDevolucionRV('${r.id}')" title="Registrar devolución"><i class="ti ti-corner-down-left"></i></button>`:''}
       <button class="btn btn-s btn-sm" onclick="imprimirRespaldoVendedor('${r.id}')" title="Imprimir"><i class="ti ti-printer"></i></button>
       <button class="btn btn-d btn-sm" onclick="eliminarRespaldoVendedor('${r.id}')"><i class="ti ti-trash"></i></button>
     </td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 }
 
 function exportarRespaldosCSV(){
@@ -5322,19 +5391,112 @@ function togglePagadaEditorial(id,pagada){
   toast(pagada?'Factura marcada como pagada':'Pago revertido');
 }
 
+let ncLineas=0;
+let ncTotalAuto=0;
+
+function renderBusquedaNC(){
+  const q=(document.getElementById('nc-buscar-prod').value||'').trim().toLowerCase();
+  const cont=document.getElementById('nc-buscar-resultados');
+  if(!q){cont.style.display='none';cont.innerHTML='';return;}
+  const matches=DB.productos.filter(p=>p.editorial!=='Hist.'&&(
+    (p.nombre||'').toLowerCase().includes(q)||(p.editorial||'').toLowerCase().includes(q)||(p.codigo||'').toLowerCase().includes(q)
+  )).slice(0,25);
+  if(!matches.length){cont.innerHTML='<div style="padding:8px 12px;font-size:12px;color:var(--mu)">Sin resultados</div>';cont.style.display='block';return;}
+  cont.innerHTML=`
+    <div>${matches.map(p=>{
+      const st=stockActual(p.id);
+      return`<label style="display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f1f1">
+        <input type="checkbox" class="nc-check-prod" value="${p.id}">
+        <span>${escH(p.nombre)}${p.editorial?' <span style="color:var(--mu)">('+escH(p.editorial)+')</span>':''} — Stock: ${st}</span>
+      </label>`;
+    }).join('')}</div>
+    <div style="position:sticky;bottom:0;background:#fff;border-top:1px solid var(--bd);padding:8px 12px;text-align:right">
+      <button type="button" class="btn btn-p btn-sm" onclick="agregarSeleccionadosNC()"><i class="ti ti-check"></i> Agregar seleccionados</button>
+    </div>`;
+  cont.style.display='block';
+}
+
+function agregarSeleccionadosNC(){
+  const checks=[...document.querySelectorAll('.nc-check-prod:checked')];
+  if(!checks.length){toast('Marca al menos un producto de la lista','err');return;}
+  checks.forEach(ch=>agregarProductoNC(ch.value));
+  document.getElementById('nc-buscar-prod').value='';
+  document.getElementById('nc-buscar-resultados').style.display='none';
+  document.getElementById('nc-buscar-resultados').innerHTML='';
+  document.getElementById('nc-buscar-prod').focus();
+  toast(checks.length+' producto'+(checks.length===1?'':'s')+' agregado'+(checks.length===1?'':'s'),'ok');
+}
+
+function agregarProductoNC(prodId){
+  const lineasEls=[...document.getElementById('nc-lineas').children];
+  for(const el of lineasEls){
+    const sel=el.querySelector('select');
+    if(sel&&sel.value===prodId){
+      const cantEl=el.querySelector('[id$="-cant"]');
+      cantEl.value=(parseInt(cantEl.value)||0)+1;
+      actualizarResumenNC();
+      return;
+    }
+  }
+  agregarLineaNC();
+  const lastLine=document.getElementById('nc-lineas').lastElementChild;
+  const sel=lastLine.querySelector('select');
+  if(sel)sel.value=prodId;
+  actualizarResumenNC();
+}
+
+function agregarLineaNC(){
+  ncLineas++;
+  const id='ncl-'+ncLineas;
+  const div=document.createElement('div');
+  div.id=id;
+  div.style.cssText='display:grid;grid-template-columns:3fr 1fr auto;gap:6px;margin-bottom:6px;align-items:end';
+  div.innerHTML=`
+    <div class="fg" style="margin:0"><label>Producto</label>
+      <select onchange="actualizarResumenNC()">
+        <option value="">— seleccionar —</option>
+        ${DB.productos.filter(p=>p.editorial!=='Hist.').sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).map(p=>{const st=stockActual(p.id);return`<option value="${p.id}" data-pcosto="${p.precioCosto||0}">${p.nombre}${p.editorial?' ('+p.editorial+')':''} — Stock: ${st}</option>`}).join('')}
+      </select>
+    </div>
+    <div class="fg" style="margin:0"><label>Cantidad</label><input type="number" id="${id}-cant" min="1" placeholder="1" value="1" oninput="actualizarResumenNC()"></div>
+    <button class="btn btn-d btn-sm" style="margin-bottom:10px" onclick="document.getElementById('${id}').remove();actualizarResumenNC()"><i class="ti ti-x"></i></button>`;
+  document.getElementById('nc-lineas').appendChild(div);
+}
+
+function actualizarResumenNC(){
+  const lineasEls=[...document.getElementById('nc-lineas').children];
+  let items=0,nprod=0,costoSugerido=0;
+  lineasEls.forEach(el=>{
+    const sel=el.querySelector('select');
+    const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
+    if(!sel?.value||!cant)return;
+    items+=cant;nprod++;
+    costoSugerido+=cant*(parseFloat(sel.selectedOptions[0]?.dataset.pcosto)||0);
+  });
+  const res=document.getElementById('nc-resumen');
+  if(!nprod){res.style.display='none';return;}
+  res.style.display='block';
+  res.innerHTML=`<b>Productos distintos:</b> ${nprod} &nbsp;|&nbsp; <b>Total unidades:</b> ${items} &nbsp;|&nbsp; <b>Sugerido según costo:</b> ${fmt(costoSugerido)}`;
+  const totalEl=document.getElementById('nc-total');
+  if(!totalEl.value||parseFloat(totalEl.value)===ncTotalAuto)totalEl.value=costoSugerido.toFixed(2);
+  ncTotalAuto=costoSugerido;
+}
+
 function renderNotasCredito(){
   const total=DB.notasCredito.reduce((a,n)=>a+n.total,0);
   document.getElementById('nc-total-val').textContent=fmt(total);
   document.getElementById('nc-count').textContent=DB.notasCredito.length;
   document.getElementById('edit-tb-nc').innerHTML=DB.notasCredito.length===0
     ?'<tr><td colspan="6" class="empty">No hay notas de crédito registradas</td></tr>'
-    :[...DB.notasCredito].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(n=>`<tr>
+    :[...DB.notasCredito].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(n=>{
+        const prodTxt=(n.lineas||[]).map(l=>`${l.cantidad} x ${l.nombre}`).join(', ');
+        return`<tr>
         <td>${escH(n.fecha||'-')}</td><td>${escH(n.editorial)}</td>
         <td><span class="chip">${escH(n.num||'-')}</span></td>
         <td class="cg"><b>${fmt(n.total)}</b></td>
-        <td>${escH(n.nota||'-')}</td>
+        <td>${escH(n.nota||'-')}${prodTxt?`<br><small style="color:var(--mu)">📦 ${escH(prodTxt)} <span style="color:var(--r1)">(stock descontado)</span></small>`:''}</td>
         <td><button class="btn btn-d btn-sm" onclick="delNC('${n.id}')"><i class="ti ti-trash"></i></button></td>
-      </tr>`).join('');
+      </tr>`;}).join('');
 }
 
 function saveNC(){
@@ -5345,18 +5507,36 @@ function saveNC(){
   const nota=document.getElementById('nc-nota').value.trim();
   if(!editorial){toast('Ingresa el nombre de la editorial','err');return;}
   if(total<=0){toast('El total debe ser mayor a 0','err');return;}
-  DB.notasCredito.push({id:uid(),fecha,editorial,num,total,nota});
-  logHistorial('Nota de crédito registrada',`${editorial} — ${fmt(total)}`);
-  save();renderNotasCredito();
+  const lineasEls=[...document.getElementById('nc-lineas').children];
+  const lineas=[];
+  lineasEls.forEach(el=>{
+    const sel=el.querySelector('select');
+    const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
+    if(!sel?.value||!cant)return;
+    const prod=DB.productos.find(p=>p.id===sel.value);
+    lineas.push({prodId:sel.value,nombre:prod?.nombre||'N/A',editorial:prod?.editorial||'',cantidad:cant});
+  });
+  const id=uid();
+  DB.notasCredito.push({id,fecha,editorial,num,total,nota,lineas});
+  lineas.forEach(l=>{
+    DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha,ref:'NC-'+id,cliente:'Devolución a '+editorial});
+  });
+  logHistorial('Nota de crédito registrada',`${editorial} — ${fmt(total)}${lineas.length?' — '+lineas.reduce((a,l)=>a+l.cantidad,0)+' unidades devueltas (stock descontado)':''}`);
+  save();renderNotasCredito();renderCatalogo();renderStockReport();
   ['nc-editorial','nc-num','nc-nota'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nc-total').value='';
-  toast('Nota de crédito guardada');
+  document.getElementById('nc-lineas').innerHTML='';
+  document.getElementById('nc-buscar-prod').value='';
+  document.getElementById('nc-resumen').style.display='none';
+  ncTotalAuto=0;
+  toast('Nota de crédito guardada'+(lineas.length?' y stock actualizado':''));
 }
 
 function delNC(id){
-  if(!confirm('¿Eliminar esta nota de crédito?'))return;
+  if(!confirm('¿Eliminar esta nota de crédito? Si tenía productos, se le devolverá el stock a tu inventario.'))return;
+  DB.movInv=DB.movInv.filter(m=>m.ref!=='NC-'+id);
   DB.notasCredito=DB.notasCredito.filter(n=>n.id!==id);
-  save();renderNotasCredito();
+  save();renderNotasCredito();renderCatalogo();renderStockReport();
 }
 
 // ===================================================
