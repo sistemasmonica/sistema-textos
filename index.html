@@ -162,8 +162,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="pill" id="inv-pill">0 productos</div>
     <div class="pill" id="sync-status" title="Estado de sincronización con la nube">☁️ Conectando...</div>
     <div class="pill" style="background:rgba(255,255,0,.3);color:#fff;font-size:10px">v9-jun</div>
-    <button onclick="backupData()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Guardar todos los datos en un archivo JSON">💾 Backup</button>
-    <label style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
+    <button onclick="backupData()" id="btn-backup" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Guardar todos los datos en un archivo JSON">💾 Backup</button>
+    <label id="lbl-restaurar" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
+    <button onclick="entrarModoContadora()" id="btn-contadora" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Acceso de solo lectura para la contadora">🔒 Contadora</button>
   </div>
 </div>
 
@@ -1098,6 +1099,15 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
 
     <div class="ay-sec">
+      <div class="ay-sec-t">🔒 Acceso para tu contadora (solo lectura)</div>
+      <div class="ay-paso"><b>1.</b> Dale a tu contadora el mismo link del sistema. Ella entra normal, sin login.</div>
+      <div class="ay-paso"><b>2.</b> Cuando quiera revisar los números sin riesgo de dañar nada, le dice que presione el botón <b>🔒 Contadora</b> arriba a la derecha, e ingrese la clave que tú le compartas.</div>
+      <div class="ay-paso"><b>3.</b> En ese modo puede ver TODO (Balance, Por Cobrar, Liquidación, Reportes, etc.) pero cualquier intento de guardar, borrar o modificar algo se bloquea y la página se recarga sola — así nunca puede dañar tus datos por error.</div>
+      <div class="ay-paso"><b>4.</b> Para salir del modo solo lectura, presiona <b>🔓 Salir modo contadora</b>.</div>
+      <div class="ay-tip">🔑 Si quieres cambiar la clave de acceso de la contadora, pídemelo y te la actualizo.</div>
+    </div>
+
+    <div class="ay-sec">
       <div class="ay-sec-t">📖 Cómo cargar facturas de la editorial (ej: DIDÁCTICA)</div>
       <div class="ay-paso"><b>1.</b> Ve a <b>XML+IA</b> y arrastra los archivos XML que te llegan al correo del SRI (mezclados está bien, personales y de negocio juntos).</div>
       <div class="ay-paso"><b>2.</b> El sistema clasifica cada uno solo — las de editoriales/librerías/distribuidoras de libros quedan como <b>Negocio → Textos escolares</b> automáticamente.</div>
@@ -1334,6 +1344,35 @@ const SUPA_URL='https://pqluiqsvfeddmxpuxyhm.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbHVpcXN2ZmVkZG14cHV4eWhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTI4MDYsImV4cCI6MjA5NjA4ODgwNn0.cdWKlECRLxms1y8a3sSHr1i5rsif9B94mDrvigHNm2A';
 const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
+// ===================================================
+// MODO CONTADORA — acceso de solo lectura para auditoría
+// ===================================================
+const CLAVE_CONTADORA='Textos2026*';
+let MODO_LECTURA=sessionStorage.getItem('txe_modo')==='contadora';
+
+function entrarModoContadora(){
+  const clave=prompt('Clave de acceso para la contadora:');
+  if(clave===null)return;
+  if(clave!==CLAVE_CONTADORA){alert('Clave incorrecta.');return;}
+  sessionStorage.setItem('txe_modo','contadora');
+  location.reload();
+}
+function salirModoContadora(){
+  sessionStorage.removeItem('txe_modo');
+  location.reload();
+}
+function aplicarModoLectura(){
+  if(!MODO_LECTURA)return;
+  const banner=document.createElement('div');
+  banner.style.cssText='position:sticky;top:0;z-index:999;background:#fff3cd;color:#7a5b00;border-bottom:1px solid #ffe08a;padding:8px 14px;font-size:12px;font-weight:700;text-align:center';
+  banner.textContent='🔒 MODO CONTADORA — solo lectura. Los cambios que intentes hacer no se guardarán.';
+  document.body.insertBefore(banner,document.body.firstChild);
+  const btnContadora=document.getElementById('btn-contadora');
+  if(btnContadora){btnContadora.textContent='🔓 Salir modo contadora';btnContadora.setAttribute('onclick','salirModoContadora()');}
+  const btnBackup=document.getElementById('btn-backup');if(btnBackup)btnBackup.style.display='none';
+  const lblRestaurar=document.getElementById('lbl-restaurar');if(lblRestaurar)lblRestaurar.style.display='none';
+}
+
 function setSyncStatus(s){
   const el=document.getElementById('sync-status');
   if(!el)return;
@@ -1521,6 +1560,11 @@ function load(){
 }
 let _opCount=0;
 function save(){
+  if(MODO_LECTURA){
+    toast('🔒 Modo solo lectura — este cambio no se guardó','err');
+    setTimeout(()=>location.reload(),1200);
+    return;
+  }
   try{
     if(DB.productos.length>0)
       localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
@@ -5016,6 +5060,7 @@ try{
   renderDash();
   agregarLineaEntrada();
   syncFromCloud();
+  aplicarModoLectura();
 }catch(initErr){
   console.error('Error de inicio:',initErr);
   document.body.innerHTML='<div style="font-family:Arial;padding:40px;color:#c00"><h2>Error al iniciar la aplicación</h2><p>'+initErr.message+'</p><p>Por favor recarga la página (F5).</p></div>';
