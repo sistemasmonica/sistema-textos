@@ -1087,6 +1087,32 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <div id="pn-ayuda" class="pn">
   <div class="card">
     <div class="card-t cg"><i class="ti ti-help"></i> Guía: cómo saber si estoy ganando o perdiendo</div>
+
+    <div class="ay-sec">
+      <div class="ay-sec-t">🧭 ¿Por dónde empiezo? — El orden correcto (una cosa alimenta a la otra)</div>
+      <div class="ay-tip" style="margin-top:0;margin-bottom:10px">Este sistema funciona en cadena: lo que llenas en un módulo aparece automáticamente en los siguientes. Si sigues este orden, todo cuadra solo. Si te saltas un paso, los reportes de más adelante van a salir incompletos o mal.</div>
+
+      <div class="ay-paso"><b>1. Crea tus productos</b> — Inventario → Catálogo. Pon código, nombre, editorial, precio de compra y precio de venta. <span style="color:var(--mu)">➜ Sin esto no puedes registrar entradas de stock ni guías de retiro.</span></div>
+
+      <div class="ay-paso"><b>2. Registra lo que compras a la editorial</b> — dos formas, según cómo te llegue: <b>(a)</b> Si te llega la factura electrónica al correo, usa <b>XML+IA</b> (el sistema la clasifica solo). <b>(b)</b> Si no hay XML (compra física, factura física), usa <b>Inventario → Entradas</b>. <span style="color:var(--mu)">➜ Esto sube tu stock disponible Y alimenta <b>Editorial → Deuda Editorial</b>, <b>Reportes</b>, <b>Consolidado</b> y <b>Liquidación</b>.</span></div>
+
+      <div class="ay-paso"><b>3. Cuando entregas libros a un colegio</b>, registra la <b>Guía de retiro</b> (pestaña Colegios). <span style="color:var(--mu)">➜ Esto descuenta el stock automáticamente y alimenta <b>Consolidado</b> y <b>Liquidación</b> (ventas por colegio).</span> Si es una venta suelta que no es por guía a colegio, regístrala en <b>Ventas</b> en su lugar. <span style="color:var(--mu)">➜ Esa alimenta <b>Reportes</b> y <b>Por Cobrar</b> (si no te han pagado todavía).</span></div>
+
+      <div class="ay-paso"><b>4. Cuando te pagan</b> (colegio, cliente): <b>(a)</b> si tienes el extracto bancario, súbelo en <b>Banco</b> y concilia — el sistema sugiere solo con qué factura coincide. <b>(b)</b> si te pagaron en efectivo o algo que no aparece en el banco, regístralo directo en <b>Pagos</b> (tipo Cobro). <span style="color:var(--mu)">➜ Cualquiera de las dos formas baja el saldo pendiente en <b>Por Cobrar</b> y sube el saldo en <b>Balance</b>.</span></div>
+
+      <div class="ay-paso"><b>5. Cuando le pagas a la editorial</b>, marca la factura como "Pagada" en <b>Editorial → Deuda Editorial</b>, o regístralo en <b>Pagos</b> (tipo Pago) si prefieres llevar el detalle ahí también. <span style="color:var(--mu)">➜ Esto baja tu deuda en <b>Balance</b> (Pasivos).</span></div>
+
+      <div class="ay-paso"><b>6. Si tienes deudas personales o del negocio</b> que no son con la editorial (préstamos, tarjetas, etc.), regístralas en <b>Deudas</b> y ve anotando los abonos ahí. <span style="color:var(--mu)">➜ Alimenta <b>Balance</b> (Pasivos).</span></div>
+
+      <div class="ay-paso"><b>7. Si le debes comisión a un vendedor</b> por una venta, regístrala en <b>Comisiones</b>. <span style="color:var(--mu)">➜ Se resta automáticamente en <b>Liquidación</b>.</span></div>
+
+      <div class="ay-paso"><b>8. Si la editorial te hace una devolución</b> (notas de crédito), regístrala en <b>Editorial → Notas de Crédito</b>. <span style="color:var(--mu)">➜ También se resta en <b>Liquidación</b>.</span></div>
+
+      <div class="ay-paso"><b>9. Al final del mes, revisa en este orden:</b> <b>Por Cobrar</b> (quién te debe) → <b>Editorial → Deuda Editorial</b> (qué debes tú) → <b>Liquidación</b> (tu utilidad real) → <b>Balance</b> (la foto completa: cuánto tienes vs. cuánto debes) → <b>Historial</b> (revisar que no falte ni sobre nada raro).</div>
+
+      <div class="ay-tip">💡 Regla simple: <b>Catálogo → Entradas/XML → Guía o Venta → Cobro/Pago → revisar Liquidación y Balance</b>. Si algo no cuadra, casi siempre es porque un paso de en medio no se registró.</div>
+    </div>
+
     <div class="ay-sec">
       <div class="ay-sec-t">📊 Qué mide cada reporte</div>
       <table class="ay-tabla" style="width:100%;font-size:12px;border-collapse:collapse">
