@@ -2454,6 +2454,26 @@ function rechazarSugerencia(bId){
   save();renderBanco();
 }
 
+function reintentarBusquedaFactura(bId){
+  const b=DB.banco.find(x=>x.id===bId);if(!b)return;
+  const match=buscarMejorCandidato(b);
+  if(!match){
+    toast('No se encontró ninguna factura tuya que coincida por monto/nombre. Si ya la tienes, cárgala en XML+IA o Manual e intenta de nuevo.','err');
+    return;
+  }
+  if(match.tipo==='exacto'){
+    b.clasificacion=null;
+    _aplicarVinculo(b,match.reg.id);
+    logHistorial('Conciliación bancaria confirmada',`${b.descripcion||''} — ${fmt(b.debito||b.credito||0)}`);
+    save();renderBanco();
+    toast('¡Encontrada! Conciliado con '+match.reg.proveedor,'ok');
+  }else{
+    b.sugerido=match.reg.id;
+    save();renderBanco();
+    toast('Encontré una posible coincidencia — confírmala abajo','ok');
+  }
+}
+
 function clasificarMovimiento(bId,clas){
   const b=DB.banco.find(x=>x.id===bId);
   if(!b)return;
@@ -2507,15 +2527,17 @@ function renderBanco(){
           <button class="btn btn-s btn-sm" onclick="rechazarSugerencia('${b.id}')"><i class="ti ti-x"></i> Rechazar</button>
         </div></div>`;
     }else if(b.clasificacion){
-      if(REQUIERE_FACTURA[b.clasificacion]){
-        estado='<span class="bdg bdg-warn">⚠️ '+CLASIFICACIONES[b.clasificacion]+' (sin factura)</span>';nRevision++;
-      }else{
-        estado='<span class="bdg" style="background:var(--lt);color:var(--mu)">🏷️ '+CLASIFICACIONES[b.clasificacion]+'</span>';nResuelto++;
-      }
-      accionCol=`<select style="font-size:11px;width:100%;max-width:200px" onchange="clasificarMovimiento('${b.id}',this.value)">
+      const claseSel=`<select style="font-size:11px;width:100%;max-width:200px" onchange="clasificarMovimiento('${b.id}',this.value)">
         <option value="">— quitar clasificación —</option>
         ${Object.entries(CLASIFICACIONES).map(([k,v])=>`<option value="${k}" ${b.clasificacion===k?'selected':''}>${v}</option>`).join('')}
       </select>`;
+      if(REQUIERE_FACTURA[b.clasificacion]){
+        estado='<span class="bdg bdg-warn">🟡 Factura pendiente de encontrar</span><br><span style="font-size:10px;color:var(--mu)">'+CLASIFICACIONES[b.clasificacion]+'</span>';nRevision++;
+        accionCol=`<button class="btn btn-s btn-sm" style="margin-bottom:4px" onclick="reintentarBusquedaFactura('${b.id}')"><i class="ti ti-search"></i> Buscar factura de nuevo</button>${claseSel}`;
+      }else{
+        estado='<span class="bdg" style="background:var(--lt);color:var(--mu)">🏷️ '+CLASIFICACIONES[b.clasificacion]+'</span>';nResuelto++;
+        accionCol=claseSel;
+      }
     }else{
       estado='<span class="bdg bdg-err">🔴 Sin clasificar</span>';nRevision++;
       accionCol=`<select style="font-size:11px;width:100%;max-width:200px;margin-bottom:4px" onchange="conciliarManual('${b.id}',this.value)">
