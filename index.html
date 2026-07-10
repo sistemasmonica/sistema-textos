@@ -378,11 +378,16 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div id="banco-concil" style="display:none">
     <div class="sh">
       <h2>Conciliación bancaria</h2>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-p btn-sm" onclick="autoConciliar()"><i class="ti ti-wand"></i> Auto-conciliar</button>
+        <button class="btn btn-sm" style="background:#6a1b9a;color:#fff" onclick="autoClasificarSinFactura()"><i class="ti ti-tags"></i> Clasificar lo sin factura</button>
         <button class="btn btn-s btn-sm" onclick="exportConcilCSV()"><i class="ti ti-download"></i> Exportar</button>
         <button class="btn btn-d btn-sm" onclick="limpiarBanco()"><i class="ti ti-trash"></i> Limpiar</button>
       </div>
+    </div>
+    <div style="background:var(--g4);border:1px solid var(--g3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--g1);margin-bottom:12px">
+      <b>Tu nombre tal como aparece en el banco</b> (para detectar transferencias entre tus propias cuentas):
+      <input type="text" id="banco-mi-nombre" placeholder="Ej: ALVARADO AGUILERA MONICA" style="margin-left:6px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;min-width:260px" onchange="guardarMiNombreBanco()">
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="sc"><div class="sc-lbl">Total movimientos</div><div class="sc-val cb" id="b-total">0</div></div>
@@ -2374,6 +2379,30 @@ function autoConciliar(){
   });
   save();renderBanco();
   toast(`${exactos} conciliados automáticamente · ${sugeridos} sugerencias nuevas · ${limpiadas} sugerencias viejas quitadas`,'ok');
+}
+
+function guardarMiNombreBanco(){
+  const v=(document.getElementById('banco-mi-nombre').value||'').trim();
+  localStorage.setItem('txe_mi_nombre_banco',v);
+}
+
+function autoClasificarSinFactura(){
+  if(!DB.banco.length)return toast('No hay movimientos bancarios cargados','err');
+  const miNombre=(document.getElementById('banco-mi-nombre').value||'').trim();
+  const miTokens=_normTxt(miNombre).split(/\s+/).filter(t=>t.length>2);
+  let transferencias=0,cobros=0,pagos=0;
+  DB.banco.forEach(b=>{
+    if(b.regId||b.sugerido||b.clasificacion)return; // ya conciliado, sugerido o clasificado — no tocar
+    const desc=_normTxt(b.descripcion||'');
+    const esMio=miTokens.length&&miTokens.filter(t=>desc.includes(t)).length>=Math.min(2,miTokens.length);
+    if(esMio){b.clasificacion='transferencia';transferencias++;}
+    else if(b.credito>0){b.clasificacion='cobro';cobros++;}
+    else if(b.debito>0){b.clasificacion='pago';pagos++;}
+  });
+  const total=transferencias+cobros+pagos;
+  if(!total){toast('No había movimientos "sin factura" para clasificar','err');return;}
+  save();renderBanco();
+  toast(`${total} movimientos clasificados: ${cobros} cobros, ${pagos} pagos, ${transferencias} transferencias. Revísalos y corrige los que no cuadren.`,'ok');
 }
 
 function confirmarSugerencia(bId){
@@ -5396,6 +5425,7 @@ try{
   document.getElementById('mf').value=today();
   document.getElementById('vf').value=today();
   document.getElementById('ent-fecha').value=today();
+  document.getElementById('banco-mi-nombre').value=localStorage.getItem('txe_mi_nombre_banco')||'';
   updateCount();
   renderDash();
   agregarLineaEntrada();
