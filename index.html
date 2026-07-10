@@ -379,6 +379,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh">
       <h2>Conciliación bancaria</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="background:#0d6832;color:#fff" onclick="resolverTodoBanco()"><i class="ti ti-sparkles"></i> ✨ Resolver todo</button>
         <button class="btn btn-p btn-sm" onclick="autoConciliar()"><i class="ti ti-wand"></i> Auto-conciliar</button>
         <button class="btn btn-sm" style="background:#6a1b9a;color:#fff" onclick="autoClasificarSinFactura()"><i class="ti ti-tags"></i> Clasificar lo sin factura</button>
         <button class="btn btn-s btn-sm" onclick="exportConcilCSV()"><i class="ti ti-download"></i> Exportar</button>
@@ -396,6 +397,16 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">✅ Resuelto (no necesita factura)</div><div class="sc-val cg" id="b-resuelto">0</div></div>
       <div class="sc"><div class="sc-lbl">⚠️ Necesita revisión</div><div class="sc-val ca" id="b-revision">0</div></div>
       <div class="sc"><div class="sc-lbl">🟡 Sugeridos (dentro de revisión)</div><div class="sc-val ca" id="b-sug">0</div></div>
+    </div>
+    <div class="card" style="margin-top:10px;margin-bottom:10px">
+      <div class="card-t" style="font-size:13px"><i class="ti ti-list-check"></i> Panel de pendientes</div>
+      <div id="banco-panel-categorias" style="font-size:12px"></div>
+    </div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="banco-solo-pendientes" onchange="toggleBancoSoloPendientes()">
+        Mostrar solo lo que necesita revisión (ocultar lo ya resuelto)
+      </label>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -2310,13 +2321,15 @@ function extraerContraparte(desc){
   return tokens.join(' ');
 }
 
+function _normalizarRegla(r){return typeof r==='string'?{clas:r,veces:1}:r;}
+
 function buscarReglaAprendida(desc){
   DB.reglasBanco=DB.reglasBanco||{};
   const clave=extraerContraparte(desc);
   if(!clave)return null;
-  if(DB.reglasBanco[clave])return DB.reglasBanco[clave];
+  if(DB.reglasBanco[clave])return _normalizarRegla(DB.reglasBanco[clave]);
   for(const k in DB.reglasBanco){
-    if(k&&k.length>4&&(clave.includes(k)||k.includes(clave)))return DB.reglasBanco[k];
+    if(k&&k.length>4&&(clave.includes(k)||k.includes(clave)))return _normalizarRegla(DB.reglasBanco[k]);
   }
   return null;
 }
@@ -2426,12 +2439,31 @@ function autoClasificarSinFactura(){
     const esMio=miTokens.length&&miTokens.filter(t=>desc.includes(t)).length>=Math.min(2,miTokens.length);
     const tieneImpuesto=PALABRAS_IMPUESTO.some(p=>desc.includes(p));
     const tieneFactura=PALABRAS_CON_FACTURA.some(p=>desc.includes(p));
-    if(regla){b.clasificacion=regla;aprendidos++;}
-    else if(esMio){b.clasificacion='transferencia';transferencias++;}
-    else if(tieneImpuesto){b.clasificacion='impuesto';impuestos++;}
-    else if(tieneFactura&&b.debito>0){b.clasificacion='pago';pagos++;}
-    else if(b.credito>0){b.clasificacion='cobro';cobros++;}
-    else if(b.debito>0){b.clasificacion='pagoEmpleado';pagos++;}
+    if(regla){
+      b.clasificacion=regla.clas;
+      b.origenClasificacion=`Clasificado automáticamente porque ya clasificaste así a esta misma persona/empresa ${regla.veces} ${regla.veces===1?'vez':'veces'} antes.`;
+      aprendidos++;
+    }else if(esMio){
+      b.clasificacion='transferencia';
+      b.origenClasificacion='Clasificado automáticamente porque tu propio nombre aparece en la descripción (transferencia entre tus cuentas).';
+      transferencias++;
+    }else if(tieneImpuesto){
+      b.clasificacion='impuesto';
+      b.origenClasificacion='Clasificado automáticamente porque la descripción menciona SRI/Impuesto.';
+      impuestos++;
+    }else if(tieneFactura&&b.debito>0){
+      b.clasificacion='pago';
+      b.origenClasificacion='Clasificado automáticamente porque la descripción parece una compra (tienda/proveedor) — debería tener factura.';
+      pagos++;
+    }else if(b.credito>0){
+      b.clasificacion='cobro';
+      b.origenClasificacion='Clasificado por defecto: entró dinero y no hay ninguna otra señal — revisa si es correcto.';
+      cobros++;
+    }else if(b.debito>0){
+      b.clasificacion='pagoEmpleado';
+      b.origenClasificacion='Clasificado por defecto: salió dinero y no hay ninguna otra señal — revisa si es correcto.';
+      pagos++;
+    }
   });
   const total=aprendidos+transferencias+cobros+pagos+impuestos;
   if(!total){toast('No había movimientos "sin factura" para clasificar','err');return;}
@@ -2477,11 +2509,16 @@ function reintentarBusquedaFactura(bId){
 function clasificarMovimiento(bId,clas){
   const b=DB.banco.find(x=>x.id===bId);
   if(!b)return;
-  if(!clas){b.clasificacion=null;save();renderBanco();return;}
+  if(!clas){b.clasificacion=null;b.origenClasificacion=null;save();renderBanco();return;}
   _quitarVinculo(b);
-  b.sugerido=null;b.clasificacion=clas;
+  b.sugerido=null;b.clasificacion=clas;b.origenClasificacion=null; // clasificado a mano, sin necesidad de explicación
   const clave=extraerContraparte(b.descripcion);
-  if(clave){DB.reglasBanco=DB.reglasBanco||{};DB.reglasBanco[clave]=clas;}
+  if(clave){
+    DB.reglasBanco=DB.reglasBanco||{};
+    const anterior=_normalizarRegla(DB.reglasBanco[clave]||{clas,veces:0});
+    const veces=anterior.clas===clas?anterior.veces+1:1;
+    DB.reglasBanco[clave]={clas,veces};
+  }
   save();renderBanco();
 }
 
@@ -2500,46 +2537,76 @@ function desconciliar(bId){
   save();renderBanco();
 }
 
+const UMBRAL_URGENTE=500;
+let bancoSoloPendientes=false;
+
+function toggleBancoSoloPendientes(){
+  bancoSoloPendientes=document.getElementById('banco-solo-pendientes').checked;
+  renderBanco();
+}
+
+function resolverTodoBanco(){
+  if(!DB.banco.length)return toast('No hay movimientos bancarios cargados','err');
+  autoConciliar();
+  autoClasificarSinFactura();
+  bancoSoloPendientes=true;
+  const chk=document.getElementById('banco-solo-pendientes');if(chk)chk.checked=true;
+  renderBanco();
+}
+
 function renderBanco(){
   const conc=document.getElementById('banco-concil');
   if(!DB.banco.length){conc.style.display='none';return}
   conc.style.display='block';
   const total=DB.banco.length;
-  let nConc=0,nSug=0,nParc=0,nResuelto=0,nRevision=0;
+  let nConc=0,nSug=0,nParc=0,nResuelto=0,nRevision=0,nUrgente=0,totalNoDeducible=0;
+  const porCategoria={};
+  Object.keys(CLASIFICACIONES).forEach(k=>porCategoria[k]=0);
   const tb=document.getElementById('tb-banco');
-  tb.innerHTML=DB.banco.map(b=>{
+
+  const filas=DB.banco.map(b=>{
     const monto=b.debito?`<span style="color:var(--r1);font-family:monospace">-${fmt(b.debito)}</span>`:
                 b.credito?`<span style="color:var(--g1);font-family:monospace">+${fmt(b.credito)}</span>`:'—';
+    const montoNum=b.debito||b.credito||0;
     const regMatch=b.regId?DB.regs.find(r=>r.id===b.regId):null;
     const sugReg=b.sugerido?DB.regs.find(r=>r.id===b.sugerido):null;
 
-    let estado,accionCol;
+    let estado,accionCol,esRevision=false,prioridad='';
+    const origenTxt=b.origenClasificacion?`<br><span style="font-size:10px;color:var(--mu);font-style:italic">💡 ${escH(b.origenClasificacion)}</span>`:'';
     if(regMatch){
       const parcial=estadoPagoReg(regMatch)==='parcial';
       if(parcial){estado='<span class="bdg" style="background:var(--b2);color:var(--b1)">🔵 Pago parcial</span>';nParc++;}
       else{estado='<span class="bdg bdg-ok">🟢 Conciliado</span>';nConc++;}
       accionCol=`<span style="font-size:11px">${escH(regMatch.proveedor)}<br><span style="color:var(--mu)">${regMatch.numFact||''} ${fmt(regMatch.total)}${parcial?' · saldo '+fmt(saldoPendiente(regMatch)):''}</span></span>`;
     }else if(sugReg){
-      estado='<span class="bdg bdg-warn">🟡 Sugerido</span>';nSug++;nRevision++;
+      esRevision=true;prioridad=montoNum>=UMBRAL_URGENTE?'urgente':'revisar';
+      estado=(prioridad==='urgente'?'<span class="bdg bdg-err">🔴 Urgente — Sugerido</span>':'<span class="bdg bdg-warn">🟡 Sugerido</span>');nSug++;nRevision++;
       accionCol=`<div style="font-size:11px">¿Conciliar con <b>${escH(sugReg.proveedor)}</b> — ${sugReg.numFact||''} ${fmt(sugReg.total)}?
         <div style="margin-top:4px;display:flex;gap:4px">
           <button class="btn btn-p btn-sm" onclick="confirmarSugerencia('${b.id}')"><i class="ti ti-check"></i> Confirmar</button>
           <button class="btn btn-s btn-sm" onclick="rechazarSugerencia('${b.id}')"><i class="ti ti-x"></i> Rechazar</button>
         </div></div>`;
     }else if(b.clasificacion){
+      if(porCategoria[b.clasificacion]!==undefined)porCategoria[b.clasificacion]++;
       const claseSel=`<select style="font-size:11px;width:100%;max-width:200px" onchange="clasificarMovimiento('${b.id}',this.value)">
         <option value="">— quitar clasificación —</option>
         ${Object.entries(CLASIFICACIONES).map(([k,v])=>`<option value="${k}" ${b.clasificacion===k?'selected':''}>${v}</option>`).join('')}
       </select>`;
       if(REQUIERE_FACTURA[b.clasificacion]){
-        estado='<span class="bdg bdg-warn">🟡 Factura pendiente de encontrar</span><br><span style="font-size:10px;color:var(--mu)">'+CLASIFICACIONES[b.clasificacion]+'</span>';nRevision++;
+        esRevision=true;prioridad=montoNum>=UMBRAL_URGENTE?'urgente':'revisar';
+        totalNoDeducible+=montoNum;
+        estado=(prioridad==='urgente'?'<span class="bdg bdg-err">🔴 Urgente — Factura pendiente</span>':'<span class="bdg bdg-warn">🟡 Factura pendiente de encontrar</span>')+origenTxt+
+          '<br><span style="font-size:10px;color:var(--mu)">'+CLASIFICACIONES[b.clasificacion]+'</span>'+
+          '<br><span style="font-size:10px;color:var(--r1)">🚫 Mientras no aparezca la factura, es un gasto NO deducible de impuestos</span>';
+        nRevision++;
         accionCol=`<button class="btn btn-s btn-sm" style="margin-bottom:4px" onclick="reintentarBusquedaFactura('${b.id}')"><i class="ti ti-search"></i> Buscar factura de nuevo</button>${claseSel}`;
       }else{
-        estado='<span class="bdg" style="background:var(--lt);color:var(--mu)">🏷️ '+CLASIFICACIONES[b.clasificacion]+'</span>';nResuelto++;
+        estado='<span class="bdg" style="background:var(--lt);color:var(--mu)">🏷️ '+CLASIFICACIONES[b.clasificacion]+'</span>'+origenTxt;nResuelto++;
         accionCol=claseSel;
       }
     }else{
-      estado='<span class="bdg bdg-err">🔴 Sin clasificar</span>';nRevision++;
+      esRevision=true;prioridad=montoNum>=UMBRAL_URGENTE?'urgente':'revisar';
+      estado=(prioridad==='urgente'?'<span class="bdg bdg-err">🔴 Urgente — Sin clasificar</span>':'<span class="bdg bdg-err">🔴 Sin clasificar</span>');nRevision++;
       accionCol=`<select style="font-size:11px;width:100%;max-width:200px;margin-bottom:4px" onchange="conciliarManual('${b.id}',this.value)">
           <option value="">— seleccionar factura —</option>
           ${DB.regs.filter(r=>saldoPendiente(r)>0.01).map(r=>`<option value="${r.id}">${escH(r.proveedor)} ${fmt(saldoPendiente(r))} (${r.fecha})</option>`).join('')}
@@ -2549,8 +2616,9 @@ function renderBanco(){
           ${Object.entries(CLASIFICACIONES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
         </select>`;
     }
+    if(prioridad==='urgente')nUrgente++;
     const accion=(regMatch)?`<button class="btn btn-d btn-sm" onclick="desconciliar('${b.id}')"><i class="ti ti-unlink"></i></button>`:'';
-    return`<tr class="${regMatch?'conc-match':'conc-pending'}">
+    return{esRevision,prioridad,montoNum,html:`<tr class="${regMatch?'conc-match':'conc-pending'}">
       <td style="font-family:monospace;white-space:nowrap">${b.fecha}</td>
       <td style="max-width:200px">${escH(b.descripcion)}</td>
       <td>${b.debito?monto:'—'}</td>
@@ -2558,8 +2626,15 @@ function renderBanco(){
       <td>${estado}</td>
       <td>${accionCol}</td>
       <td>${accion}</td>
-    </tr>`;
-  }).join('');
+    </tr>`};
+  });
+
+  const ordenPrioridad={urgente:0,revisar:1,'':2};
+  let filasFiltradas=bancoSoloPendientes?filas.filter(f=>f.esRevision):filas;
+  filasFiltradas=[...filasFiltradas].sort((a,c)=>ordenPrioridad[a.prioridad]-ordenPrioridad[c.prioridad]);
+
+  tb.innerHTML=filasFiltradas.length?filasFiltradas.map(f=>f.html).join(''):'<tr><td colspan="7"><div class="empty">🎉 No hay nada pendiente por revisar.</div></td></tr>';
+
   document.getElementById('b-total').textContent=total;
   document.getElementById('b-conc').textContent=nConc;
   document.getElementById('b-parc').textContent=nParc;
@@ -2567,6 +2642,16 @@ function renderBanco(){
   document.getElementById('b-revision').textContent=nRevision;
   document.getElementById('b-sug').textContent=nSug;
   document.getElementById('d-bancopend').textContent=nRevision;
+
+  const panelEl=document.getElementById('banco-panel-categorias');
+  if(panelEl){
+    const filasCat=Object.entries(CLASIFICACIONES).filter(([k])=>porCategoria[k]>0)
+      .map(([k,v])=>`<span class="bdg" style="background:var(--lt);color:var(--mu);margin:2px">${v}: <b>${porCategoria[k]}</b></span>`).join(' ');
+    panelEl.innerHTML=`
+      <div style="margin-bottom:6px"><b>⚠️ Necesita revisión:</b> ${nRevision} ${nUrgente?`(<span style="color:var(--r1)">🔴 ${nUrgente} urgentes</span>)`:''} &nbsp;|&nbsp; <b>✅ Resuelto:</b> ${nResuelto+nConc}</div>
+      ${totalNoDeducible>0?`<div style="margin-bottom:6px;color:var(--r1)">🚫 Gastos aún sin factura (no deducibles por ahora): <b>${fmt(totalNoDeducible)}</b></div>`:''}
+      <div>${filasCat||'<span style="color:var(--mu);font-size:12px">Sin movimientos clasificados todavía.</span>'}</div>`;
+  }
 }
 
 function limpiarBanco(){
