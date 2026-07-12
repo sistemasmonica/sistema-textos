@@ -4339,16 +4339,29 @@ function exportStockCSV(){
 // ===================================================
 // DASHBOARD
 // ===================================================
+let _saludDatos={};
+
+function irATab(id){
+  const btn=[...document.querySelectorAll('.nav > .nt')].find(b=>(b.getAttribute('onclick')||'').includes(`tab('${id}'`));
+  if(btn)tab(id,btn);
+}
+
+function irAInvTab(id){
+  irATab('inv');
+  const btn=[...document.querySelectorAll('#pn-inv .nav > .nt')].find(b=>(b.getAttribute('onclick')||'').includes(`invTab('${id}'`));
+  if(btn)invTab(id,btn);
+}
+
 function revisarSistema(){
   const cont=document.getElementById('salud-resultado');
   if(!cont)return;
   const checks=[];
 
   const sinPrecio=DB.productos.filter(p=>p.editorial!=='Hist.'&&(!p.precioVenta||!p.precioCosto));
-  checks.push({txt: sinPrecio.length?`${sinPrecio.length} producto(s) sin precio de costo o de venta`:'Todos los productos tienen precio de costo y venta', nivel: sinPrecio.length?'warn':'ok'});
+  checks.push({key:'sinPrecio', txt: sinPrecio.length?`${sinPrecio.length} producto(s) sin precio de costo o de venta`:'Todos los productos tienen precio de costo y venta', nivel: sinPrecio.length?'warn':'ok'});
 
   const bajoCosto=DB.productos.filter(p=>p.editorial!=='Hist.'&&p.precioVenta>0&&p.precioCosto>0&&p.precioVenta<p.precioCosto);
-  checks.push({txt: bajoCosto.length?`${bajoCosto.length} producto(s) se están vendiendo por debajo del costo`:'Ningún producto se vende bajo costo', nivel: bajoCosto.length?'error':'ok'});
+  checks.push({key:'bajoCosto', txt: bajoCosto.length?`${bajoCosto.length} producto(s) se están vendiendo por debajo del costo`:'Ningún producto se vende bajo costo', nivel: bajoCosto.length?'error':'ok'});
 
   const hoyD=new Date();hoyD.setHours(0,0,0,0);
   const vencidas=DB.regs.filter(r=>{
@@ -4356,25 +4369,27 @@ function revisarSistema(){
     const vence=parseLocalDate(r.fecha);vence.setDate(vence.getDate()+180);
     return vence<hoyD;
   });
-  checks.push({txt: vencidas.length?`${vencidas.length} factura(s) de editorial vencidas sin pagar (Deuda Editorial)`:'No hay facturas de editorial vencidas', nivel: vencidas.length?'error':'ok'});
+  checks.push({key:'vencidas', txt: vencidas.length?`${vencidas.length} factura(s) de editorial vencidas sin pagar (Deuda Editorial)`:'No hay facturas de editorial vencidas', nivel: vencidas.length?'error':'ok'});
 
-  const bancoRevision=(DB.banco||[]).filter(b=>!b.regId&&!b.sugerido&&(!b.clasificacion||(typeof REQUIERE_FACTURA!=='undefined'&&REQUIERE_FACTURA[b.clasificacion]))).length;
-  checks.push({txt: bancoRevision?`${bancoRevision} movimiento(s) bancarios necesitan revisión`:'Todos los movimientos bancarios están resueltos', nivel: bancoRevision?'warn':'ok'});
+  const bancoItems=(DB.banco||[]).filter(b=>!b.regId&&!b.sugerido&&(!b.clasificacion||(typeof REQUIERE_FACTURA!=='undefined'&&REQUIERE_FACTURA[b.clasificacion])));
+  checks.push({key:'banco', txt: bancoItems.length?`${bancoItems.length} movimiento(s) bancarios necesitan revisión`:'Todos los movimientos bancarios están resueltos', nivel: bancoItems.length?'warn':'ok'});
 
   const comisionesPend=(DB.comisiones||[]).filter(c=>c.estado==='pendiente');
-  checks.push({txt: comisionesPend.length?`${comisionesPend.length} comisión(es) pendientes de pago`:'No hay comisiones pendientes', nivel: comisionesPend.length?'warn':'ok'});
+  checks.push({key:'comisiones', txt: comisionesPend.length?`${comisionesPend.length} comisión(es) pendientes de pago`:'No hay comisiones pendientes', nivel: comisionesPend.length?'warn':'ok'});
 
   const mapaFact={};
   DB.regs.forEach(r=>{
     if(!r.numFact)return;
     const k=(r.proveedor||'')+'|'+r.numFact+'|'+r.tipo;
-    mapaFact[k]=(mapaFact[k]||0)+1;
+    (mapaFact[k]=mapaFact[k]||[]).push(r);
   });
-  const nDuplicadas=Object.values(mapaFact).filter(n=>n>1).length;
-  checks.push({txt: nDuplicadas?`${nDuplicadas} posible(s) factura(s) duplicada(s) (mismo proveedor y N° factura)`:'No se detectaron facturas duplicadas', nivel: nDuplicadas?'error':'ok'});
+  const gruposDuplicados=Object.values(mapaFact).filter(g=>g.length>1);
+  checks.push({key:'duplicadas', txt: gruposDuplicados.length?`${gruposDuplicados.length} posible(s) factura(s) duplicada(s) (mismo proveedor y N° factura)`:'No se detectaron facturas duplicadas', nivel: gruposDuplicados.length?'error':'ok'});
 
   const guiasCero=(DB.guias||[]).filter(g=>!g.total);
-  checks.push({txt: guiasCero.length?`${guiasCero.length} guía(s) de retiro registradas con valor $0.00 (revisa precios)`:'Todas las guías tienen un valor registrado', nivel: guiasCero.length?'warn':'ok'});
+  checks.push({key:'guias', txt: guiasCero.length?`${guiasCero.length} guía(s) de retiro registradas con valor $0.00 (revisa precios)`:'Todas las guías tienen un valor registrado', nivel: guiasCero.length?'warn':'ok'});
+
+  _saludDatos={sinPrecio,bajoCosto,vencidas,bancoItems,comisionesPend,gruposDuplicados,guiasCero};
 
   const nError=checks.filter(c=>c.nivel==='error').length;
   const nWarn=checks.filter(c=>c.nivel==='warn').length;
@@ -4385,7 +4400,81 @@ function revisarSistema(){
     ?`<div class="ay-tip" style="margin:0 0 10px">✔ Sistema revisado. No se encontraron advertencias.</div>`
     :`<div class="ay-tip" style="margin:0 0 10px;background:#fff3cd;border-color:#ffe08a;color:#7a5b00">✔ Sistema revisado. Se encontraron ${nError+nWarn} advertencia${(nError+nWarn)===1?'':'s'} (${nError} urgente${nError===1?'':'s'}, ${nWarn} para revisar).</div>`;
 
-  cont.innerHTML=resumen+checks.map(c=>`<div style="padding:7px 2px;border-bottom:1px solid #f1f1f1;font-size:13px;color:${colores[c.nivel]}">${iconos[c.nivel]} ${escH(c.txt)}</div>`).join('');
+  cont.innerHTML=resumen+checks.map(c=>`
+    <div style="padding:7px 2px;border-bottom:1px solid #f1f1f1;font-size:13px;color:${colores[c.nivel]};display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span>${iconos[c.nivel]} ${escH(c.txt)}</span>
+      ${c.nivel!=='ok'?`<button class="btn btn-s btn-sm" onclick="toggleSaludDetalle('${c.key}')" style="white-space:nowrap">▾ Ver detalle</button>`:''}
+    </div>
+    <div id="salud-det-${c.key}" style="display:none;margin:4px 0 10px"></div>
+  `).join('');
+}
+
+function toggleSaludDetalle(key){
+  const el=document.getElementById('salud-det-'+key);
+  if(!el)return;
+  if(el.style.display==='block'){el.style.display='none';return;}
+  document.querySelectorAll('[id^="salud-det-"]').forEach(d=>d.style.display='none');
+  el.innerHTML=renderSaludDetalle(key);
+  el.style.display='block';
+}
+
+function renderSaludDetalle(key){
+  const d=_saludDatos;
+  const tblOpen='<div class="tbl-wrap"><table style="font-size:12px"><tbody>';
+  const tblClose='</tbody></table></div>';
+  if(key==='sinPrecio'||key==='bajoCosto'){
+    const lista=d[key]||[];
+    return tblOpen+lista.map(p=>`<tr>
+      <td>${escH(p.nombre)}${p.editorial?' <span style="color:var(--mu)">('+escH(p.editorial)+')</span>':''}</td>
+      <td style="font-family:monospace">Costo: ${fmt(p.precioCosto)}</td>
+      <td style="font-family:monospace">Venta: ${fmt(p.precioVenta)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="irAInvTab('catalogo');abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i> Editar</button></td>
+    </tr>`).join('')+tblClose;
+  }
+  if(key==='vencidas'){
+    return tblOpen+d.vencidas.map(r=>`<tr>
+      <td>${escH(r.fecha)}</td><td>${escH(r.proveedor)}</td><td>${escH(r.numFact||'-')}</td>
+      <td style="font-family:monospace">${fmt(r.total)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="irATab('editorial')"><i class="ti ti-arrow-right"></i> Ir a Deuda Editorial</button></td>
+    </tr>`).join('')+tblClose;
+  }
+  if(key==='banco'){
+    const porMes={};
+    d.bancoItems.forEach(b=>{const m=mesAnio(b.fecha);porMes[m]=(porMes[m]||0)+1;});
+    const resumenMeses=Object.keys(porMes).sort().map(m=>`<span class="chip" style="margin:2px">${mesLabel(m)}: <b>${porMes[m]}</b></span>`).join(' ');
+    const primeros=d.bancoItems.slice(0,10);
+    return `<div style="margin-bottom:8px">${resumenMeses}</div>`+
+      tblOpen+primeros.map(b=>`<tr>
+        <td>${escH(b.fecha)}</td><td>${escH(b.descripcion||'')}</td>
+        <td style="font-family:monospace">${fmt(b.debito||b.credito||0)}</td>
+        <td style="color:var(--mu)">${b.clasificacion?'Sin factura encontrada':'Sin clasificar'}</td>
+      </tr>`).join('')+tblClose+
+      (d.bancoItems.length>10?`<div style="font-size:11px;color:var(--mu);margin:4px 0">y ${d.bancoItems.length-10} más...</div>`:'')+
+      `<button class="btn btn-p btn-sm" onclick="irATab('banco');document.getElementById('banco-solo-pendientes').checked=true;bancoSoloPendientes=true;renderBanco();"><i class="ti ti-arrow-right"></i> Ver todos en Banco</button>`;
+  }
+  if(key==='comisiones'){
+    return tblOpen+d.comisionesPend.map(c=>`<tr>
+      <td>${escH(c.fecha)}</td><td>${escH(c.beneficiario)}</td>
+      <td style="font-family:monospace">${fmt(c.monto)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="irATab('comisiones')"><i class="ti ti-arrow-right"></i> Ir a Comisiones</button></td>
+    </tr>`).join('')+tblClose;
+  }
+  if(key==='duplicadas'){
+    return d.gruposDuplicados.map(g=>tblOpen+
+      `<tr style="background:var(--g4)"><td colspan="4"><b>${escH(g[0].proveedor)} — N° ${escH(g[0].numFact)}</b></td></tr>`+
+      g.map(r=>`<tr>
+        <td>${escH(r.fecha)}</td><td>${fmt(r.total)}</td><td>${escH(r.categoria||'')}</td>
+        <td><button class="btn btn-s btn-sm" onclick="irATab('mov');document.getElementById('f-q').value='${(r.numFact||'').replace(/'/g,"\\'")}';renderMov();"><i class="ti ti-arrow-right"></i> Ver</button></td>
+      </tr>`).join('')
+      +tblClose).join('');
+  }
+  if(key==='guias'){
+    return tblOpen+d.guiasCero.map(g=>`<tr>
+      <td>${escH(g.numero)}</td><td>${escH(g.cliente)}</td><td>${escH(g.fecha)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="irAInvTab('guias');editarGuia('${g.id}')"><i class="ti ti-pencil"></i> Editar guía</button></td>
+    </tr>`).join('')+tblClose;
+  }
+  return '';
 }
 
 function renderDash(){
