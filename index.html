@@ -1508,13 +1508,13 @@ function aplicarModoLectura(){
   const lblRestaurar=document.getElementById('lbl-restaurar');if(lblRestaurar)lblRestaurar.style.display='none';
 }
 
-function setSyncStatus(s){
+function setSyncStatus(s,detalle){
   const el=document.getElementById('sync-status');
   if(!el)return;
-  if(s==='sync'){el.textContent='🔄 Sincronizando...';el.style.opacity='0.8';}
-  else if(s==='ok'){el.textContent='☁️ Guardado';el.style.opacity='1';}
-  else if(s==='load'){el.textContent='⬇️ Cargando nube...';el.style.opacity='0.8';}
-  else{el.textContent='⚠️ Sin conexión';el.style.opacity='0.8';}
+  if(s==='sync'){el.textContent='🔄 Sincronizando...';el.style.opacity='0.8';el.title='';}
+  else if(s==='ok'){el.textContent='☁️ Guardado';el.style.opacity='1';el.title='';}
+  else if(s==='load'){el.textContent='⬇️ Cargando nube...';el.style.opacity='0.8';el.title='';}
+  else{el.textContent='⚠️ Sin conexión';el.style.opacity='0.8';el.title=detalle?('Detalle: '+detalle):'Pasa el mouse aquí para ver el detalle del error (si lo hay)';}
 }
 
 let syncCompleted=false;
@@ -1549,7 +1549,7 @@ async function saveToCloud(data){
     const{error}=await sb.from('app_data').upsert({key:'txe_main',value:payload,updated_at:ts});
     if(error)throw error;
     setSyncStatus('ok');
-  }catch(e){setSyncStatus('err');console.warn('Cloud save error:',e);}
+  }catch(e){setSyncStatus('err',e.message);console.warn('Cloud save error:',e);}
 }
 
 async function syncFromCloud(){
@@ -1618,13 +1618,12 @@ async function syncFromCloud(){
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
-    const cfgTable=tablesOk?'txe_config':'app_data';
-    const{data:krow}=await sb.from(cfgTable).select('value').eq('key','claude_key').maybeSingle();
+    const{data:krow}=await sb.from('txe_config').select('value').eq('key','claude_key').maybeSingle();
     if(krow?.value?.key){
       const inp=document.getElementById('claude-key');
       if(inp&&!inp.value)inp.value=krow.value.key;
     }
-  }catch(e){setSyncStatus('err');console.warn('Cloud sync error:',e);}
+  }catch(e){setSyncStatus('err',e.message);console.warn('Cloud sync error:',e);}
 }
 
 function getClaudeKey(){
