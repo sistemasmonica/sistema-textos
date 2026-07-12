@@ -205,6 +205,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sc"><div class="sc-lbl">Stock bajo / agotado</div><div class="sc-val cr" id="d-stockbajo">0</div><div class="sc-sub">requieren reposición</div></div>
     <div class="sc"><div class="sc-lbl">Movs. banco pendientes</div><div class="sc-val ca" id="d-bancopend">0</div><div class="sc-sub">sin conciliar</div></div>
   </div>
+  <div class="card">
+    <div class="sh" style="margin-bottom:6px">
+      <div class="card-t" style="margin:0"><i class="ti ti-stethoscope"></i> 🩺 Salud del sistema</div>
+      <button class="btn btn-s btn-sm" onclick="revisarSistema()"><i class="ti ti-refresh"></i> Revisar ahora</button>
+    </div>
+    <div id="salud-resultado"><div class="empty">Presiona "Revisar ahora" para ver si todo está en orden (inventario, facturas, banco, comisiones...).</div></div>
+  </div>
   <div class="two">
     <div class="card"><div class="card-t cg"><i class="ti ti-building-store"></i> Negocio por categoría</div><div id="dc-neg"><div class="empty">Sin datos</div></div></div>
     <div class="card"><div class="card-t ca"><i class="ti ti-user"></i> Personales por categoría</div><div id="dc-per"><div class="empty">Sin datos</div></div></div>
@@ -1131,6 +1138,18 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="ay-sec-t">🧭 ¿Por dónde empiezo? — El orden correcto (una cosa alimenta a la otra)</div>
       <div class="ay-tip" style="margin-top:0;margin-bottom:10px">Este sistema funciona en cadena: lo que llenas en un módulo aparece automáticamente en los siguientes. Si sigues este orden, todo cuadra solo. Si te saltas un paso, los reportes de más adelante van a salir incompletos o mal.</div>
 
+      <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;background:var(--g4);border:1px solid var(--g3);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="text-align:center;font-size:12px;font-weight:700;color:var(--g1)">🟢<br>Catálogo</div>
+        <div style="color:var(--mu);font-size:16px">➜</div>
+        <div style="text-align:center;font-size:12px;font-weight:700;color:var(--g1)">📦<br>Entradas</div>
+        <div style="color:var(--mu);font-size:16px">➜</div>
+        <div style="text-align:center;font-size:12px;font-weight:700;color:var(--g1)">🚚<br>Guías</div>
+        <div style="color:var(--mu);font-size:16px">➜</div>
+        <div style="text-align:center;font-size:12px;font-weight:700;color:var(--g1)">💰<br>Cobros</div>
+        <div style="color:var(--mu);font-size:16px">➜</div>
+        <div style="text-align:center;font-size:12px;font-weight:700;color:var(--g1)">📊<br>Liquidación</div>
+      </div>
+
       <div class="ay-paso"><b>1. Crea tus productos</b> — Inventario → Catálogo. Pon código, nombre, editorial, precio de compra y precio de venta. <span style="color:var(--mu)">➜ Sin esto no puedes registrar entradas de stock ni guías de retiro.</span></div>
 
       <div class="ay-paso"><b>2. Registra lo que compras a la editorial</b> — dos formas, según cómo te llegue: <b>(a)</b> Si te llega la factura electrónica al correo, usa <b>XML+IA</b> (el sistema la clasifica solo). <b>(b)</b> Si no hay XML (compra física, factura física), usa <b>Inventario → Entradas</b>. <span style="color:var(--mu)">➜ Esto sube tu stock disponible Y alimenta <b>Editorial → Deuda Editorial</b>, <b>Reportes</b>, <b>Consolidado</b> y <b>Liquidación</b>.</span></div>
@@ -1171,6 +1190,15 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="ay-paso"><b>4.</b> Revisa <b>Editorial → Deuda Editorial</b> — aunque tengas plata en el banco, si le debes mucho a la editorial esa plata ya no es tuya, es prestada.</div>
       <div class="ay-paso"><b>5.</b> Revisa <b>Comisiones</b> — que estén todas registradas; si a un vendedor le debes comisión y no la anotaste, tu "ganancia" está inflada.</div>
       <div class="ay-paso"><b>6.</b> En <b>Inventario → Catálogo</b>, busca productos donde el Precio de Venta sea menor al Precio de Compra — vender bajo costo es la forma más común de perder plata sin notarlo.</div>
+    </div>
+
+    <div class="ay-sec">
+      <div class="ay-sec-t">❌ Errores comunes</div>
+      <div class="ay-paso">❌ <b>Registré una guía pero no aparece utilidad.</b><br><span style="color:var(--mu)">👉 Probablemente olvidaste ingresar la compra de esos productos (factura de la editorial). La utilidad se calcula ventas − costo, si falta el costo no hay con qué comparar.</span></div>
+      <div class="ay-paso" style="margin-top:10px">❌ <b>Me sale utilidad negativa en Liquidación.</b><br><span style="color:var(--mu)">👉 Revisa Comisiones (pestaña Comisiones) y Notas de Crédito (Editorial → Notas de Crédito) — si hay montos grandes ahí, eso resta directo a tu utilidad.</span></div>
+      <div class="ay-paso" style="margin-top:10px">❌ <b>El banco no coincide con mis facturas.</b><br><span style="color:var(--mu)">👉 Ve a Banco y revisa los movimientos marcados como "Sugerido" o "Sin clasificar" — probablemente hay cobros o pagos sin conciliar todavía.</span></div>
+      <div class="ay-paso" style="margin-top:10px">❌ <b>Un producto se vende pero no baja el stock.</b><br><span style="color:var(--mu)">👉 Revisa que la venta se haya hecho por <b>Guía de retiro</b> (esa sí descuenta stock) y no por <b>Ventas manual</b> o <b>Respaldo vendedor</b> (esas no tocan inventario a propósito).</span></div>
+      <div class="ay-paso" style="margin-top:10px">❌ <b>No sé si le debo comisión a alguien.</b><br><span style="color:var(--mu)">👉 Ve a la pestaña Comisiones y filtra por "Pendiente" — ahí aparecen todas las que aún no has pagado.</span></div>
     </div>
 
     <div class="ay-sec">
@@ -4311,6 +4339,55 @@ function exportStockCSV(){
 // ===================================================
 // DASHBOARD
 // ===================================================
+function revisarSistema(){
+  const cont=document.getElementById('salud-resultado');
+  if(!cont)return;
+  const checks=[];
+
+  const sinPrecio=DB.productos.filter(p=>p.editorial!=='Hist.'&&(!p.precioVenta||!p.precioCosto));
+  checks.push({txt: sinPrecio.length?`${sinPrecio.length} producto(s) sin precio de costo o de venta`:'Todos los productos tienen precio de costo y venta', nivel: sinPrecio.length?'warn':'ok'});
+
+  const bajoCosto=DB.productos.filter(p=>p.editorial!=='Hist.'&&p.precioVenta>0&&p.precioCosto>0&&p.precioVenta<p.precioCosto);
+  checks.push({txt: bajoCosto.length?`${bajoCosto.length} producto(s) se están vendiendo por debajo del costo`:'Ningún producto se vende bajo costo', nivel: bajoCosto.length?'error':'ok'});
+
+  const hoyD=new Date();hoyD.setHours(0,0,0,0);
+  const vencidas=DB.regs.filter(r=>{
+    if(r.tipo!=='negocio'||r.categoria!=='Textos escolares'||r.pagadaEditorial)return false;
+    const vence=parseLocalDate(r.fecha);vence.setDate(vence.getDate()+180);
+    return vence<hoyD;
+  });
+  checks.push({txt: vencidas.length?`${vencidas.length} factura(s) de editorial vencidas sin pagar (Deuda Editorial)`:'No hay facturas de editorial vencidas', nivel: vencidas.length?'error':'ok'});
+
+  const bancoRevision=(DB.banco||[]).filter(b=>!b.regId&&!b.sugerido&&(!b.clasificacion||(typeof REQUIERE_FACTURA!=='undefined'&&REQUIERE_FACTURA[b.clasificacion]))).length;
+  checks.push({txt: bancoRevision?`${bancoRevision} movimiento(s) bancarios necesitan revisión`:'Todos los movimientos bancarios están resueltos', nivel: bancoRevision?'warn':'ok'});
+
+  const comisionesPend=(DB.comisiones||[]).filter(c=>c.estado==='pendiente');
+  checks.push({txt: comisionesPend.length?`${comisionesPend.length} comisión(es) pendientes de pago`:'No hay comisiones pendientes', nivel: comisionesPend.length?'warn':'ok'});
+
+  const mapaFact={};
+  DB.regs.forEach(r=>{
+    if(!r.numFact)return;
+    const k=(r.proveedor||'')+'|'+r.numFact+'|'+r.tipo;
+    mapaFact[k]=(mapaFact[k]||0)+1;
+  });
+  const nDuplicadas=Object.values(mapaFact).filter(n=>n>1).length;
+  checks.push({txt: nDuplicadas?`${nDuplicadas} posible(s) factura(s) duplicada(s) (mismo proveedor y N° factura)`:'No se detectaron facturas duplicadas', nivel: nDuplicadas?'error':'ok'});
+
+  const guiasCero=(DB.guias||[]).filter(g=>!g.total);
+  checks.push({txt: guiasCero.length?`${guiasCero.length} guía(s) de retiro registradas con valor $0.00 (revisa precios)`:'Todas las guías tienen un valor registrado', nivel: guiasCero.length?'warn':'ok'});
+
+  const nError=checks.filter(c=>c.nivel==='error').length;
+  const nWarn=checks.filter(c=>c.nivel==='warn').length;
+  const iconos={ok:'🟢',warn:'🟡',error:'🔴'};
+  const colores={ok:'var(--g1)',warn:'#92400e',error:'var(--r1)'};
+
+  const resumen=(nError+nWarn)===0
+    ?`<div class="ay-tip" style="margin:0 0 10px">✔ Sistema revisado. No se encontraron advertencias.</div>`
+    :`<div class="ay-tip" style="margin:0 0 10px;background:#fff3cd;border-color:#ffe08a;color:#7a5b00">✔ Sistema revisado. Se encontraron ${nError+nWarn} advertencia${(nError+nWarn)===1?'':'s'} (${nError} urgente${nError===1?'':'s'}, ${nWarn} para revisar).</div>`;
+
+  cont.innerHTML=resumen+checks.map(c=>`<div style="padding:7px 2px;border-bottom:1px solid #f1f1f1;font-size:13px;color:${colores[c.nivel]}">${iconos[c.nivel]} ${escH(c.txt)}</div>`).join('');
+}
+
 function renderDash(){
   const rv=DB.regs.filter(r=>r.tipo==='venta');
   const rn=DB.regs.filter(r=>r.tipo==='negocio');
