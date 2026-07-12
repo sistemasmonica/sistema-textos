@@ -194,16 +194,17 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 
 <!-- ===================== INICIO ===================== -->
 <div id="pn-dash" class="pn on">
+  <div style="text-align:right;font-size:11px;color:var(--mu);margin-bottom:6px" id="d-actualizado">Datos actualizados: —</div>
   <div class="sc-grid">
-    <div class="sc"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
-    <div class="sc"><div class="sc-lbl">Compras negocio</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
-    <div class="sc"><div class="sc-lbl">Gastos personales</div><div class="sc-val ca" id="sp">$0.00</div><div class="sc-sub" id="spn">0 registros</div></div>
-    <div class="sc"><div class="sc-lbl">Utilidad estimada</div><div class="sc-val" id="su">$0.00</div><div class="sc-sub">ventas − compras</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Compras negocio</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Gastos personales</div><div class="sc-val ca" id="sp">$0.00</div><div class="sc-sub" id="spn">0 registros</div></div>
+    <div class="sc" style="cursor:pointer;border:2px solid var(--g1);background:var(--g4)" onclick="irATab('liquidacion')" title="Ver en Liquidación"><div class="sc-lbl" style="font-weight:700">🏆 Utilidad estimada</div><div class="sc-val" id="su" style="font-size:26px">$0.00</div><div class="sc-sub">ventas − compras</div></div>
   </div>
   <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="sc"><div class="sc-lbl">Productos en inventario</div><div class="sc-val cp" id="d-nprod">0</div><div class="sc-sub">artículos distintos</div></div>
-    <div class="sc"><div class="sc-lbl">Stock bajo / agotado</div><div class="sc-val cr" id="d-stockbajo">0</div><div class="sc-sub">requieren reposición</div></div>
-    <div class="sc"><div class="sc-lbl">Movs. banco pendientes</div><div class="sc-val ca" id="d-bancopend">0</div><div class="sc-sub">sin conciliar</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irAInvTab('catalogo')" title="Ver en Inventario"><div class="sc-lbl">Productos en inventario</div><div class="sc-val cp" id="d-nprod">0</div><div class="sc-sub">artículos distintos</div></div>
+    <div class="sc" style="cursor:pointer" onclick="document.getElementById('inv-stock').value='bajoagotado';irAInvTab('catalogo');" title="Ver productos con stock bajo"><div class="sc-lbl">Stock bajo / agotado</div><div class="sc-val cr" id="d-stockbajo">0</div><div class="sc-sub">requieren reposición</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irATab('banco');const chk=document.getElementById('banco-solo-pendientes');if(chk){chk.checked=true;bancoSoloPendientes=true;}renderBanco();" title="Ver pendientes en Banco"><div class="sc-lbl">Movs. banco pendientes</div><div class="sc-val ca" id="d-bancopend">0</div><div class="sc-sub">sin conciliar</div></div>
   </div>
   <div class="card">
     <div class="sh" style="margin-bottom:6px">
@@ -460,6 +461,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <option value="ok">Stock normal</option>
         <option value="low">Stock bajo (≤5)</option>
         <option value="zero">Agotado</option>
+        <option value="bajoagotado">Stock bajo o agotado (≤5)</option>
       </select>
       <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="inv-show-hist" onchange="renderCatalogo()"> Ver históricos</label>
     </div>
@@ -2787,6 +2789,7 @@ function renderCatalogo(){
     if(stockFilter==='ok'&&st<=5)return false;
     if(stockFilter==='low'&&(st>5||st===0))return false;
     if(stockFilter==='zero'&&st!==0)return false;
+    if(stockFilter==='bajoagotado'&&st>5)return false;
     return true;
   });
   const tb=document.getElementById('tb-cat');
@@ -4496,8 +4499,10 @@ function renderDash(){
   const stockBajo=prodsActuales.filter(p=>stockActual(p.id)<=5).length;
   document.getElementById('d-nprod').textContent=prodsActuales.length;
   document.getElementById('d-stockbajo').textContent=stockBajo;
-  const bancoPend=DB.banco.filter(b=>!b.conciliado).length;
+  const bancoPend=(DB.banco||[]).filter(b=>!b.regId&&!b.sugerido&&(!b.clasificacion||(typeof REQUIERE_FACTURA!=='undefined'&&REQUIERE_FACTURA[b.clasificacion]))).length;
   document.getElementById('d-bancopend').textContent=bancoPend;
+  const actEl=document.getElementById('d-actualizado');
+  if(actEl)actEl.textContent='Datos actualizados: '+new Date().toLocaleString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   renderCatBars('dc-neg',rn,sn);
   renderCatBars('dc-per',rp,sp);
   const rec=[...DB.regs].sort((a,b)=>b.id-a.id).slice(0,6);
