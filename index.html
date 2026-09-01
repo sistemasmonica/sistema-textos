@@ -195,6 +195,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- ===================== INICIO ===================== -->
 <div id="pn-dash" class="pn on">
   <div style="text-align:right;font-size:11px;color:var(--mu);margin-bottom:6px" id="d-actualizado">Datos actualizados: —</div>
+  <div id="d-resumen-ganancia" style="margin-bottom:12px"></div>
   <div class="sc-grid">
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Compras negocio</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
@@ -514,7 +515,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Total unidades</th><th>Valor total</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Total unidades</th><th>Valor total</th><th>Factura de la editorial</th><th></th></tr></thead>
         <tbody id="tb-entradas"></tbody>
       </table>
     </div>
@@ -886,6 +887,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">Facturas sin ingreso</div><div class="sc-val ca" id="cq-sinentrada">0</div></div>
       <div class="sc"><div class="sc-lbl">Ingresos sin factura</div><div class="sc-val ca" id="cq-sinfactura">0</div></div>
     </div>
+    <div id="cq-deuda-box" style="margin-bottom:10px"></div>
     <div id="cq-aviso-costos" style="margin-bottom:10px"></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer">
@@ -3046,13 +3048,25 @@ function renderEntradas(){
   });
   const tb=document.getElementById('tb-entradas');
   const arr=Object.values(grupos).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if(!arr.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">Sin entradas registradas</div></td></tr>';return}
+  if(!arr.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin entradas registradas</div></td></tr>';return}
+  const facturas=DB.regs.filter(esCompraEditorial);
   tb.innerHTML=arr.map(g=>{
     const totalUnd=g.lineas.reduce((a,l)=>a+l.cant,0);
     const totalVal=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
     const prods=g.lineas.map(l=>`${l.nom} (${l.cant})`).join(', ');
     const key=encodeURIComponent(g.fecha+'|'+g.ref+'|'+g.prov);
-    return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td><td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verEntrada('${key}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirEntrada('${key}')" title="Imprimir Comprobante"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarEntrada('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
+    // ¿Existe la factura de la editorial cargada para esta guía de entrada?
+    const fac=g.ref?facturas.find(r=>mismaFactura(r.numFact,g.ref)):null;
+    let cel;
+    if(!g.ref) cel=`<span class="bdg bdg-warn" title="Esta entrada no tiene n° de factura, no se puede cruzar">Sin n° de factura</span>`;
+    else if(!fac) cel=`<span class="bdg bdg-err" title="No hay ninguna factura de editorial cargada con este número">⚠ No cargada</span>`;
+    else{
+      const vf=baseFactura(fac), dif=vf-totalVal;
+      cel=Math.abs(dif)<=0.5
+        ?`<span class="bdg bdg-ok" title="La factura cuadra con lo ingresado">✔ ${fmt(vf)}</span>`
+        :`<span class="bdg bdg-warn" title="La factura dice ${fmt(vf)} y se ingresó ${fmt(totalVal)}">${fmt(vf)} · dif ${fmt(dif)}</span>`;
+    }
+    return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td><td style="font-size:11px">${cel}</td><td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verEntrada('${key}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirEntrada('${key}')" title="Imprimir Comprobante"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarEntrada('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
   }).join('');
 }
 
@@ -3625,32 +3639,120 @@ function eliminarGuia(id){
   toast('Guía eliminada y stock restaurado','ok');
 }
 
+// Descarga un .xls de verdad (no CSV) para que Excel abra las columnas
+// separadas siempre, sin depender de la configuración regional de la PC.
+function bajarXLS(html,nombre){
+  const doc=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="utf-8">
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+    <x:Name>Hoja1</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+  <style>
+    td,th{font-family:Calibri,Arial,sans-serif;font-size:11pt;vertical-align:middle}
+    .tit{font-size:15pt;font-weight:bold;color:#1565c0}
+    .sub{font-size:10pt;color:#666}
+    .th{background:#1565c0;color:#ffffff;font-weight:bold;text-align:center;border:1px solid #0d47a1}
+    .c{border:1px solid #cccccc}
+    .grp{background:#e3f2fd;font-weight:bold;border:1px solid #90caf9}
+    .sub-t{background:#f1f8e9;font-weight:bold;border:1px solid #c5e1a5}
+    .tot{background:#1565c0;color:#ffffff;font-weight:bold;border:1px solid #0d47a1}
+    .num{mso-number-format:"0\\.00";text-align:right}
+    .ent{mso-number-format:"0";text-align:center}
+    .txt{mso-number-format:"\\@"}
+  </style></head><body>${html}</body></html>`;
+  const blob=new Blob(['﻿'+doc],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=nombre;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
 function exportarEntradasCSV(){
   const entradas=DB.movInv.filter(m=>m.tipo==='entrada');
   if(!entradas.length)return toast('No hay entradas registradas','err');
-  const filas=[['Fecha','N° Factura','Editorial / Proveedor','Producto','Cantidad','Precio Costo','Subtotal']];
+
+  // Agrupar por guía de entrada (factura + editorial + fecha)
   const grupos={};
   entradas.forEach(m=>{
-    const key=m.ref+'|'+m.proveedor+'|'+m.fecha;
-    if(!grupos[key])grupos[key]={fecha:m.fecha,ref:m.ref,prov:m.proveedor,lineas:[]};
+    const key=(m.ref||'')+'|'+(m.proveedor||'')+'|'+(m.fecha||'');
+    if(!grupos[key])grupos[key]={fecha:m.fecha||'',ref:m.ref||'',prov:m.proveedor||'',lineas:[]};
     const prod=DB.productos.find(p=>p.id===m.prodId);
-    grupos[key].lineas.push({nom:prod?.nombre||'N/A',cant:m.cantidad,costo:m.precioCosto||0});
-  });
-  Object.values(grupos).sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(g=>{
-    g.lineas.forEach((l,i)=>{
-      filas.push([
-        i===0?g.fecha:'', i===0?(g.ref||''):'', i===0?g.prov:'',
-        l.nom, l.cant, l.costo.toFixed(2), (l.cant*l.costo).toFixed(2)
-      ]);
+    grupos[key].lineas.push({
+      cod:prod?.codigo||'',
+      nom:prod?.nombre||'(producto eliminado)',
+      edit:prod?.editorial||'',
+      cant:m.cantidad||0,
+      costo:parseFloat(m.precioCosto)||0
     });
   });
-  const csv=filas.map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}"`).join(',')).join('\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='entradas_inventario_'+today()+'.csv';
-  a.click();
-  toast('Archivo Excel descargado','ok');
+
+  // Orden: fecha (más antigua primero) → editorial → n° de factura.
+  // Dentro de cada guía, los productos van en orden alfabético.
+  const arr=Object.values(grupos).sort((a,b)=>
+    (a.fecha||'').localeCompare(b.fecha||'')||
+    (a.prov||'').localeCompare(b.prov||'')||
+    (a.ref||'').localeCompare(b.ref||''));
+  arr.forEach(g=>g.lineas.sort((x,y)=>x.nom.localeCompare(y.nom,'es')));
+
+  const facturas=DB.regs.filter(esCompraEditorial);
+  let gUnd=0,gVal=0,sinFact=0;
+  const cuerpo=arr.map(g=>{
+    const und=g.lineas.reduce((a,l)=>a+l.cant,0);
+    const val=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
+    gUnd+=und;gVal+=val;
+    const fac=g.ref?facturas.find(r=>mismaFactura(r.numFact,g.ref)):null;
+    if(!fac)sinFact++;
+    const estado=!g.ref?'SIN N° DE FACTURA':(fac?'Factura cargada — '+fmt(baseFactura(fac)):'⚠ Factura NO cargada en el sistema');
+    // Fila cabecera de la guía
+    const cab=`<tr>
+      <td class="grp txt">${escH(g.fecha||'—')}</td>
+      <td class="grp txt">${escH(g.ref||'—')}</td>
+      <td class="grp txt" colspan="3">${escH(g.prov||'—')}</td>
+      <td class="grp ent">${und}</td>
+      <td class="grp"></td>
+      <td class="grp num">${val.toFixed(2)}</td>
+      <td class="grp txt">${escH(estado)}</td></tr>`;
+    const det=g.lineas.map(l=>`<tr>
+      <td class="c"></td><td class="c"></td>
+      <td class="c txt">${escH(l.cod)}</td>
+      <td class="c txt">${escH(l.nom)}</td>
+      <td class="c txt">${escH(l.edit)}</td>
+      <td class="c ent">${l.cant}</td>
+      <td class="c num">${l.costo.toFixed(2)}</td>
+      <td class="c num">${(l.cant*l.costo).toFixed(2)}</td>
+      <td class="c"></td></tr>`).join('');
+    return cab+det;
+  }).join('');
+
+  const f=new Date();
+  const html=`<table>
+    <tr><td class="tit" colspan="9">D&amp;M BOOKS — GUÍAS DE ENTRADA DE INVENTARIO</td></tr>
+    <tr><td class="sub" colspan="9">Generado el ${f.toLocaleDateString('es-EC')} ${f.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})} — ${arr.length} guía(s) de entrada${sinFact?` — ${sinFact} sin factura de editorial cargada`:''}</td></tr>
+    <tr><td colspan="9"></td></tr>
+    <tr>
+      <th class="th" width="90">FECHA</th>
+      <th class="th" width="140">N° FACTURA</th>
+      <th class="th" width="90">CÓDIGO</th>
+      <th class="th" width="300">PRODUCTO / EDITORIAL</th>
+      <th class="th" width="120">EDITORIAL</th>
+      <th class="th" width="70">CANT.</th>
+      <th class="th" width="80">P. COSTO</th>
+      <th class="th" width="90">SUBTOTAL</th>
+      <th class="th" width="230">FACTURA DE LA EDITORIAL</th>
+    </tr>
+    ${cuerpo}
+    <tr><td colspan="9"></td></tr>
+    <tr>
+      <td class="tot" colspan="5">TOTAL GENERAL (${arr.length} guías)</td>
+      <td class="tot ent">${gUnd}</td>
+      <td class="tot"></td>
+      <td class="tot num">${gVal.toFixed(2)}</td>
+      <td class="tot"></td>
+    </tr>
+  </table>`;
+  bajarXLS(html,'guias_entrada_inventario_'+today()+'.xls');
+  toast(`Excel descargado — ${arr.length} guía(s), ${gUnd} unidades`,'ok');
 }
 
 function imprimirEntradas(){
@@ -4831,11 +4933,68 @@ function renderDash(){
   document.getElementById('d-bancopend').textContent=bancoPend;
   const actEl=document.getElementById('d-actualizado');
   if(actEl)actEl.textContent='Datos actualizados: '+new Date().toLocaleString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  renderResumenGanancia();
   renderCatBars('dc-neg',rn,sn);
   renderCatBars('dc-per',rp,sp);
   const rec=[...DB.regs].sort((a,b)=>b.id-a.id).slice(0,6);
   if(!rec.length){document.getElementById('d-rec').innerHTML='<div class="empty">Sin movimientos aún</div>';return}
   document.getElementById('d-rec').innerHTML=`<table><thead><tr><th>Fecha</th><th>Proveedor / Cliente</th><th>N° Factura</th><th>Tipo</th><th>Categoría</th><th>Total</th></tr></thead><tbody>${rec.map(r=>`<tr><td style="font-family:monospace">${r.fecha}</td><td>${r.proveedor}</td><td style="font-family:monospace;font-size:11px">${r.numFact||'—'}</td><td><span class="bdg bdg-${r.tipo}">${r.tipo.toUpperCase()}</span></td><td>${r.categoria}</td><td style="font-family:monospace;font-weight:600">${fmt(r.total)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+// Resumen corto de "¿cuánto estoy ganando?" en la pestaña Inicio.
+// Es la misma fórmula de la pestaña Liquidación, pero en una sola línea legible.
+function renderResumenGanancia(){
+  const c=document.getElementById('d-resumen-ganancia');
+  if(!c)return;
+  const g=resumenGanancia();
+  if(!g.ventas&&!g.costoLibros){
+    c.innerHTML=`<div class="card" style="padding:12px 16px;font-size:12px;color:var(--mu)">💰 <b>Tu ganancia</b> aparecerá aquí en cuanto registres ventas y facturas de la editorial.</div>`;
+    return;
+  }
+  const paso=(lbl,val,signo,col,tit)=>`<div style="text-align:center;min-width:96px"${tit?` title="${escH(tit)}"`:''}>
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">${lbl}</div>
+    <div style="font-size:16px;font-weight:800;font-family:monospace;color:${col}">${signo}${fmt(val)}</div></div>`;
+  const op=s=>`<div style="font-size:17px;color:#94a3b8;font-weight:700;padding:0 2px">${s}</div>`;
+  const buena=g.neta>=0;
+  c.innerHTML=`<div class="card" style="padding:13px 16px;border:2px solid ${buena?'#16a34a':'#dc2626'};background:${buena?'#f0fdf4':'#fef2f2'};cursor:pointer" onclick="irATab('liquidacion')" title="Clic para ver el detalle completo en Liquidación">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:800;color:${buena?'#15803d':'#b91c1c'}">💰 ¿Cuánto estoy ganando hasta ahora?</div>
+      <div style="font-size:10px;color:#64748b">Todo lo cargado en el sistema · clic para ver el detalle →</div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      ${paso('Ventas',g.ventas,'','#0369a1','Todo lo que has facturado a los colegios')}
+      ${op('−')}
+      ${paso('Costo libros',g.costoNeto,'','#b45309',`Compras a editorial ${fmt(g.costoLibros)} menos notas de crédito ${fmt(g.notasCred)}`)}
+      ${op('−')}
+      ${paso('Comisiones',g.comisiones,'','#b45309','Comisiones y capacitación')}
+      ${op('−')}
+      ${paso('Otros gastos',g.otrosGastos,'','#b45309','Gastos del negocio que no son textos escolares')}
+      ${op('=')}
+      <div style="text-align:center;min-width:150px;background:#fff;border:2px solid ${buena?'#16a34a':'#dc2626'};border-radius:9px;padding:6px 14px">
+        <div style="font-size:10px;color:${buena?'#15803d':'#b91c1c'};text-transform:uppercase;letter-spacing:.5px;font-weight:800">🏆 Tu ganancia</div>
+        <div style="font-size:26px;font-weight:900;font-family:monospace;color:${buena?'#15803d':'#b91c1c'};line-height:1.1">${fmt(g.neta)}</div>
+        <div style="font-size:10px;color:#64748b">margen ${g.margen.toFixed(1)}% sobre ventas</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;padding-top:9px;border-top:1px dashed #cbd5e1;font-size:11.5px">
+      <div style="flex:1;min-width:200px;background:#fff;border:1px solid #fecaca;border-radius:7px;padding:7px 11px">
+        <span style="color:#991b1b">🔻 <b>Le debes a la editorial:</b></span>
+        <b style="font-family:monospace;font-size:14px;color:#b91c1c"> ${fmt(g.debesEditorial)}</b>
+        ${g.ed.nVenc?`<div style="font-size:10px;color:#991b1b;margin-top:2px">${g.ed.nVenc} factura(s) vencida(s) por ${fmt(g.ed.vencida)}</div>`
+                    :`<div style="font-size:10px;color:#64748b;margin-top:2px">${g.ed.nPend} factura(s) pendiente(s), ninguna vencida</div>`}
+      </div>
+      <div style="flex:1;min-width:200px;background:#fff;border:1px solid #bbf7d0;border-radius:7px;padding:7px 11px">
+        <span style="color:#166534">🔺 <b>Te deben los colegios:</b></span>
+        <b style="font-family:monospace;font-size:14px;color:#15803d"> ${fmt(g.porCobrar)}</b>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">ventas facturadas todavía sin cobrar</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:#fff;border:1px solid #cbd5e1;border-radius:7px;padding:7px 11px">
+        <span style="color:#334155">⚖️ <b>Diferencia a tu favor:</b></span>
+        <b style="font-family:monospace;font-size:14px;color:${g.porCobrar-g.debesEditorial>=0?'#15803d':'#b91c1c'}"> ${fmt(g.porCobrar-g.debesEditorial)}</b>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">lo que te deben menos lo que debes</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderCatBars(id,regs,total){
@@ -7065,6 +7224,31 @@ function renderCuadreMercaderia(){
   set('cq-sinentrada',sinEntrada);
   set('cq-sinfactura',sinFactura);
 
+  // ── Cuánto le debes a la editorial según las facturas cargadas ──
+  const box=document.getElementById('cq-deuda-box');
+  if(box){
+    const e=resumenEditorial();
+    const it=(lbl,val,col,tit)=>`<div style="flex:1;min-width:130px"${tit?` title="${escH(tit)}"`:''}>
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">${lbl}</div>
+      <div style="font-size:17px;font-weight:800;color:${col};font-family:monospace">${val}</div></div>`;
+    box.innerHTML=`<div style="background:#fff;border:2px solid #1565c0;border-radius:10px;padding:12px 16px">
+      <div style="font-size:13px;font-weight:800;color:#1565c0;margin-bottom:9px">💳 Lo que le debes a la editorial <span style="font-weight:400;color:#64748b;font-size:11px">— según las ${e.facturas} factura(s) cargadas</span></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+        ${it('Facturado total',fmt(e.facturado),'#334155','Suma de todas las facturas de editorial cargadas')}
+        ${it('Ya pagado',fmt(e.pagado),'#16a34a','Facturas marcadas como Pagada')}
+        ${it('Notas de crédito',fmt(e.notasCred),'#16a34a','Devoluciones a la editorial: bajan lo que le debes')}
+        ${it(`Pendiente (${e.nPend})`,fmt(e.pendiente),'#b45309','Facturas todavía sin pagar')}
+        <div style="flex:1.3;min-width:170px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:7px 12px">
+          <div style="font-size:10px;color:#1e40af;text-transform:uppercase;letter-spacing:.4px;font-weight:700">➜ Le debes hoy</div>
+          <div style="font-size:24px;font-weight:900;color:#1d4ed8;font-family:monospace">${fmt(e.deudaReal)}</div>
+          <div style="font-size:10px;color:#64748b">pendiente − notas de crédito</div>
+        </div>
+      </div>
+      ${e.nVenc?`<div style="margin-top:9px;font-size:11px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px">🔴 <b>${e.nVenc} factura(s) ya vencida(s)</b> por <b>${fmt(e.vencida)}</b> (plazo de 180 días). Por vencer: ${fmt(e.porVencer)}.</div>`
+        :`<div style="margin-top:9px;font-size:11px;color:#065f46">✔ Ninguna factura vencida. Por vencer: <b>${fmt(e.porVencer)}</b>.</div>`}
+    </div>`;
+  }
+
   // Aviso: entradas registradas sin precio de costo (por eso salen en $0.00)
   const sinCostoN=entradas.filter(e=>e.sinCosto>0).length;
   const av=document.getElementById('cq-aviso-costos');
@@ -7173,6 +7357,49 @@ function edFiltro(f){
 }
 
 function esCompraEditorial(r){return r.tipo==='negocio'&&r.categoria==='Textos escolares';}
+
+// ── UN SOLO CÁLCULO DE "CUÁNTO LE DEBO A LA EDITORIAL" ──────────────────────
+// Lo usan el Cuadre, la Deuda editorial y el resumen de ganancia de Inicio,
+// para que los tres muestren siempre el mismo número.
+function resumenEditorial(){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const facturas=DB.regs.filter(esCompraEditorial);
+  let facturado=0,pagado=0,pendiente=0,vencida=0,porVencer=0,nPend=0,nVenc=0;
+  facturas.forEach(r=>{
+    const t=parseFloat(r.total)||0;
+    facturado+=t;
+    if(r.pagadaEditorial){pagado+=t;return;}
+    pendiente+=t;nPend++;
+    const v=parseLocalDate(r.fecha);v.setDate(v.getDate()+180);
+    if(Math.ceil((v-hoy)/86400000)<0){vencida+=t;nVenc++;}else porVencer+=t;
+  });
+  // Las notas de crédito son devoluciones a la editorial: bajan lo que le debes
+  const notasCred=(DB.notasCredito||[]).reduce((a,n)=>a+(parseFloat(n.total)||0),0);
+  const deudaReal=Math.max(0,pendiente-notasCred);
+  return {facturas:facturas.length,facturado,pagado,pendiente,vencida,porVencer,
+          nPend,nVenc,notasCred,deudaReal};
+}
+
+// Resumen corto de "¿cuánto estoy ganando?" — sin filtros ni fechas, todo lo cargado.
+function resumenGanancia(){
+  const ventas=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+(r.total||0),0);
+  const costoLibros=DB.regs.filter(esCompraEditorial).reduce((a,r)=>a+(r.total||0),0);
+  const notasCred=(DB.notasCredito||[]).reduce((a,n)=>a+(parseFloat(n.total)||0),0);
+  // Misma fórmula que la pestaña Liquidación, para que los dos números coincidan
+  const costoNeto=Math.max(0,costoLibros-notasCred);  // lo que de verdad te costó la mercadería
+  const otrosGastos=DB.regs.filter(r=>r.tipo==='negocio'&&!esCompraEditorial(r))
+                           .reduce((a,r)=>a+(r.total||0),0);
+  const comisiones=(DB.comisiones||[]).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+  const bruta=ventas-costoNeto;
+  const neta=bruta-otrosGastos-comisiones;
+  const margen=ventas>0?(neta/ventas*100):0;
+  // Cuánto de esa ganancia ya está cobrada de verdad
+  const porCobrar=DB.regs.filter(r=>r.tipo==='venta')
+                         .reduce((a,r)=>a+(typeof saldoPendiente==='function'?(saldoPendiente(r)||0):0),0);
+  const ed=resumenEditorial();
+  return {ventas,costoLibros,notasCred,costoNeto,otrosGastos,comisiones,bruta,neta,margen,
+          porCobrar,debesEditorial:ed.deudaReal,ed};
+}
 
 function renderDeudaEditorial(){
   const hoy=new Date();hoy.setHours(0,0,0,0);
