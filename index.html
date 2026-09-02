@@ -366,6 +366,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">Tu ingreso $</div><div class="sc-val cg" id="col-tp">$0.00</div></div>
       <div class="sc"><div class="sc-lbl">Saldo por pagar editorial</div><div class="sc-val cr" id="col-tsaldo">$0.00</div></div>
     </div>
+    <div id="col-analisis-todos"></div>
     <div class="sh" style="margin-top:4px">
       <h2>Todos los colegios</h2>
       <button class="btn btn-s btn-sm" onclick="exportColegiosCSV()"><i class="ti ti-download"></i> CSV</button>
@@ -640,7 +641,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Fecha</th><th>Proveedor / Cliente</th><th>N° Factura</th><th>Categoría</th><th>Tipo</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Origen</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Proveedor / Cliente</th><th>N° Factura</th><th>Categoría</th><th>Tipo</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Origen</th><th></th></tr></thead>
       <tbody id="tb-mov"></tbody>
     </table>
   </div>
@@ -3049,17 +3050,16 @@ function renderEntradas(){
   const tb=document.getElementById('tb-entradas');
   const arr=Object.values(grupos).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if(!arr.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin entradas registradas</div></td></tr>';return}
-  const facturas=DB.regs.filter(esCompraEditorial);
   tb.innerHTML=arr.map(g=>{
     const totalUnd=g.lineas.reduce((a,l)=>a+l.cant,0);
     const totalVal=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
     const prods=g.lineas.map(l=>`${l.nom} (${l.cant})`).join(', ');
     const key=encodeURIComponent(g.fecha+'|'+g.ref+'|'+g.prov);
     // ¿Existe la factura de la editorial cargada para esta guía de entrada?
-    const fac=g.ref?facturas.find(r=>mismaFactura(r.numFact,g.ref)):null;
+    const d=diagFacturaEntrada(g.ref);
+    const fac=d.ok?d.fac:null;
     let cel;
-    if(!g.ref) cel=`<span class="bdg bdg-warn" title="Esta entrada no tiene n° de factura, no se puede cruzar">Sin n° de factura</span>`;
-    else if(!fac) cel=`<span class="bdg bdg-err" title="No hay ninguna factura de editorial cargada con este número">⚠ No cargada</span>`;
+    if(!fac) cel=`<span class="bdg ${d.cls}" title="${escH(d.title)}">${escH(d.txt)}</span>`;
     else{
       const vf=baseFactura(fac), dif=vf-totalVal;
       cel=Math.abs(dif)<=0.5
@@ -3656,9 +3656,6 @@ function bajarXLS(html,nombre){
     .grp{background:#e3f2fd;font-weight:bold;border:1px solid #90caf9}
     .sub-t{background:#f1f8e9;font-weight:bold;border:1px solid #c5e1a5}
     .tot{background:#1565c0;color:#ffffff;font-weight:bold;border:1px solid #0d47a1}
-    .num{mso-number-format:"0\\.00";text-align:right}
-    .ent{mso-number-format:"0";text-align:center}
-    .txt{mso-number-format:"\\@"}
   </style></head><body>${html}</body></html>`;
   const blob=new Blob(['﻿'+doc],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a');
@@ -3666,6 +3663,18 @@ function bajarXLS(html,nombre){
   a.download=nombre;
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+// Formatos de celda para Excel. VAN SIEMPRE EN style="" DE LA CELDA, nunca como
+// clase CSS: Excel ignora la segunda clase de un class="a b" y entonces convierte
+// los n° de factura largos a notación científica (1,001E+12).
+const XLS_TXT="mso-number-format:'\\@'";                        // texto tal cual
+const XLS_NUM="mso-number-format:'0\\.00';text-align:right";    // 1234.50
+const XLS_ENT="mso-number-format:'0';text-align:center";        // entero
+// Fecha en formato ecuatoriano, como texto (si no, Excel la muestra 3/4/2026 al revés)
+function xlsFecha(f){
+  const p=String(f||'').split('-');
+  return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:(f||'');
 }
 
 function exportarEntradasCSV(){
@@ -3695,46 +3704,50 @@ function exportarEntradasCSV(){
     (a.ref||'').localeCompare(b.ref||''));
   arr.forEach(g=>g.lineas.sort((x,y)=>x.nom.localeCompare(y.nom,'es')));
 
-  const facturas=DB.regs.filter(esCompraEditorial);
-  let gUnd=0,gVal=0,sinFact=0;
+  let gUnd=0,gVal=0,sinFact=0,sinCosto=0;
   const cuerpo=arr.map(g=>{
     const und=g.lineas.reduce((a,l)=>a+l.cant,0);
     const val=g.lineas.reduce((a,l)=>a+l.cant*l.costo,0);
     gUnd+=und;gVal+=val;
-    const fac=g.ref?facturas.find(r=>mismaFactura(r.numFact,g.ref)):null;
+    sinCosto+=g.lineas.filter(l=>!(l.costo>0)).length;
+    const d=diagFacturaEntrada(g.ref);
+    const fac=d.ok?d.fac:null;
     if(!fac)sinFact++;
-    const estado=!g.ref?'SIN N° DE FACTURA':(fac?'Factura cargada — '+fmt(baseFactura(fac)):'⚠ Factura NO cargada en el sistema');
+    const estado=!g.ref?'SIN N° DE FACTURA':(fac?'Factura cargada — '+fmt(baseFactura(fac)):(d.txt==='Mal clasificada'?'Cargada pero MAL CLASIFICADA (no como Textos escolares)':'⚠ Factura NO cargada en el sistema'));
     // Fila cabecera de la guía
     const cab=`<tr>
-      <td class="grp txt">${escH(g.fecha||'—')}</td>
-      <td class="grp txt">${escH(g.ref||'—')}</td>
-      <td class="grp txt" colspan="3">${escH(g.prov||'—')}</td>
-      <td class="grp ent">${und}</td>
+      <td class="grp" style="${XLS_TXT}">${escH(xlsFecha(g.fecha)||'—')}</td>
+      <td class="grp" style="${XLS_TXT}">${escH(g.ref||'—')}</td>
+      <td class="grp" style="${XLS_TXT}" colspan="3">${escH(g.prov||'—')}</td>
+      <td class="grp" style="${XLS_ENT}">${und}</td>
       <td class="grp"></td>
-      <td class="grp num">${val.toFixed(2)}</td>
-      <td class="grp txt">${escH(estado)}</td></tr>`;
+      <td class="grp" style="${XLS_NUM}">${val.toFixed(2)}</td>
+      <td class="grp" style="${XLS_TXT}">${escH(estado)}</td></tr>`;
     const det=g.lineas.map(l=>`<tr>
       <td class="c"></td><td class="c"></td>
-      <td class="c txt">${escH(l.cod)}</td>
-      <td class="c txt">${escH(l.nom)}</td>
-      <td class="c txt">${escH(l.edit)}</td>
-      <td class="c ent">${l.cant}</td>
-      <td class="c num">${l.costo.toFixed(2)}</td>
-      <td class="c num">${(l.cant*l.costo).toFixed(2)}</td>
+      <td class="c" style="${XLS_TXT}">${escH(l.cod)}</td>
+      <td class="c" style="${XLS_TXT}">${escH(l.nom)}</td>
+      <td class="c" style="${XLS_TXT}">${escH(l.edit)}</td>
+      <td class="c" style="${XLS_ENT}">${l.cant}</td>
+      <td class="c" style="${XLS_NUM}">${l.costo.toFixed(2)}</td>
+      <td class="c" style="${XLS_NUM}">${(l.cant*l.costo).toFixed(2)}</td>
       <td class="c"></td></tr>`).join('');
     return cab+det;
   }).join('');
 
   const f=new Date();
+  const avisos=[`${arr.length} guía(s) de entrada`];
+  if(sinFact)avisos.push(`${sinFact} sin factura de editorial cargada`);
+  if(sinCosto)avisos.push(`⚠ ${sinCosto} línea(s) sin precio de costo — por eso salen en 0.00. Arréglalo en Editorial → Cuadre → "Poner los costos que faltan"`);
   const html=`<table>
     <tr><td class="tit" colspan="9">D&amp;M BOOKS — GUÍAS DE ENTRADA DE INVENTARIO</td></tr>
-    <tr><td class="sub" colspan="9">Generado el ${f.toLocaleDateString('es-EC')} ${f.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})} — ${arr.length} guía(s) de entrada${sinFact?` — ${sinFact} sin factura de editorial cargada`:''}</td></tr>
+    <tr><td class="sub" colspan="9">Generado el ${f.toLocaleDateString('es-EC')} ${f.toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})} — ${avisos.join(' — ')}</td></tr>
     <tr><td colspan="9"></td></tr>
     <tr>
       <th class="th" width="90">FECHA</th>
-      <th class="th" width="140">N° FACTURA</th>
-      <th class="th" width="90">CÓDIGO</th>
-      <th class="th" width="300">PRODUCTO / EDITORIAL</th>
+      <th class="th" width="150">N° FACTURA</th>
+      <th class="th" width="80">CÓDIGO</th>
+      <th class="th" width="300">PRODUCTO</th>
       <th class="th" width="120">EDITORIAL</th>
       <th class="th" width="70">CANT.</th>
       <th class="th" width="80">P. COSTO</th>
@@ -3745,14 +3758,16 @@ function exportarEntradasCSV(){
     <tr><td colspan="9"></td></tr>
     <tr>
       <td class="tot" colspan="5">TOTAL GENERAL (${arr.length} guías)</td>
-      <td class="tot ent">${gUnd}</td>
+      <td class="tot" style="${XLS_ENT}">${gUnd}</td>
       <td class="tot"></td>
-      <td class="tot num">${gVal.toFixed(2)}</td>
+      <td class="tot" style="${XLS_NUM}">${gVal.toFixed(2)}</td>
       <td class="tot"></td>
     </tr>
   </table>`;
   bajarXLS(html,'guias_entrada_inventario_'+today()+'.xls');
-  toast(`Excel descargado — ${arr.length} guía(s), ${gUnd} unidades`,'ok');
+  toast(sinCosto
+    ? `Excel descargado — ojo: ${sinCosto} línea(s) sin precio de costo salen en 0.00`
+    : `Excel descargado — ${arr.length} guía(s), ${gUnd} unidades`, sinCosto?'err':'ok');
 }
 
 function imprimirEntradas(){
@@ -5030,7 +5045,7 @@ function renderMov(){
   const tb=document.getElementById('tb-mov');
   const tip=document.getElementById('mov-tip');
   if(!data.length){
-    tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin movimientos. Importa tus XML del SRI en la pestaña XML+IA.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="10"><div class="empty">Sin movimientos. Importa tus XML del SRI en la pestaña XML+IA.</div></td></tr>';
     if(tip)tip.style.display='flex';
     return;
   }
@@ -5038,7 +5053,7 @@ function renderMov(){
   const tot=data.reduce((a,r)=>a+r.total,0);
   tb.innerHTML=data.map(r=>{
     const hasD=r.detalles&&r.detalles.length>0;
-    const detHTML=hasD?`<tr id="det-${r.id}" style="display:none"><td colspan="9" style="padding:0">
+    const detHTML=hasD?`<tr id="det-${r.id}" style="display:none"><td colspan="10" style="padding:0">
       <table style="width:100%;background:#fafbfc;border-top:1px solid var(--bd)">
         <thead><tr style="background:var(--lt)"><th style="padding:5px 10px">Producto / Descripción</th><th style="padding:5px 10px;text-align:center">Cant.</th><th style="padding:5px 10px;text-align:right">P.Unit.</th><th style="padding:5px 10px;text-align:right">Subtotal</th></tr></thead>
         <tbody>${r.detalles.map(d=>`<tr><td style="padding:5px 10px">${d.desc}</td><td style="padding:5px 10px;text-align:center">${d.cant}</td><td style="padding:5px 10px;font-family:monospace;text-align:right">${fmt(d.pu)}</td><td style="padding:5px 10px;font-family:monospace;text-align:right;font-weight:600">${fmt(d.subtotal)}</td></tr>`).join('')}</tbody>
@@ -5053,13 +5068,33 @@ function renderMov(){
       <td style="font-family:monospace">${fmt(r.iva)}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(r.total)}</td>
       <td>${r.clasificadoIA?`<span class="bdg bdg-ia">IA ${r.confianzaIA}%</span>`:`<span class="chip">manual</span>`}${hasD?` <span class="chip" style="color:var(--g1);border-color:var(--g1)">▶ ${r.detalles.length} ítems</span>`:''}</td>
+      <td><button class="btn btn-d btn-sm" title="Eliminar este registro" onclick="event.stopPropagation();eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>${detHTML}`;
-  }).join('')+`<tr class="total-row"><td colspan="7" style="text-align:right;font-size:11px">TOTAL (${data.length} registros):</td><td colspan="2" style="font-family:monospace">${fmt(tot)}</td></tr>`;
+  }).join('')+`<tr class="total-row"><td colspan="8" style="text-align:right;font-size:11px">TOTAL (${data.length} registros):</td><td colspan="2" style="font-family:monospace">${fmt(tot)}</td></tr>`;
 }
 
 function toggleDet(id){
   const el=document.getElementById('det-'+id);
   if(el)el.style.display=el.style.display==='none'?'table-row':'none';
+}
+
+// Elimina una factura/gasto/venta de DB.regs. Suelta primero cualquier
+// movimiento bancario que estuviera conciliado con ella (vuelve a "pendiente").
+function eliminarReg(id){
+  const r=DB.regs.find(x=>x.id===id);
+  if(!r)return;
+  const et=r.tipo==='venta'?'venta':(r.tipo==='personal'?'gasto personal':'compra de negocio');
+  const conc=(DB.banco||[]).filter(b=>b.regId===id).length;
+  if(!confirm(`¿Eliminar esta ${et}?\n\n${r.proveedor||'(sin proveedor)'}\nN° ${r.numFact||'—'} — ${fmt(r.total)} — ${r.fecha}\n\n`+
+     (conc?`⚠ Hay ${conc} movimiento(s) bancario(s) conciliado(s) con esta factura: volverán a quedar como pendientes.\n\n`:'')+
+     `Esta acción NO se puede deshacer.`))return;
+  (DB.banco||[]).forEach(b=>{ if(b.regId===id){ b.regId=null; b.conciliado=false; } });
+  DB.regs=DB.regs.filter(x=>x.id!==id);
+  if(typeof logHistorial==='function')logHistorial('Registro eliminado',`${et} — ${r.proveedor||''} — N° ${r.numFact||'—'} — ${fmt(r.total)}`);
+  save();
+  // Refrescar todo lo que dependa de DB.regs (según en qué pestaña esté)
+  [renderMov,renderDeudaEditorial,renderDash,renderResumenGanancia].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});
+  toast('Factura eliminada','ok');
 }
 
 // ===================================================
@@ -6685,6 +6720,44 @@ function renderColResumen(){
   document.getElementById('col-tp').textContent=fmt(totalP);
   const elSaldo=document.getElementById('col-tsaldo');
   if(elSaldo)elSaldo.textContent=fmt(totalSaldoEd);
+
+  // Tarjeta "análisis" igual a la de Financiero pero sumando TODOS los colegios
+  const gan=totalP-totalCostoEd;
+  const cajAT=document.getElementById('col-analisis-todos');
+  if(cajAT)cajAT.innerHTML=`
+    <div style="border:2px solid #90caf9;border-radius:8px;padding:12px;background:#fff;margin:12px 0">
+      <div style="font-size:12px;font-weight:700;color:#1565c0;text-transform:uppercase;margin-bottom:8px">🧮 Lo real — TODOS los colegios juntos (${activos} con ventas)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+        <div style="background:#e3f2fd;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#1565c0;text-transform:uppercase">Total vendido</div>
+          <div style="font-family:monospace;font-size:17px;font-weight:700;color:#1565c0">${fmt(totalTV)}</div>
+        </div>
+        <div style="background:#fff3e0;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#e65100;text-transform:uppercase">− Colegios</div>
+          <div style="font-family:monospace;font-size:17px;font-weight:700;color:#e65100">${fmt(totalC)}</div>
+        </div>
+        <div style="background:#fdecea;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#b71c1c;text-transform:uppercase">− Editorial</div>
+          <div style="font-family:monospace;font-size:17px;font-weight:700;color:#b71c1c">${fmt(totalCostoEd)}</div>
+        </div>
+        <div style="background:${gan>=0?'#e8f5e9':'#fdecea'};border:2px solid ${gan>=0?'#66bb6a':'#e57373'};border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:${gan>=0?'#1b5e20':'#b71c1c'};text-transform:uppercase">= TE QUEDA</div>
+          <div style="font-family:monospace;font-size:19px;font-weight:700;color:${gan>=0?'var(--g1)':'var(--r1)'}">${fmt(gan)}</div>
+        </div>
+      </div>
+      <table style="width:100%;font-size:12px;max-width:520px">
+        <tr><td style="padding:4px 0">Total vendido (menos devoluciones)</td><td style="text-align:right;font-family:monospace;font-weight:700">${fmt(totalTV)}</td></tr>
+        <tr><td style="padding:4px 0">Comisión de los colegios</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--a1)">− ${fmt(totalC)}</td></tr>
+        <tr style="border-top:1px solid #ddd"><td style="padding:4px 0;font-weight:700">Tu ingreso real</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--g1)">${fmt(totalP)}</td></tr>
+        <tr><td style="padding:4px 0">Costo editorial de lo vendido</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--r1)">− ${fmt(totalCostoEd)}</td></tr>
+        <tr style="border-top:2px solid #90caf9"><td style="padding:6px 0;font-weight:700">GANANCIA NETA REAL</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${gan>=0?'var(--g1)':'var(--r1)'}">${fmt(gan)}</td></tr>
+        <tr><td colspan="2" style="padding:8px 0 2px"><hr style="border:none;border-top:1px dashed #ccc"></td></tr>
+        <tr><td style="padding:4px 0">Deuda con la editorial (costo de lo vendido)</td><td style="text-align:right;font-family:monospace">${fmt(totalCostoEd)}</td></tr>
+        <tr><td style="padding:4px 0">Ya pagado a la editorial</td><td style="text-align:right;font-family:monospace;color:var(--g1)">− ${fmt(totalPagEd)}</td></tr>
+        <tr style="border-top:1px solid #ddd"><td style="padding:6px 0;font-weight:700">SALDO POR PAGAR A LA EDITORIAL</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${totalSaldoEd>0.005?'var(--r1)':'var(--g1)'}">${fmt(totalSaldoEd)}</td></tr>
+      </table>
+      <div style="background:#e3f2fd;border-radius:6px;padding:7px 11px;margin-top:9px;font-size:11px;color:#1565c0">Suma del cuadro "Lo real" de cada colegio. Para ver el detalle de uno, ábrelo en la tabla de abajo.</div>
+    </div>`;
   const tb=document.getElementById('tb-col-res');
   tb.innerHTML=rows+`<tr class="total-row"><td>TOTALES</td><td></td><td></td><td></td><td>${fmt(totalTV)}</td><td>${fmt(totalC)}</td><td>${fmt(totalP)}</td><td>${fmt(totalCostoEd)}</td><td>${fmt(totalPagEd)}</td><td>${fmt(totalSaldoEd)}</td><td></td></tr>`;
 }
@@ -7171,6 +7244,24 @@ function baseFactura(r){
   return sub>0?sub:(parseFloat(r.total)||0);
 }
 
+// Explica por qué una guía de entrada aparece como "No cargada": puede ser que
+// la factura de verdad no exista, o que exista pero mal clasificada (no como
+// Negocio → Textos escolares, que es lo único que cuenta como editorial).
+function diagFacturaEntrada(ref){
+  if(!ref) return {cls:'bdg-warn',txt:'Sin n° de factura',title:'Esta entrada no tiene n° de factura, no se puede cruzar'};
+  const edit=DB.regs.find(r=>esCompraEditorial(r)&&mismaFactura(r.numFact,ref));
+  if(edit) return {ok:true,fac:edit};
+  // ¿Existe con ese número pero clasificada de otra forma?
+  const otra=DB.regs.find(r=>r.numFact&&mismaFactura(r.numFact,ref));
+  if(otra){
+    const comoTipo=otra.tipo==='venta'?'una VENTA':otra.tipo==='personal'?'gasto PERSONAL':'compra de negocio';
+    const comoCat=otra.categoria?` (categoría "${otra.categoria}")`:'';
+    return {cls:'bdg-warn',txt:'Mal clasificada',
+      title:`La factura ${otra.numFact} de ${otra.proveedor||'?'} SÍ está cargada, pero como ${comoTipo}${comoCat}. Para que cuente como editorial, en Movimientos edítala a: Negocio → Textos escolares.`};
+  }
+  return {cls:'bdg-err',txt:'⚠ No cargada',title:'No hay ninguna factura cargada con este número. Súbela por XML+IA o Manual.'};
+}
+
 function gruposEntradas(){
   const g={};
   DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{
@@ -7296,13 +7387,56 @@ function renderCuadreMercaderia(){
 
 // Rellena el precio de costo de las entradas que quedaron en 0,
 // tomándolo del catálogo de Inventario (y si ahí tampoco hay, de Colegios).
+// Tokens "de contenido" de un nombre de libro (ignora palabras de relleno)
+function _tokLibro(s){
+  const stop=['DE','LA','EL','Y','DEL','LOS','LAS','CON','PARA','EN','TOMO','LIBRO','TEXTO','CUADERNO','TRABAJO'];
+  return new Set(String(s||'').toUpperCase().replace(/[^A-Z0-9. ]/g,' ').split(/\s+/)
+    .filter(t=>(t.length>1||/^\d$/.test(t))&&!stop.includes(t)));  // conserva los grados de 1 dígito
+}
+// Grado / nivel: el último token que sea solo dígitos (ignora "5.0" de la marca)
+function _gradoLibro(set){ return [...set].filter(t=>/^\d+$/.test(t)).pop()||''; }
+// Qué tanto se parecen el nombre del producto (+su editorial) y la descripción de una línea de factura.
+function _pareceMismoLibro(nombreProd,editorialProd,descFactura){
+  const a=_tokLibro((nombreProd||'')+' '+(editorialProd||''));
+  const b=_tokLibro(descFactura);
+  if(!a.size||!b.size)return 0;
+  const gA=_gradoLibro(a),gB=_gradoLibro(b);
+  if(gA&&gB&&gA!==gB)return 0;                   // distinto grado/nivel → no es el mismo
+  if((gA&&!gB)||(gB&&!gA))return 0;              // uno tiene grado y el otro no → tampoco
+  let inter=0,palabras=0;
+  a.forEach(t=>{ if(b.has(t)){ inter++; if(!/^\d/.test(t))palabras++; } });
+  if(palabras<1)return 0;                        // al menos una palabra real en común
+  return inter/Math.min(a.size,b.size);
+}
+
+// Rellena el precio de costo de las entradas de inventario que están en $0.
+// Prioridad: 1) precio unitario que puso la editorial en ESA factura XML (lo más fiel)
+//            2) costo guardado en el Catálogo del producto
+//            3) costo anotado en el Control de ventas de algún colegio
 function rellenarCostosEntradas(){
-  let n=0,sinDato=0;
+  let n=0,sinDato=0,deFactura=0;
+  const editoriales=DB.regs.filter(esCompraEditorial);
   DB.movInv.filter(m=>m.tipo==='entrada'&&!(parseFloat(m.precioCosto)>0)).forEach(m=>{
     const prod=DB.productos.find(p=>p.id===m.prodId);
-    let costo=parseFloat(prod?.precioCosto)||0;
+    let costo=0;
+
+    // 1) el precio de la factura de esa entrada
+    if(m.ref){
+      const fac=editoriales.find(r=>mismaFactura(r.numFact,m.ref));
+      if(fac&&Array.isArray(fac.detalles)){
+        let best=null,bestSc=0.7;
+        fac.detalles.forEach(det=>{
+          if(!(parseFloat(det.pu)>0))return;
+          const sc=_pareceMismoLibro(prod?.nombre,prod?.editorial,det.desc);
+          if(sc>bestSc){bestSc=sc;best=det;}
+        });
+        if(best){costo=parseFloat(best.pu);deFactura++;}
+      }
+    }
+    // 2) catálogo
+    if(!costo)costo=parseFloat(prod?.precioCosto)||0;
+    // 3) Control de ventas de algún colegio
     if(!costo){
-      // buscar el costo en el Control de ventas de cualquier colegio
       const nom=(prod?.nombre||'').trim().toLowerCase();
       for(const col of Object.keys(DB.colData||{})){
         const l=(DB.colData[col].lineas||[]).find(x=>x.prodId===m.prodId
@@ -7311,12 +7445,17 @@ function rellenarCostosEntradas(){
         if(c){costo=c;break;}
       }
     }
-    if(costo){m.precioCosto=costo;n++;} else sinDato++;
+
+    if(costo){
+      m.precioCosto=costo;n++;
+      if(prod&&!(parseFloat(prod.precioCosto)>0))prod.precioCosto=costo; // de paso, deja el costo en el catálogo
+    } else sinDato++;
   });
-  if(!n) return toast('No encontré costos en el catálogo ni en Colegios. Escríbelos en Inventario → Catálogo.','err');
-  logHistorial('Costos de entradas rellenados',n+' línea(s) de entrada actualizadas');
+  if(!n) return toast('No encontré costos en las facturas, el catálogo ni en Colegios. Escríbelos en Inventario → Catálogo.','err');
+  logHistorial('Costos de entradas rellenados',`${n} línea(s) — ${deFactura} desde la factura`);
   save();renderCuadreMercaderia();renderEntradas();
-  toast(n+' línea(s) actualizadas'+(sinDato?` — ${sinDato} siguen sin costo`:''),'ok');
+  if(typeof renderCatalogo==='function')renderCatalogo();
+  toast(`${n} línea(s) actualizadas (${deFactura} con el precio de la factura)`+(sinDato?` — ${sinDato} siguen sin costo`:''),'ok');
 }
 
 function exportCuadreMercaderiaXLS(){
@@ -7334,15 +7473,28 @@ function exportCuadreMercaderiaXLS(){
     filas.push([e.ref||'',e.fecha||'',e.prov||'','0.00',e.unidades,e.valor.toFixed(2),(-e.valor).toFixed(2),'INGRESO SIN FACTURA']);
   });
   if(!filas.length)return toast('No hay nada que exportar','err');
-  const html=`<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>
-    <table border="1"><tr><th>N FACTURA</th><th>FECHA</th><th>EDITORIAL</th><th>VALOR FACTURA</th><th>UNIDADES INGRESADAS</th><th>VALOR INGRESADO</th><th>DIFERENCIA</th><th>ESTADO</th></tr>
-    ${filas.map(f=>'<tr>'+f.map(c=>`<td>${escH(c)}</td>`).join('')+'</tr>').join('')}</table></body></html>`;
-  const blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`cuadre_facturas_mercaderia_${today()}.xls`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  // Columnas: 0 n° factura (TEXTO, si no Excel lo vuelve 1,001E+12), 1 fecha, 2 editorial,
+  // 3 valor factura, 4 unidades, 5 valor ingresado, 6 diferencia, 7 estado.
+  const cuerpo=filas.map(f=>`<tr>
+    <td class="c" style="${XLS_TXT}">${escH(f[0])}</td>
+    <td class="c" style="${XLS_TXT}">${escH(xlsFecha(f[1]))}</td>
+    <td class="c" style="${XLS_TXT}">${escH(f[2])}</td>
+    <td class="c" style="${XLS_NUM}">${escH(f[3])}</td>
+    <td class="c" style="${XLS_ENT}">${escH(f[4])}</td>
+    <td class="c" style="${XLS_NUM}">${escH(f[5])}</td>
+    <td class="c" style="${XLS_NUM}">${escH(f[6])}</td>
+    <td class="c" style="${XLS_TXT}">${escH(f[7])}</td></tr>`).join('');
+  const e=resumenEditorial();
+  const html=`<table>
+    <tr><td class="tit" colspan="8">D&amp;M BOOKS — CUADRE: FACTURAS DE EDITORIAL vs. MERCADERÍA INGRESADA</td></tr>
+    <tr><td class="sub" colspan="8">Generado el ${new Date().toLocaleDateString('es-EC')} — Le debes a la editorial hoy: ${fmt(e.deudaReal)} (${e.nPend} factura(s) pendiente(s)${e.nVenc?`, ${e.nVenc} vencida(s)`:''})</td></tr>
+    <tr><td colspan="8"></td></tr>
+    <tr>
+      <th class="th" width="150">N° FACTURA</th><th class="th" width="90">FECHA</th><th class="th" width="160">EDITORIAL</th>
+      <th class="th" width="100">VALOR FACTURA</th><th class="th" width="90">UNID. INGRESADAS</th>
+      <th class="th" width="110">VALOR INGRESADO</th><th class="th" width="90">DIFERENCIA</th><th class="th" width="200">ESTADO</th>
+    </tr>${cuerpo}</table>`;
+  bajarXLS(html,`cuadre_facturas_mercaderia_${today()}.xls`);
   toast(filas.length+' fila(s) exportada(s)','ok');
 }
 
@@ -7464,11 +7616,12 @@ function renderDeudaEditorial(){
       const origen=r.origen==='xml'
         ?'<span class="bdg bdg-ok" title="Importada del XML del SRI">SRI / XML</span>'
         :'<span class="bdg" style="background:#eef2ff;color:#3730a3">Manual</span>';
-      const acciones=esEd
+      const accPrincipal=esEd
         ?(pagado
           ?`<button class="btn btn-s btn-sm" onclick="togglePagadaEditorial('${r.id}',false)" title="Deshacer pago"><i class="ti ti-rotate-left"></i></button>`
           :`<button class="btn btn-p btn-sm" onclick="togglePagadaEditorial('${r.id}',true)"><i class="ti ti-check"></i> Pagar</button>`)
         :`<button class="btn btn-s btn-sm" onclick="reclasificarATextos('${r.id}')" title="Clasificar esta factura como Textos escolares para que cuente en la deuda editorial">→ Textos</button>`;
+      const acciones=`<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">${accPrincipal}<button class="btn btn-d btn-sm" title="Eliminar esta factura (por ejemplo si quedó duplicada)" onclick="eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></div>`;
       return`<tr${esEd?'':' style="background:#fffdf5"'}>
         <td>${escH(r.fecha||'-')}</td><td>${escH(r.proveedor||'-')}</td><td><span class="chip">${escH(r.numFact||'-')}</span></td>
         <td>${origen}</td>
@@ -7506,25 +7659,45 @@ function exportFacturasEditorialXLS(){
     const esEd=esCompraEditorial(r);
     const v=parseLocalDate(r.fecha);v.setDate(v.getDate()+180);
     const vence=`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+    // N° de factura y RUC van como TEXTO: son números largos y Excel los
+    // convertiría a notación científica (1,001E+12).
     return`<tr>
-      <td>${escH(r.fecha||'')}</td><td>${escH(r.proveedor||'')}</td><td>${escH(r.ruc||'')}</td>
-      <td>${escH(r.numFact||'')}</td><td>${r.origen==='xml'?'SRI / XML':'Manual'}</td>
-      <td>${escH(r.categoria||'')}</td>
-      <td>${(r.subtotal||0).toFixed(2)}</td><td>${(r.iva||0).toFixed(2)}</td><td>${(r.total||0).toFixed(2)}</td>
-      <td>${esEd?'SI':'NO'}</td><td>${esEd?vence:''}</td><td>${r.pagadaEditorial?'Pagada':(esEd?'Pendiente':'')}</td>
+      <td class="c" style="${XLS_TXT}">${escH(xlsFecha(r.fecha))}</td>
+      <td class="c" style="${XLS_TXT}">${escH(r.proveedor||'')}</td>
+      <td class="c" style="${XLS_TXT}">${escH(r.ruc||'')}</td>
+      <td class="c" style="${XLS_TXT}">${escH(r.numFact||'')}</td>
+      <td class="c" style="${XLS_TXT}">${r.origen==='xml'?'SRI / XML':'Manual'}</td>
+      <td class="c" style="${XLS_TXT}">${escH(r.categoria||'')}</td>
+      <td class="c" style="${XLS_NUM}">${(r.subtotal||0).toFixed(2)}</td>
+      <td class="c" style="${XLS_NUM}">${(r.iva||0).toFixed(2)}</td>
+      <td class="c" style="${XLS_NUM}">${(r.total||0).toFixed(2)}</td>
+      <td class="c" style="${XLS_TXT}">${esEd?'SI':'NO'}</td>
+      <td class="c" style="${XLS_TXT}">${esEd?xlsFecha(vence):''}</td>
+      <td class="c" style="${XLS_TXT}">${r.pagadaEditorial?'Pagada':(esEd?'Pendiente':'')}</td>
     </tr>`;
   }).join('');
-  const html=`<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>
-    <table border="1"><tr>
-      <th>FECHA</th><th>PROVEEDOR</th><th>RUC</th><th>N FACTURA</th><th>ORIGEN</th><th>CATEGORIA</th>
-      <th>SUBTOTAL</th><th>IVA</th><th>TOTAL</th><th>CUENTA COMO EDITORIAL</th><th>VENCE</th><th>ESTADO</th>
-    </tr>${filas}</table></body></html>`;
-  const blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`facturas_editorial_${today()}.xls`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const e=resumenEditorial();
+  const totales=lista.reduce((a,r)=>({s:a.s+(r.subtotal||0),i:a.i+(r.iva||0),t:a.t+(r.total||0)}),{s:0,i:0,t:0});
+  const html=`<table>
+    <tr><td class="tit" colspan="12">D&amp;M BOOKS — FACTURAS DE LA EDITORIAL</td></tr>
+    <tr><td class="sub" colspan="12">Generado el ${new Date().toLocaleDateString('es-EC')} — ${lista.length} factura(s) — Le debes a la editorial hoy: ${fmt(e.deudaReal)}${e.nVenc?` (${e.nVenc} vencida(s) por ${fmt(e.vencida)})`:''}</td></tr>
+    <tr><td colspan="12"></td></tr>
+    <tr>
+      <th class="th" width="90">FECHA</th><th class="th" width="160">PROVEEDOR</th><th class="th" width="120">RUC</th>
+      <th class="th" width="150">N° FACTURA</th><th class="th" width="80">ORIGEN</th><th class="th" width="130">CATEGORÍA</th>
+      <th class="th" width="90">SUBTOTAL</th><th class="th" width="80">IVA</th><th class="th" width="90">TOTAL</th>
+      <th class="th" width="90">¿ES EDITORIAL?</th><th class="th" width="90">VENCE</th><th class="th" width="90">ESTADO</th>
+    </tr>${filas}
+    <tr><td colspan="12"></td></tr>
+    <tr>
+      <td class="tot" colspan="6">TOTAL (${lista.length} facturas)</td>
+      <td class="tot" style="${XLS_NUM}">${totales.s.toFixed(2)}</td>
+      <td class="tot" style="${XLS_NUM}">${totales.i.toFixed(2)}</td>
+      <td class="tot" style="${XLS_NUM}">${totales.t.toFixed(2)}</td>
+      <td class="tot" colspan="3"></td>
+    </tr>
+  </table>`;
+  bajarXLS(html,`facturas_editorial_${today()}.xls`);
   toast(lista.length+' factura(s) exportada(s)','ok');
 }
 
