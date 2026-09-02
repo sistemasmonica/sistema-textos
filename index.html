@@ -492,6 +492,14 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh"><h2>Entradas de inventario (desde editorial)</h2></div>
     <div class="card">
       <div class="card-t cg"><i class="ti ti-arrow-bar-down"></i> Registrar entrada de mercadería</div>
+      <div id="ent-traer-box" style="background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:none">
+        <div style="font-size:12px;font-weight:700;color:#1565c0;margin-bottom:6px">📄 Traer las líneas de una factura de la editorial</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="ent-traer-sel" style="flex:1;min-width:220px;font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px"></select>
+          <button class="btn btn-p btn-sm" onclick="traerLineasDeFactura()"><i class="ti ti-download"></i> Traer</button>
+        </div>
+        <div style="font-size:11px;color:var(--mu);margin-top:5px">Solo salen las facturas de editorial que todavía no tienen entrada. El sistema llena producto, cantidad y costo; los que no reconoce salen en rojo — tú revisas y das <b>Registrar entrada</b>.</div>
+      </div>
       <div class="f3">
         <div class="fg"><label>Fecha</label><input type="date" id="ent-fecha"></div>
         <div class="fg"><label>N° Factura editorial</label><input type="text" id="ent-nfact" placeholder="001-001-000000001"></div>
@@ -3007,27 +3015,41 @@ function guardarEntrada(){
   if(!prov)return toast('Ingresa el proveedor/editorial','err');
   const lineasEls=[...document.getElementById('ent-lineas').children];
   if(!lineasEls.length)return toast('Agrega al menos un producto','err');
-  const lineas=[];
+  const lineas=[];let creados=0;
   for(const el of lineasEls){
     const sel=el.querySelector('select');
     const cantEl=el.querySelector('[id$="-cant"]');
     const costoEl=el.querySelector('[id$="-costo"]');
     const ventaEl=el.querySelector('[id$="-venta"]');
-    if(!sel?.value)continue;
     const cant=parseInt(cantEl?.value)||0;
     const costo=parseFloat(costoEl?.value)||0;
     const venta=parseFloat(ventaEl?.value)||0;
+    let prodId=sel?.value||'';
+    // Fila "nueva" traída de una factura sin producto en el catálogo → crear el producto
+    if(!prodId&&el.dataset&&el.dataset.newName){
+      const nom=el.dataset.newName.trim();
+      let p=DB.productos.find(x=>(x.nombre||'').trim().toLowerCase()===nom.toLowerCase());
+      if(!p){
+        p={id:uid(),nombre:nom,editorial:el.dataset.newEdit||'',nivel:'',codigo:'',nota:'',
+           precioCosto:costo||parseFloat(el.dataset.newCost)||0,precioVenta:venta||0,
+           stockInicial:0,creadoEn:new Date().toISOString()};
+        DB.productos.push(p);creados++;
+      }
+      prodId=p.id;
+    }
+    if(!prodId)continue;
     if(!cant)continue;
-    lineas.push({prodId:sel.value,cantidad:cant,precioCosto:costo,precioVenta:venta});
+    lineas.push({prodId,cantidad:cant,precioCosto:costo,precioVenta:venta});
     // Actualizar precios en catálogo si cambian
-    const prod=DB.productos.find(p=>p.id===sel.value);
+    const prod=DB.productos.find(p=>p.id===prodId);
     if(prod){if(costo)prod.precioCosto=costo;if(venta)prod.precioVenta=venta;}
     // Registrar movimiento de inventario
-    DB.movInv.push({id:uid(),tipo:'entrada',prodId:sel.value,cantidad:cant,precioCosto:costo,fecha,ref:nfact,proveedor:prov});
+    DB.movInv.push({id:uid(),tipo:'entrada',prodId,cantidad:cant,precioCosto:costo,fecha,ref:nfact,proveedor:prov});
   }
   if(!lineas.length)return toast('Completa al menos una línea con producto y cantidad','err');
-  logHistorial('Entrada de inventario registrada',`${prov} — ${nfact} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades`);
-  save();limpiarEntrada();renderCatalogo();renderEntradas();renderStockReport();toast('Entrada registrada','ok');
+  logHistorial('Entrada de inventario registrada',`${prov} — ${nfact} — ${lineas.reduce((a,l)=>a+l.cantidad,0)} unidades`+(creados?` (${creados} producto(s) nuevo(s))`:''));
+  save();limpiarEntrada();renderCatalogo();renderEntradas();renderStockReport();
+  toast('Entrada registrada'+(creados?` — se crearon ${creados} producto(s) nuevo(s), revísales el P.Venta en Catálogo`:''),'ok');
 }
 
 function limpiarEntrada(){
@@ -3047,6 +3069,7 @@ function renderEntradas(){
     const prod=DB.productos.find(p=>p.id===m.prodId);
     grupos[key].lineas.push({nom:prod?.nombre||'N/A',cant:m.cantidad,costo:m.precioCosto});
   });
+  poblarTraerFactura();
   const tb=document.getElementById('tb-entradas');
   const arr=Object.values(grupos).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if(!arr.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin entradas registradas</div></td></tr>';return}
@@ -3068,6 +3091,69 @@ function renderEntradas(){
     }
     return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td><td style="font-size:11px">${cel}</td><td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verEntrada('${key}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirEntrada('${key}')" title="Imprimir Comprobante"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarEntrada('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
   }).join('');
+}
+
+// Facturas de editorial (con detalle de productos) que TODAVÍA no tienen su entrada de inventario
+function facturasSinEntrada(){
+  const refsConEntrada=new Set(DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref).map(m=>numFactDigits(m.ref)));
+  return DB.regs.filter(r=>esCompraEditorial(r)&&Array.isArray(r.detalles)&&r.detalles.length
+    &&!refsConEntrada.has(numFactDigits(r.numFact)));
+}
+
+function poblarTraerFactura(){
+  const box=document.getElementById('ent-traer-box');
+  const sel=document.getElementById('ent-traer-sel');
+  if(!box||!sel)return;
+  const lista=facturasSinEntrada();
+  if(!lista.length){box.style.display='none';sel.innerHTML='';return}
+  box.style.display='block';
+  sel.innerHTML='<option value="">— elige una factura —</option>'+
+    lista.sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')).map(r=>
+      `<option value="${r.id}">${escH(r.fecha||'')} · ${escH(r.numFact||'s/n')} · ${escH(r.proveedor||'')} · ${fmt(r.total||0)} · ${r.detalles.length} título(s)</option>`).join('');
+}
+
+// Llena el formulario de entrada con las líneas de la factura elegida.
+function traerLineasDeFactura(){
+  const sel=document.getElementById('ent-traer-sel');
+  const fac=DB.regs.find(r=>r.id===sel?.value);
+  if(!fac)return toast('Elige una factura de la lista','err');
+  document.getElementById('ent-fecha').value=fac.fecha||today();
+  document.getElementById('ent-nfact').value=fac.numFact||'';
+  document.getElementById('ent-prov').value=fac.proveedor||'';
+  const cont=document.getElementById('ent-lineas');
+  cont.innerHTML='';
+  editLineasEntrada=0;
+  const opciones='<option value="">— seleccionar —</option>'+
+    DB.productos.map(p=>`<option value="${p.id}">${escH(p.nombre)} (${escH(p.editorial||'')})</option>`).join('');
+  const frag=document.createDocumentFragment();
+  let ok=0,nuevos=0;
+  (fac.detalles||[]).forEach(det=>{
+    const desc=String(det.desc||'').replace(/\s*\*+\s*$/,'').trim();  // quita el "*" del final
+    const cant=parseInt(det.cant)||0;
+    const pu=parseFloat(det.pu)||0;
+    if(!desc||!cant)return;
+    let best=null,bs=0.7;
+    DB.productos.forEach(p=>{const sc=_pareceMismoLibro(p.nombre,p.editorial,desc);if(sc>bs){bs=sc;best=p;}});
+    editLineasEntrada++;
+    const id='ent-l-'+editLineasEntrada;
+    const div=document.createElement('div');
+    div.id=id;
+    div.style.cssText='display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:end';
+    if(best){ok++;}
+    else{ nuevos++; div.dataset.newName=desc; div.dataset.newEdit=fac.proveedor||''; div.dataset.newCost=pu; div.style.background='#fef2f2'; div.style.borderLeft='3px solid #ef4444'; div.style.padding='4px 4px 4px 6px'; }
+    div.innerHTML=`
+      <div class="fg" style="margin:0"><label>${best?'Producto':'<span style="color:#b91c1c">NUEVO: '+escH(desc)+'</span>'}</label>
+        <select onchange="autoFillEntrada(this,'${id}')">${opciones}</select>
+      </div>
+      <div class="fg" style="margin:0"><label>Cantidad</label><input type="number" id="${id}-cant" min="1" value="${cant}"></div>
+      <div class="fg" style="margin:0"><label>P.Costo $</label><input type="number" id="${id}-costo" step="0.01" value="${pu||''}"></div>
+      <div class="fg" style="margin:0"><label>P.Venta $</label><input type="number" id="${id}-venta" step="0.01" placeholder="0.00" value="${best&&best.precioVenta?best.precioVenta:''}"></div>
+      <button class="btn btn-d btn-sm" style="margin-bottom:10px" onclick="document.getElementById('${id}').remove()"><i class="ti ti-x"></i></button>`;
+    if(best)div.querySelector('select').value=best.id;
+    frag.appendChild(div);
+  });
+  cont.appendChild(frag);
+  toast(`${ok+nuevos} línea(s) traídas — ${ok} reconocidas, ${nuevos} nuevas (en rojo). Revisa y da "Registrar entrada".`, nuevos?'err':'ok');
 }
 
 function verEntrada(key){
@@ -7389,12 +7475,15 @@ function renderCuadreMercaderia(){
 // tomándolo del catálogo de Inventario (y si ahí tampoco hay, de Colegios).
 // Tokens "de contenido" de un nombre de libro (ignora palabras de relleno)
 function _tokLibro(s){
-  const stop=['DE','LA','EL','Y','DEL','LOS','LAS','CON','PARA','EN','TOMO','LIBRO','TEXTO','CUADERNO','TRABAJO'];
+  const stop=['DE','LA','EL','Y','DEL','LOS','LAS','CON','PARA','EN','TOMO','LIBRO','TEXTO'];
   return new Set(String(s||'').toUpperCase().replace(/[^A-Z0-9. ]/g,' ').split(/\s+/)
     .filter(t=>(t.length>1||/^\d$/.test(t))&&!stop.includes(t)));  // conserva los grados de 1 dígito
 }
 // Grado / nivel: el último token que sea solo dígitos (ignora "5.0" de la marca)
 function _gradoLibro(set){ return [...set].filter(t=>/^\d+$/.test(t)).pop()||''; }
+// Palabras que cambian POR COMPLETO de qué material se trata: si una está en un
+// lado y no en el otro, NO es el mismo producto (solucionario ≠ libro del alumno).
+const _TIPO_LIBRO=['SOLUCIONARIO','GUIA','CUADERNO','WORKBOOK','DIGITAL','DOCENTE','PROFESOR'];
 // Qué tanto se parecen el nombre del producto (+su editorial) y la descripción de una línea de factura.
 function _pareceMismoLibro(nombreProd,editorialProd,descFactura){
   const a=_tokLibro((nombreProd||'')+' '+(editorialProd||''));
@@ -7403,6 +7492,7 @@ function _pareceMismoLibro(nombreProd,editorialProd,descFactura){
   const gA=_gradoLibro(a),gB=_gradoLibro(b);
   if(gA&&gB&&gA!==gB)return 0;                   // distinto grado/nivel → no es el mismo
   if((gA&&!gB)||(gB&&!gA))return 0;              // uno tiene grado y el otro no → tampoco
+  for(const t of _TIPO_LIBRO){ if(a.has(t)!==b.has(t))return 0; }  // solucionario/guía/etc. en un solo lado
   let inter=0,palabras=0;
   a.forEach(t=>{ if(b.has(t)){ inter++; if(!/^\d/.test(t))palabras++; } });
   if(palabras<1)return 0;                        // al menos una palabra real en común
