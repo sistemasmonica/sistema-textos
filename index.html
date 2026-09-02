@@ -6107,6 +6107,10 @@ function renderControl(){
       </select>
       <span style="font-size:11px;color:#8a7500">Al traerlo del inventario se llenan solos el PVP y el costo.</span>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#eef6ff;border:1px dashed #90caf9;border-radius:6px;padding:8px 10px">
+      <button class="btn btn-s btn-sm" onclick="traerCostosDeCatalogo('${nombre}')"><i class="ti ti-download"></i> Traer los costos del Catálogo</button>
+      <span style="font-size:11px;color:#1565c0">El PVP se lo pones tú (es lo que te paga ESTE colegio). El <b>costo</b> lo que te cobra la editorial es el mismo para todos — este botón lo copia del Catálogo emparejando por título.</span>
+    </div>
 
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid #e6c800;border-radius:6px;padding:7px 10px">
       <span style="font-size:11px;font-weight:700;color:#8a7500">COMISIÓN POR MATERIA:</span>
@@ -6297,6 +6301,33 @@ function agregarLineaDesdeInv(nombre,sel){
   sincronizarFinDesdeLinea(d,titulo,p.precioVenta);
   save();renderControl();
   toast(p.nombre+' agregado al control','ok');
+}
+
+// Copia el precio de COSTO (lo que cobra la editorial) del Catálogo a cada línea
+// del Control de ventas de este colegio, emparejando por prodId o por título.
+// NO toca el PVP (ese lo negocia Mónica con cada colegio).
+function traerCostosDeCatalogo(nombre){
+  initColData();
+  const d=DB.colData[nombre];if(!d||!d.lineas.length)return toast('Este colegio no tiene productos en el control','err');
+  let n=0,sinDato=0;
+  d.lineas.forEach(l=>{
+    let p=l.prodId?DB.productos.find(x=>x.id===l.prodId):null;
+    if(!p){
+      // el título del control suele venir como "NOMBRE (EDITORIAL)"
+      const t=String(l.libro||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+      let best=null,bs=0.7;
+      DB.productos.forEach(x=>{if(x.editorial==='Hist.')return;const sc=_pareceMismoLibro(x.nombre,x.editorial,t);if(sc>bs){bs=sc;best=x;}});
+      p=best;
+      if(p)l.prodId=p.id;
+    }
+    const c=parseFloat(p?.precioCosto)||0;
+    if(c){ if(Math.abs((l.costo||0)-c)>0.005)n++; l.costo=c; }
+    else sinDato++;
+  });
+  if(!n&&sinDato)return toast('No encontré esos títulos en el Catálogo con un costo puesto. Primero corre "Poner los costos que faltan" en Editorial.','err');
+  logHistorial('Costos traídos del catálogo al control',nombre+' — '+n+' línea(s)');
+  save();renderControl();
+  toast(`${n} costo(s) actualizados desde el Catálogo`+(sinDato?` — ${sinDato} título(s) no están en el Catálogo`:''),sinDato?'err':'ok');
 }
 
 function eliminarLineaControl(nombre,i){
