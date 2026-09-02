@@ -614,6 +614,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">Valor inventario (costo)</div><div class="sc-val cg" id="rep-valcosto">$0.00</div></div>
       <div class="sc"><div class="sc-lbl">Valor inventario (venta)</div><div class="sc-val cb" id="rep-valventa">$0.00</div></div>
     </div>
+    <div id="rep-aviso-dup"></div>
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Código</th><th>Producto</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th><th></th></tr></thead>
@@ -4607,6 +4608,48 @@ function renderStockReport(){
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
+
+  // Aviso: productos con "stock inicial" Y además la entrada de su factura → posible doble conteo
+  const dup=productosStockInicialDuplicado();
+  const av=document.getElementById('rep-aviso-dup');
+  if(av){
+    av.innerHTML=dup.length
+      ?`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12px;color:#92400e;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span style="flex:1;min-width:220px"><b>⚠️ ${dup.length} producto(s)</b> tienen <b>stock inicial</b> Y además la entrada de una factura ya registrada — es probable que sean los mismos libros contados dos veces (${fmt(dup.reduce((a,p)=>a+p.stockInicial*(p.precioCosto||0),0))} de más).</span>
+          <button class="btn btn-p btn-sm" onclick="corregirStockInicialDuplicado()"><i class="ti ti-wand"></i> Poner el stock inicial en 0 en esos productos</button>
+        </div>`
+      :'';
+  }
+}
+
+// Productos cuyo stockInicial>0 probablemente ya está contado también como entrada de factura
+function productosStockInicialDuplicado(){
+  return DB.productos.filter(p=>(p.stockInicial||0)>0
+    && DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'&&m.ref));
+}
+
+function corregirStockInicialDuplicado(){
+  const dup=productosStockInicialDuplicado();
+  if(!dup.length)return;
+  const unid=dup.reduce((a,p)=>a+p.stockInicial,0);
+  const val=dup.reduce((a,p)=>a+p.stockInicial*(p.precioCosto||0),0);
+  if(!confirm(`Se va a bajar el "stock inicial" en ${dup.length} producto(s).\n\n`+
+    `Son hasta ${unid} unidades (${fmt(val)}) que ya están registradas como entrada de su factura, así que estaban contadas dos veces.\n\n`+
+    `En los productos donde se vendió más de lo que dicen las facturas, se deja lo mínimo para que el stock no quede negativo.\n\n`+
+    `Esto NO se deshace solo. ¿Continuar?`))return;
+  let quitadas=0,conservados=0;
+  dup.forEach(p=>{
+    const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
+    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
+    const minNecesario=Math.max(0,sal-ent);                 // lo justo para no quedar negativo
+    const nuevo=Math.min(p.stockInicial,minNecesario);
+    quitadas+=p.stockInicial-nuevo;
+    if(nuevo>0)conservados++;
+    p.stockInicial=nuevo;
+  });
+  logHistorial('Stock inicial duplicado corregido',`${dup.length} producto(s), −${quitadas} u.`);
+  save();renderStockReport();renderCatalogo();
+  toast(`${dup.length} producto(s) corregidos — se quitaron ${quitadas} unidades duplicadas`+(conservados?` (${conservados} conservan algo de stock inicial real)`:''),'ok');
 }
 
 function imprimirInventario(){
