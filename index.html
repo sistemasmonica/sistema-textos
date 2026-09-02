@@ -109,6 +109,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--g1);border-color
 .stock-low{background:#fef3c7!important}
 .stock-ok{background:#f0faf4!important}
 .stock-zero{background:#fef2f2!important}
+.stock-neg{background:#fee2e2!important;box-shadow:inset 3px 0 0 #dc2626}
 .conc-match{background:#f0faf4}
 .conc-pending{background:#fffbeb}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
@@ -4601,8 +4602,8 @@ function renderStockReport(){
     const st=p.stockInicial+ent-sal;
     const valC=st*p.precioCosto;const valV=st*p.precioVenta;
     totalCosto+=valC;totalVenta+=valV;totalSalidas+=sal;totalStock+=st;
-    const rc=st===0?'stock-zero':st<=5?'stock-low':'';
-    return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700">${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
+    const rc=st<0?'stock-neg':st===0?'stock-zero':st<=5?'stock-low':'';
+    return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700${st<0?';color:#dc2626':''}">${st<0?'⚠ ':''}${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
   tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="3" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
@@ -4613,13 +4614,46 @@ function renderStockReport(){
   const dup=productosStockInicialDuplicado();
   const av=document.getElementById('rep-aviso-dup');
   if(av){
-    av.innerHTML=dup.length
-      ?`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12px;color:#92400e;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    let htmlAv='';
+    if(dup.length)htmlAv+=`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12px;color:#92400e;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span style="flex:1;min-width:220px"><b>⚠️ ${dup.length} producto(s)</b> tienen <b>stock inicial</b> Y además la entrada de una factura ya registrada — es probable que sean los mismos libros contados dos veces (${fmt(dup.reduce((a,p)=>a+p.stockInicial*(p.precioCosto||0),0))} de más).</span>
           <button class="btn btn-p btn-sm" onclick="corregirStockInicialDuplicado()"><i class="ti ti-wand"></i> Poner el stock inicial en 0 en esos productos</button>
-        </div>`
-      :'';
+        </div>`;
+    const neg=productosStockNegativo();
+    if(neg.length)htmlAv+=`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12px;color:#991b1b">
+        <div style="font-weight:700;margin-bottom:6px">⚠️ ${neg.length} producto(s) con stock NEGATIVO — vendiste más de lo que registraste comprar. Falta cargar la factura de compra de:</div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <tr style="text-align:left;color:#7f1d1d"><th style="padding:2px 6px">Producto</th><th style="padding:2px 6px">Entró</th><th style="padding:2px 6px">Salió</th><th style="padding:2px 6px">Stock</th><th style="padding:2px 6px">Guías donde salió</th></tr>
+          ${neg.map(n=>`<tr style="border-top:1px solid #fecaca">
+            <td style="padding:3px 6px;font-weight:600">${escH(n.p.nombre)}</td>
+            <td style="padding:3px 6px;text-align:center">${n.ent}</td>
+            <td style="padding:3px 6px;text-align:center">${n.sal}</td>
+            <td style="padding:3px 6px;text-align:center;font-weight:700;color:#dc2626">${n.st}</td>
+            <td style="padding:3px 6px">${n.guias.map(g=>escH(g.numero)+' ('+escH(g.cliente||'?')+'): '+g.cant).join(' · ')||'—'}</td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+    av.innerHTML=htmlAv;
   }
+}
+
+// Productos cuyo stock quedó negativo (se registró más salida que entrada + inicial),
+// con las guías de retiro donde salió cada uno.
+function productosStockNegativo(){
+  return DB.productos.filter(p=>p.editorial!=='Hist.').map(p=>{
+    const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
+    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
+    const st=(p.stockInicial||0)+ent-sal;
+    if(st>=0)return null;
+    const gmap={};
+    DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').forEach(m=>{
+      const gu=DB.guias.find(g=>g.numero===m.ref);
+      const k=m.ref||'(sin guía)';
+      if(!gmap[k])gmap[k]={numero:k,cliente:m.cliente||gu?.cliente||'',cant:0};
+      gmap[k].cant+=m.cantidad;
+    });
+    return {p,ent,sal,st,guias:Object.values(gmap)};
+  }).filter(Boolean);
 }
 
 // Productos cuyo stockInicial>0 probablemente ya está contado también como entrada de factura
