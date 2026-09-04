@@ -4398,15 +4398,19 @@ function guardarGuia(){
     // o en cero, no se guarda nada — se avisa y se detiene el guardado.
     const raw=(el.querySelector('[id$="-precio"]')?.value||'').trim();
     const pv=parseFloat(raw);
-    if(raw===''||!isFinite(pv)||pv<=0){ faltaPrecio.push('• '+nombre); return; }
-    lineas.push({prodId:sel.value,nombre,cantidad:cant,precioVenta:pv});
+    const precioOk=raw!==''&&isFinite(pv)&&pv>0;
+    if(!precioOk)faltaPrecio.push('• '+nombre);
+    lineas.push({prodId:sel.value,nombre,cantidad:cant,precioVenta:precioOk?pv:0});
   });
   if(faltaPrecio.length){
-    toast('Falta el precio en '+faltaPrecio.length+' producto(s)','err');
-    alert('No se puede guardar: falta el precio unitario en:\n\n'+faltaPrecio.join('\n')+
-          '\n\nEscribe el precio de cada uno. Si este colegio ya tiene precios acordados, '+
-          'cárgalos en Colegios → Lista de precios y se llenarán solos la próxima vez.');
-    return;
+    // La guía de retiro es sobre todo un documento de ENTREGA. El precio puede
+    // ir aquí o registrarse en Colegios → Control de ventas. Se avisa, no se bloquea.
+    const todas=faltaPrecio.length===lineas.length;
+    if(!confirm(
+      (todas?'Esta guía va SIN precios.':`${faltaPrecio.length} libro(s) van sin precio:\n${faltaPrecio.join('\n')}\n`)+
+      '\n\nLa guía igual descuenta el stock y sirve para entregar los libros.\n'+
+      'El valor de la venta lo registras en Colegios → Control de ventas.\n\n'+
+      '¿Guardar la guía así?'))return;
   }
   if(stockWarn.length&&!confirm(`⚠️ Stock insuficiente en:\n${stockWarn.join('\n')}\n\n¿Registrar la guía de todas formas?`))return;
   if(!lineas.length)return toast('Agrega al menos un producto','err');
@@ -8429,22 +8433,29 @@ function compararLiquidacionConsolidado(anioFil,ventasLiquidacion){
   const div=document.getElementById('liq-comparacion');
   if(!div)return;
   const guias=DB.guias.filter(g=>!anioFil||g.fecha?.startsWith(anioFil));
-  const ventasConsolidado=guias.reduce((a,g)=>a+g.total,0);
+  const ventasConsolidado=guias.reduce((a,g)=>a+(g.total||0),0);
+  // ¿cuántas líneas de guía van sin precio? (workflow "guía solo para entregar")
+  let totLin=0,sinPrecio=0;
+  guias.forEach(g=>(g.lineas||[]).forEach(l=>{ totLin++; if(!(l.precioVenta>0))sinPrecio++; }));
+  const guiasSinPrecio=totLin>0&&sinPrecio/totLin>0.4;
   if(!ventasLiquidacion&&!ventasConsolidado){div.style.display='none';return;}
   const diff=Math.abs(ventasLiquidacion-ventasConsolidado);
   const base=Math.max(ventasLiquidacion,ventasConsolidado,1);
   const pct=(diff/base)*100;
-  if(diff<20||pct<5){
-    div.style.display='none';
+  if((diff<20||pct<5)&&!guiasSinPrecio){ div.style.display='none'; return; }
+  div.style.display='block';
+  if(guiasSinPrecio){
+    div.innerHTML=`<div style="background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:12px 16px;font-size:12px;color:#1565c0">
+      ℹ️ Muchas guías de retiro van <b>sin precio</b> (son solo para entregar los libros). Por eso el Consolidado sale más bajo. Tu venta y tu ganancia salen del <b>Control de ventas de cada colegio</b> — esto es normal, no es un error.
+    </div>`;
     return;
   }
-  div.style.display='block';
   div.innerHTML=`<div style="background:#fff3cd;border:1px solid #ffe08a;border-radius:8px;padding:12px 16px;font-size:12px;color:#7a5b00">
     <b>⚠️ Diferencia entre Liquidación y Consolidado</b><br>
-    Ventas según Liquidación (facturas de Ventas): <b>${fmt(ventasLiquidacion)}</b><br>
+    Ventas según Liquidación (Colegios / Ventas): <b>${fmt(ventasLiquidacion)}</b><br>
     Ventas según Consolidado (Guías de retiro): <b>${fmt(ventasConsolidado)}</b><br>
     Diferencia: <b>${fmt(diff)}</b> (${pct.toFixed(0)}%)<br>
-    <span style="font-size:11px">Esto suele pasar cuando registras una venta en un módulo (Ventas manual) pero no en el otro (Guías de retiro), o al revés. Revisa que ambos reflejen las mismas ventas del período.</span>
+    <span style="font-size:11px">Revisa que las ventas del período estén registradas en Colegios → Control de ventas.</span>
   </div>`;
 }
 
