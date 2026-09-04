@@ -256,7 +256,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div id="xml-queue"></div>
   <div style="background:var(--p2);border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--p1);display:flex;align-items:center;gap:8px">
     <i class="ti ti-sparkles"></i>
-    <span>La IA analiza el proveedor, RUC y montos para clasificar automáticamente. Puedes corregir antes de guardar. Si el proveedor es una editorial, también puedes registrar la entrada en Inventario.</span>
+    <span>La IA analiza el proveedor, RUC y montos para clasificar automáticamente. Puedes corregir antes de guardar. Con <b>"Guardar todas + inventario"</b> las facturas de <b>Textos escolares</b> se registran también en el inventario automáticamente (empareja los libros por nombre y crea los que falten).</span>
   </div>
 </div>
 
@@ -2138,7 +2138,10 @@ function renderQueue(){
   const progress=pendientes.filter(q=>q.ia).length;
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
     <div style="font-size:12px;font-weight:600">${pendientes.length} factura(s) para revisar</div>
-    <button class="btn btn-p btn-sm" onclick="saveAll()"><i class="ti ti-check"></i> Guardar todas</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-s btn-sm" onclick="saveAll()"><i class="ti ti-check"></i> Guardar todas</button>
+      <button class="btn btn-p btn-sm" onclick="saveAllConInventario()" title="Guarda las facturas y, las de Textos escolares, también las mete al inventario"><i class="ti ti-package"></i> Guardar todas + inventario</button>
+    </div>
   </div>`;
   if(progress<pendientes.length){
     const pct=(progress/pendientes.length*100).toFixed(0);
@@ -2228,19 +2231,19 @@ function saveQItem(idx){
 }
 
 function saveQItemYInventario(idx){
+  const q=xmlQueue[idx];
+  if(!q||q.saved)return;
   saveQItem(idx);
-  // Pre-cargar datos en formulario de entrada de inventario
-  const q=xmlQueue[idx]||xmlQueue.find((_,i)=>i===idx);
-  if(q&&q.data){
-    // Cambiar a tab inventario > entradas
-    document.querySelector('[onclick*="inv"]')?.click();
-    setTimeout(()=>{
-      document.querySelector('[onclick*="invTab(\'entradas\'"]')?.click();
-      document.getElementById('ent-prov').value=q.data.rs||'';
-      document.getElementById('ent-nfact').value=q.data.num||'';
-      document.getElementById('ent-fecha').value=q.data.fecha||today();
-      toast('Completa los productos recibidos en Entradas','info');
-    },200);
+  const r=crearEntradaDesdeFactura(q.data);
+  if(r.ok){
+    logHistorial('Entrada de inventario desde factura XML',`${q.data.rs} — ${q.data.num||'s/n'} — ${r.lineas} línea(s)`+(r.nuevos?` (${r.nuevos} nuevo(s))`:''));
+    save();
+    if(typeof renderCatalogo==='function')renderCatalogo();
+    if(typeof renderEntradas==='function')renderEntradas();
+    if(typeof renderStockReport==='function')renderStockReport();
+    toast(`Factura guardada + ${r.lineas} línea(s) al inventario`+(r.nuevos?` (${r.nuevos} producto(s) nuevo(s))`:''),'ok');
+  }else{
+    toast('Factura guardada. Inventario: '+r.msg,'info');
   }
 }
 
@@ -2248,6 +2251,35 @@ function saveAll(){
   const pendientes=xmlQueue.filter(q=>!q.saved&&q.ia);
   if(!pendientes.length){toast('Espera que la IA termine de clasificar','err');return}
   pendientes.forEach(q=>{const idx=xmlQueue.indexOf(q);saveQItem(idx);});
+}
+
+// Guarda todas las facturas de la cola Y, para las de editorial (Textos escolares),
+// crea también su entrada de inventario en un solo paso.
+function saveAllConInventario(){
+  const pendientes=xmlQueue.filter(q=>!q.saved&&q.ia);
+  if(!pendientes.length){toast('Espera que la IA termine de clasificar','err');return}
+  // capturar la categoría elegida ANTES de guardar (saveQItem re-renderiza la cola)
+  const planes=pendientes.map(q=>{
+    const idx=xmlQueue.indexOf(q);
+    const cat=document.getElementById('qc-'+idx)?.value||q.ia?.categoria||'';
+    return {q,idx,cat};
+  });
+  let tot=0,nue=0,noTexto=0,yaTenia=0;
+  planes.forEach(({q,idx,cat})=>{
+    saveQItem(idx);
+    if(cat!=='Textos escolares'){noTexto++;return;}
+    const r=crearEntradaDesdeFactura(q.data);
+    if(r.ok){tot+=r.lineas;nue+=r.nuevos;}
+    else if(r.yaExiste)yaTenia++;
+  });
+  save();
+  if(typeof renderCatalogo==='function')renderCatalogo();
+  if(typeof renderEntradas==='function')renderEntradas();
+  if(typeof renderStockReport==='function')renderStockReport();
+  toast(`${planes.length} factura(s) guardadas · ${tot} línea(s) al inventario`
+    +(nue?` (${nue} producto(s) nuevo(s))`:'')
+    +(noTexto?` · ${noTexto} no eran de textos`:'')
+    +(yaTenia?` · ${yaTenia} ya tenían entrada`:''),'ok');
 }
 function removeQ(idx){xmlQueue[idx].saved=true;renderQueue()}
 
@@ -3122,6 +3154,37 @@ function renderEntradas(){
     }
     return`<tr><td style="font-family:monospace">${g.fecha}</td><td>${g.ref||'—'}</td><td>${g.prov}</td><td style="max-width:200px;font-size:11px">${prods}</td><td>${totalUnd}</td><td style="font-family:monospace">${fmt(totalVal)}</td><td style="font-size:11px">${cel}</td><td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" onclick="verEntrada('${key}')"><i class="ti ti-eye"></i></button><button class="btn btn-b btn-sm" onclick="imprimirEntrada('${key}')" title="Imprimir Comprobante"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarEntrada('${key}')"><i class="ti ti-trash"></i></button></td></tr>`;
   }).join('');
+}
+
+// Crea la entrada de inventario a partir del detalle de una factura (XML o cola).
+// fd = {rs, num, fecha, detalles:[{desc,cant,pu}]}. Empareja cada línea con un
+// producto del catálogo; si no existe, lo crea (con su tipo de material adivinado).
+// No duplica: si la factura ya tiene entrada, no hace nada.
+function crearEntradaDesdeFactura(fd){
+  if(!fd||!Array.isArray(fd.detalles)||!fd.detalles.length)
+    return {ok:false,msg:'la factura no trae el detalle de productos'};
+  const dg=s=>String(s||'').replace(/\D/g,'');
+  if(fd.num&&DB.movInv.some(m=>m.tipo==='entrada'&&m.ref&&dg(m.ref)===dg(fd.num)))
+    return {ok:false,yaExiste:true,msg:'esta factura ya tenía entrada en inventario'};
+  let lineas=0,nuevos=0;
+  fd.detalles.forEach(det=>{
+    const desc=String(det.desc||'').replace(/\s*\*+\s*$/,'').trim();
+    const cant=parseInt(det.cant)||0;
+    const pu=parseFloat(det.pu)||0;
+    if(!desc||!cant)return;
+    let best=null,bs=0.7;
+    DB.productos.forEach(p=>{const sc=_pareceMismoLibro(p.nombre,p.editorial,desc);if(sc>bs){bs=sc;best=p;}});
+    if(!best){
+      best={id:uid(),nombre:desc,editorial:fd.rs||'',nivel:'',codigo:'',nota:'',
+            precioCosto:pu,precioVenta:0,stockInicial:0,
+            material:clasifMaterial({nombre:desc}),creadoEn:new Date().toISOString()};
+      DB.productos.push(best); nuevos++;
+    } else if(!(best.precioCosto>0)&&pu>0){ best.precioCosto=pu; }
+    DB.movInv.push({id:uid(),tipo:'entrada',prodId:best.id,cantidad:cant,precioCosto:pu,
+                    fecha:fd.fecha||today(),ref:fd.num||'',proveedor:fd.rs||''});
+    lineas++;
+  });
+  return {ok:true,lineas,nuevos};
 }
 
 // Facturas de editorial (con detalle de productos) que TODAVÍA no tienen su entrada de inventario
