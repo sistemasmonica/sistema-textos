@@ -4245,8 +4245,10 @@ function abrirModalGuia(){
   document.getElementById('modal-guia-titulo').textContent='Nueva guía de retiro';
   document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Registrar guía y descontar stock';
   guiaLineas=0;
-  const n=DB.guias.length+1;
-  document.getElementById('g-num').value='GR-'+String(n).padStart(3,'0');
+  // Siguiente número = el más alto usado + 1 (NO la cantidad de guías, que
+  // repetía números cuando alguno se saltaba o borraba)
+  const maxN=DB.guias.reduce((mx,g)=>{const m=String(g.numero||'').match(/(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},0);
+  document.getElementById('g-num').value='GR-'+String(maxN+1).padStart(3,'0');
   document.getElementById('g-fecha').value=today();
   document.getElementById('g-resumen').style.display='none';
   agregarLineaGuia();
@@ -4504,8 +4506,17 @@ function guardarGuia(){
   }
   if(stockWarn.length&&!confirm(`⚠️ Stock insuficiente en:\n${stockWarn.join('\n')}\n\n¿Registrar la guía de todas formas?`))return;
   if(!lineas.length)return toast('Agrega al menos un producto','err');
-  const numero=document.getElementById('g-num').value;
+  let numero=document.getElementById('g-num').value;
   const fecha=document.getElementById('g-fecha').value||today();
+
+  // Evitar número de guía repetido (solo al crear una nueva)
+  if(!editId&&DB.guias.some(g=>String(g.numero||'').trim()===String(numero).trim())){
+    const maxN=DB.guias.reduce((mx,g)=>{const m=String(g.numero||'').match(/(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},0);
+    const sug='GR-'+String(maxN+1).padStart(3,'0');
+    if(!confirm(`Ya existe una guía con el número ${numero}.\n\n¿Guardar esta con el número ${sug} (el siguiente libre)?`))return;
+    numero=sug;
+    document.getElementById('g-num').value=sug;
+  }
 
   if(editId){
     // MODO EDICIÓN
