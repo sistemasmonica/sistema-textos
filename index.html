@@ -1169,7 +1169,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="card">
     <div class="sh">
       <div class="card-t"><i class="ti ti-list"></i> Historial de pagos y cobros</div>
-      <button class="btn btn-s btn-sm" onclick="exportarPagosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-s btn-sm" onclick="exportarPagosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+        <button class="btn btn-p btn-sm" onclick="imprimirPagos()"><i class="ti ti-printer"></i> Imprimir</button>
+      </div>
     </div>
     <div class="filters">
       <select id="pg-tipo-fil" onchange="renderPagos()">
@@ -3906,6 +3909,67 @@ function exportarPagosCSV(){
     rows.push([p.fecha,p.tipo==='cobro'?'Cobro':'Pago',p.nombre,p.forma,p.valor,p.nota||'']);
   });
   dlCSV(rows,'pagos_cobros_'+today()+'.csv');
+}
+
+// Imprime el historial de pagos/cobros con el filtro que esté puesto en pantalla
+// (útil para filtrar por nombre de colegio/librería y llevarlo impreso) y, al
+// final, las fotos de los comprobantes de esa lista para cuadrar cuentas.
+function imprimirPagos(){
+  const tipoFil=document.getElementById('pg-tipo-fil')?.value||'';
+  const formaFil=document.getElementById('pg-forma-fil')?.value||'';
+  const q=(document.getElementById('pg-q')?.value||'').trim();
+  const lista=[...(DB.pagos||[])].filter(p=>{
+    if(tipoFil&&p.tipo!==tipoFil)return false;
+    if(formaFil&&p.forma!==formaFil)return false;
+    if(q&&!p.nombre.toLowerCase().includes(q.toLowerCase()))return false;
+    return true;
+  }).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!lista.length)return toast('No hay pagos para imprimir con este filtro','err');
+
+  const cobrado=lista.filter(p=>p.tipo==='cobro').reduce((a,p)=>a+p.valor,0);
+  const pagado=lista.filter(p=>p.tipo==='pago').reduce((a,p)=>a+p.valor,0);
+  const filas=lista.map(p=>`<tr>
+    <td>${escH(p.fecha)}</td>
+    <td>${p.tipo==='cobro'?'Cobro':'Pago'}</td>
+    <td>${escH(p.nombre)}</td>
+    <td>${escH(p.forma)}</td>
+    <td style="text-align:right">$${p.valor.toFixed(2)}</td>
+    <td>${escH(p.nota||'')}</td>
+    <td style="text-align:center">${p.comprobante?'✔':'—'}</td>
+  </tr>`).join('');
+  // solo se pueden incrustar imágenes (los PDF se avisan aparte, no se pueden pegar en la hoja)
+  const comprobImg=lista.filter(p=>p.comprobante&&!p.comprobante.startsWith('data:application/pdf'));
+  const comprobPdf=lista.filter(p=>p.comprobante&&p.comprobante.startsWith('data:application/pdf'));
+
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Pagos y cobros</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;padding:15px;color:#222}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th{background:#1565c0;color:#fff;padding:6px;text-align:left;font-size:11px}
+    td{padding:5px 6px;border-bottom:1px solid #eee}
+    tr:nth-child(even){background:#f8f9fa}
+    .tot{background:#e3f2fd;font-weight:bold}
+    .comp-card{page-break-inside:avoid;margin-bottom:16px;border:1px solid #ddd;border-radius:8px;padding:10px}
+    .comp-card img{max-width:100%;max-height:520px;display:block;margin-top:6px;border:1px solid #ccc}
+    h3{margin-top:26px;border-top:2px solid #1565c0;padding-top:10px;font-size:13px}
+    ${dmPrintCSS()}
+  </style></head><body>
+  ${dmPrintHeader('Pagos y cobros', q?('Filtro: "'+q+'"'):'Todos los registros')}
+  <table>
+    <tr><th>Fecha</th><th>Tipo</th><th>Nombre</th><th>Forma</th><th>Valor</th><th>Nota</th><th>Foto</th></tr>
+    ${filas}
+    <tr class="tot"><td colspan="4" style="text-align:right">Total cobrado</td><td style="text-align:right">$${cobrado.toFixed(2)}</td><td colspan="2"></td></tr>
+    <tr class="tot"><td colspan="4" style="text-align:right">Total pagado</td><td style="text-align:right">$${pagado.toFixed(2)}</td><td colspan="2"></td></tr>
+    <tr class="tot" style="background:#c8e6c9"><td colspan="4" style="text-align:right">NETO</td><td style="text-align:right">$${(cobrado-pagado).toFixed(2)}</td><td colspan="2"></td></tr>
+  </table>
+  ${comprobImg.length?`<h3>📎 Comprobantes (${comprobImg.length})</h3>
+    ${comprobImg.map(p=>`<div class="comp-card"><b>${escH(p.fecha)} — ${escH(p.nombre)} — $${p.valor.toFixed(2)} (${escH(p.forma)})</b><img src="${p.comprobante}"></div>`).join('')}`:''}
+  ${comprobPdf.length?`<div style="margin-top:14px;font-size:11px;color:#888">Nota: ${comprobPdf.length} comprobante(s) son PDF y no se pueden pegar en esta hoja — ábrelos con el botón "Ver" del historial.</div>`:''}
+  ${dmPrintFooter()}
+  </body></html>`);
+  win.document.close();
+  win.onload=()=>win.print();
 }
 
 function renderPorCobrar(){
