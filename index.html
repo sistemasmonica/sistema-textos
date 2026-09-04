@@ -1429,7 +1429,20 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <span>Producto</span><span>Cantidad</span><span>Precio unit. $</span><span></span>
       </div>
       <div id="g-lineas"></div>
-      <button class="btn btn-s btn-sm" onclick="agregarLineaGuia()"><i class="ti ti-plus"></i> Agregar producto</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-s btn-sm" onclick="agregarLineaGuia()"><i class="ti ti-plus"></i> Agregar producto</button>
+        <button class="btn btn-p btn-sm" onclick="abrirPegarPedido()"><i class="ti ti-clipboard-list"></i> Pegar pedido de Excel</button>
+      </div>
+      <div id="g-pegar-box" style="display:none;margin-top:8px;background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:10px 12px">
+        <div style="font-size:12px;font-weight:700;color:#1565c0;margin-bottom:4px">📋 Pega aquí el pedido (copiado del Excel)</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Selecciona en Excel las filas de <b>libro y cantidad</b> (con Ctrl+C) y pégalas abajo. El sistema empareja cada libro con tu catálogo.</div>
+        <textarea id="g-pegar-txt" rows="6" style="width:100%;font-family:monospace;font-size:12px;padding:6px;border:1px solid var(--bd);border-radius:6px" placeholder="LENGUA Y LITERATURA EGB 2&#9;15&#10;MATEMATICA EGB 2&#9;15&#10;..."></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-p btn-sm" onclick="procesarPedidoPegado()"><i class="ti ti-wand"></i> Cargar al pedido</button>
+          <button class="btn btn-s btn-sm" onclick="document.getElementById('g-pegar-box').style.display='none'">Cerrar</button>
+        </div>
+        <div id="g-pegar-result" style="font-size:11px;margin-top:6px"></div>
+      </div>
     </div>
     <div class="fg"><label>Observación</label><input type="text" id="g-obs" placeholder="Notas adicionales..."></div>
     <input type="hidden" id="g-edit-id" value="">
@@ -4128,6 +4141,9 @@ function abrirModalGuia(){
   document.getElementById('g-fact').value='';
   document.getElementById('g-edit-id').value='';
   document.getElementById('g-col-aviso').innerHTML='';
+  const pb=document.getElementById('g-pegar-box'); if(pb)pb.style.display='none';
+  const pt=document.getElementById('g-pegar-txt'); if(pt)pt.value='';
+  const pr=document.getElementById('g-pegar-result'); if(pr)pr.innerHTML='';
   document.getElementById('modal-guia-titulo').textContent='Nueva guía de retiro';
   document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Registrar guía y descontar stock';
   guiaLineas=0;
@@ -4160,6 +4176,71 @@ function agregarLineaGuia(){
     </div>
     <button class="btn btn-d btn-sm" onclick="document.getElementById('${id}').remove();actualizarResumenGuia()"><i class="ti ti-x"></i></button>`;
   document.getElementById('g-lineas').appendChild(div);
+}
+
+function abrirPegarPedido(){
+  const box=document.getElementById('g-pegar-box');
+  if(!box)return;
+  box.style.display=box.style.display==='none'?'block':'none';
+  if(box.style.display==='block')document.getElementById('g-pegar-txt').focus();
+}
+
+// Parte una línea pegada de Excel en {nombre, cant, precio}
+function _parsePedidoLinea(line){
+  let parts=line.split('\t');
+  if(parts.length<2)parts=line.split(/\s{2,}/);
+  parts=parts.map(s=>s.trim()).filter(Boolean);
+  if(!parts.length)return null;
+  let cantIdx=-1,cant=0;
+  for(let i=parts.length-1;i>=0;i--){ if(/^\d{1,5}$/.test(parts[i])){ cant=parseInt(parts[i]); cantIdx=i; break; } }
+  let precio=0;
+  parts.forEach((p,i)=>{ if(i!==cantIdx&&/^\$?\s*\d+[.,]\d{1,2}$/.test(p))precio=parseFloat(p.replace(/[$\s]/g,'').replace(',','.')); });
+  let nombre=parts.filter((p,i)=>i!==cantIdx&&!/^\$?\s*\d+([.,]\d+)?$/.test(p)).join(' ').trim();
+  if(!nombre){ const otros=parts.filter((p,i)=>i!==cantIdx).sort((a,b)=>b.length-a.length); nombre=otros[0]||''; }
+  if(!nombre||!cant)return null;
+  return {nombre,cant,precio};
+}
+
+// Busca en el catálogo el producto que corresponde a un nombre del pedido
+function _matchProductoPedido(nombre){
+  const n=nombre.trim().toLowerCase();
+  const act=DB.productos.filter(p=>p.editorial!=='Hist.');
+  let p=act.find(x=>(x.nombre||'').trim().toLowerCase()===n);
+  if(p)return p;
+  p=act.find(x=>{const xn=(x.nombre||'').toLowerCase(); return xn&&(xn.includes(n)||n.includes(xn));});
+  if(p)return p;
+  let best=null,bs=0.6;
+  act.forEach(x=>{const sc=_pareceMismoLibro(x.nombre,x.editorial,nombre); if(sc>bs){bs=sc;best=x;}});
+  return best;
+}
+
+function procesarPedidoPegado(){
+  const txt=document.getElementById('g-pegar-txt').value||'';
+  const lines=txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length)return toast('Pega el pedido primero','err');
+  let ok=0; const noEnc=[];
+  lines.forEach(line=>{
+    const parsed=_parsePedidoLinea(line);
+    if(!parsed)return;                          // encabezado o línea sin cantidad
+    const prod=_matchProductoPedido(parsed.nombre);
+    if(!prod){ noEnc.push(parsed.nombre+' (x'+parsed.cant+')'); return; }
+    agregarLineaGuia();
+    const row=document.getElementById('g-lineas').lastElementChild;
+    const sel=row.querySelector('select');
+    sel.value=prod.id;
+    onProductoGuiaChange(sel);                  // trae el precio acordado del colegio si existe
+    const cantEl=row.querySelector('[id$="-cant"]'); if(cantEl)cantEl.value=parsed.cant;
+    if(parsed.precio>0){                        // si el Excel traía precio, ese manda
+      const pi=row.querySelector('[id$="-precio"]'); if(pi)pi.value=parsed.precio.toFixed(2);
+    }
+    ok++;
+  });
+  actualizarResumenGuia();
+  const rEl=document.getElementById('g-pegar-result');
+  if(rEl)rEl.innerHTML=`<b style="color:var(--g1)">✔ ${ok} libro(s) cargados al pedido.</b>`
+    +(noEnc.length?`<div style="color:#c62828;margin-top:4px"><b>${noEnc.length} NO se encontraron en el catálogo:</b><br>${noEnc.map(escH).join('<br>')}<br><span style="color:var(--mu)">Agrégalos a mano con “Agregar producto”, o revisa que el nombre coincida con el del catálogo.</span></div>`:'');
+  if(ok)document.getElementById('g-pegar-txt').value='';
+  toast(ok+' libro(s) cargados'+(noEnc.length?', '+noEnc.length+' no encontrados':''), noEnc.length?'err':'ok');
 }
 
 // Al elegir producto: trae el precio acordado del colegio.
