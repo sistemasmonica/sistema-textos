@@ -201,7 +201,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Compras negocio</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Gastos personales</div><div class="sc-val ca" id="sp">$0.00</div><div class="sc-sub" id="spn">0 registros</div></div>
-    <div class="sc" style="cursor:pointer;border:2px solid var(--g1);background:var(--g4)" onclick="irATab('liquidacion')" title="Ver en Liquidación"><div class="sc-lbl" style="font-weight:700">🏆 Utilidad estimada</div><div class="sc-val" id="su" style="font-size:26px">$0.00</div><div class="sc-sub">ventas − compras</div></div>
+    <div class="sc" style="cursor:pointer;border:2px solid var(--g1);background:var(--g4)" onclick="irATab('liquidacion')" title="Ver en Liquidación"><div class="sc-lbl" style="font-weight:700">🏆 Utilidad estimada</div><div class="sc-val" id="su" style="font-size:26px">$0.00</div><div class="sc-sub">ganancia real de lo vendido</div></div>
   </div>
   <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="sc" style="cursor:pointer" onclick="irAInvTab('catalogo')" title="Ver en Inventario"><div class="sc-lbl">Productos en inventario</div><div class="sc-val cp" id="d-nprod">0</div><div class="sc-sub">artículos distintos</div></div>
@@ -5091,15 +5091,17 @@ function renderDash(){
   const rv=DB.regs.filter(r=>r.tipo==='venta');
   const rn=DB.regs.filter(r=>r.tipo==='negocio');
   const rp=DB.regs.filter(r=>r.tipo==='personal');
-  const sv=rv.reduce((a,r)=>a+r.total,0);
+  const g=resumenGanancia();               // ventas + costo salen de Colegios (colData)
+  const sv=g.ventas;                        // ventas totales (colegios + regs)
   const sn=rn.reduce((a,r)=>a+r.total,0);
   const sp=rp.reduce((a,r)=>a+r.total,0);
-  const u=sv-sn;
+  const u=g.neta;                           // utilidad real, misma que la tarjeta de arriba
   document.getElementById('sv').textContent=fmt(sv);
   document.getElementById('sn').textContent=fmt(sn);
   document.getElementById('sp').textContent=fmt(sp);
   const su=document.getElementById('su');su.textContent=fmt(u);su.className='sc-val '+(u>=0?'cg':'cr');
-  document.getElementById('svn').textContent=rv.length+' ventas';
+  const nCol=Object.keys(DB.colData||{}).length;
+  document.getElementById('svn').textContent=rv.length?(rv.length+' ventas'):(nCol+' colegio(s)');
   document.getElementById('snn').textContent=rn.length+' facturas';
   document.getElementById('spn').textContent=rp.length+' registros';
   // inventario stats (solo productos actuales, sin Hist.)
@@ -5140,13 +5142,13 @@ function renderResumenGanancia(){
       <div style="font-size:10px;color:#64748b">Todo lo cargado en el sistema · clic para ver el detalle →</div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-      ${paso('Ventas',g.ventas,'','#0369a1','Todo lo que has facturado a los colegios')}
+      ${paso('Ventas',g.ventas,'','#0369a1','Total vendido a los colegios (suma de todos, pestaña Colegios)')}
       ${op('−')}
-      ${paso('Costo libros',g.costoNeto,'','#b45309',`Compras a editorial ${fmt(g.costoLibros)} menos notas de crédito ${fmt(g.notasCred)}`)}
+      ${paso('Costo libros',g.costoNeto,'','#b45309',`Costo de los libros que YA vendiste a los colegios (no de todo el inventario). Lo que le debes a la editorial por todo lo comprado se muestra abajo aparte.`)}
       ${op('−')}
-      ${paso('Comisiones',g.comisiones,'','#b45309','Comisiones y capacitación')}
+      ${paso('Comisión colegios',g.comisiones,'','#b45309',`Comisión que les pagas a los colegios (${fmt(g.comisionCol)}) + capacitación/otras comisiones`)}
       ${op('−')}
-      ${paso('Otros gastos',g.otrosGastos,'','#b45309','Gastos del negocio que no son textos escolares')}
+      ${paso('Otros gastos',g.otrosGastos,'','#b45309','Gastos del negocio que no son compra de textos (flete, servicios, etc.)')}
       ${op('=')}
       <div style="text-align:center;min-width:150px;background:#fff;border:2px solid ${buena?'#16a34a':'#dc2626'};border-radius:9px;padding:6px 14px">
         <div style="font-size:10px;color:${buena?'#15803d':'#b91c1c'};text-transform:uppercase;letter-spacing:.5px;font-weight:800">🏆 Tu ganancia</div>
@@ -5162,14 +5164,14 @@ function renderResumenGanancia(){
                     :`<div style="font-size:10px;color:#64748b;margin-top:2px">${g.ed.nPend} factura(s) pendiente(s), ninguna vencida</div>`}
       </div>
       <div style="flex:1;min-width:200px;background:#fff;border:1px solid #bbf7d0;border-radius:7px;padding:7px 11px">
-        <span style="color:#166534">🔺 <b>Te deben los colegios:</b></span>
-        <b style="font-family:monospace;font-size:14px;color:#15803d"> ${fmt(g.porCobrar)}</b>
-        <div style="font-size:10px;color:#64748b;margin-top:2px">ventas facturadas todavía sin cobrar</div>
+        <span style="color:#166534">🔺 <b>Vendido a colegios:</b></span>
+        <b style="font-family:monospace;font-size:14px;color:#15803d"> ${fmt(g.ventasCol)}</b>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">total facturado (el sistema no registra los cobros de los colegios)</div>
       </div>
       <div style="flex:1;min-width:200px;background:#fff;border:1px solid #cbd5e1;border-radius:7px;padding:7px 11px">
-        <span style="color:#334155">⚖️ <b>Diferencia a tu favor:</b></span>
-        <b style="font-family:monospace;font-size:14px;color:${g.porCobrar-g.debesEditorial>=0?'#15803d':'#b91c1c'}"> ${fmt(g.porCobrar-g.debesEditorial)}</b>
-        <div style="font-size:10px;color:#64748b;margin-top:2px">lo que te deben menos lo que debes</div>
+        <span style="color:#334155">📦 <b>Inventario sin vender:</b></span>
+        <b style="font-family:monospace;font-size:14px;color:#334155"> ${fmt(Math.max(0,(g.costoLibros-g.notasCred)-g.costoVendido))}</b>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">libros comprados a la editorial que todavía no vendes</div>
       </div>
     </div>
   </div>`;
@@ -7732,23 +7734,32 @@ function resumenEditorial(){
 
 // Resumen corto de "¿cuánto estoy ganando?" — sin filtros ni fechas, todo lo cargado.
 function resumenGanancia(){
-  const ventas=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+(r.total||0),0);
-  const costoLibros=DB.regs.filter(esCompraEditorial).reduce((a,r)=>a+(r.total||0),0);
+  // Las ventas reales de Mónica se registran POR COLEGIO (en colData), no como
+  // DB.regs tipo 'venta'. Este resumen suma todos los colegios — mismo criterio
+  // que la tarjeta de Colegios → Resumen general, para que los dos números cuadren.
+  let ventasCol=0, costoVendido=0, comisionCol=0;
+  Object.keys(DB.colData||{}).forEach(nom=>{
+    const T=totalesColegio(DB.colData[nom]);
+    ventasCol+=T.tv; costoVendido+=T.costo; comisionCol+=T.totalColegio;
+  });
+  const ventasRegs=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+(r.total||0),0);
+  const ventas=ventasCol+ventasRegs;
+
+  const costoLibros=DB.regs.filter(esCompraEditorial).reduce((a,r)=>a+(r.total||0),0); // todo lo facturado por la editorial
   const notasCred=(DB.notasCredito||[]).reduce((a,n)=>a+(parseFloat(n.total)||0),0);
-  // Misma fórmula que la pestaña Liquidación, para que los dos números coincidan
-  const costoNeto=Math.max(0,costoLibros-notasCred);  // lo que de verdad te costó la mercadería
+  const costoNeto=Math.max(0,costoVendido); // costo de lo que YA se vendió (no de todo el inventario)
+
   const otrosGastos=DB.regs.filter(r=>r.tipo==='negocio'&&!esCompraEditorial(r))
                            .reduce((a,r)=>a+(r.total||0),0);
-  const comisiones=(DB.comisiones||[]).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+  const comisiones=comisionCol+(DB.comisiones||[]).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+
   const bruta=ventas-costoNeto;
   const neta=bruta-otrosGastos-comisiones;
   const margen=ventas>0?(neta/ventas*100):0;
-  // Cuánto de esa ganancia ya está cobrada de verdad
-  const porCobrar=DB.regs.filter(r=>r.tipo==='venta')
-                         .reduce((a,r)=>a+(typeof saldoPendiente==='function'?(saldoPendiente(r)||0):0),0);
+
   const ed=resumenEditorial();
-  return {ventas,costoLibros,notasCred,costoNeto,otrosGastos,comisiones,bruta,neta,margen,
-          porCobrar,debesEditorial:ed.deudaReal,ed};
+  return {ventas,ventasCol,costoLibros,notasCred,costoNeto,costoVendido,otrosGastos,comisiones,comisionCol,
+          bruta,neta,margen,porCobrar:ventas,debesEditorial:ed.deudaReal,ed};
 }
 
 function renderDeudaEditorial(){
@@ -8146,13 +8157,20 @@ function renderLiquidacion(){
   ].filter(Boolean))].sort().reverse();
   if(anioEl)anioEl.innerHTML='<option value="">Todos los años</option>'+anios.map(a=>`<option value="${a}"${a===anioFil?' selected':''}>${a}</option>`).join('');
   const f=arr=>anioFil?arr.filter(x=>x.fecha?.startsWith(anioFil)):arr;
-  // NCs no se filtran por año: una NC del año siguiente reduce la compra del año anterior
-  const ventas=f(DB.regs).filter(r=>r.tipo==='venta').reduce((a,r)=>a+r.total,0);
+  // Ventas y costo de lo vendido salen de Colegios (colData) — ahí registra Mónica.
+  // colData no tiene fecha por línea, así que el filtro de año no aplica a esta parte.
+  let ventasCol=0, costoVendidoCol=0, comisionCol=0;
+  Object.keys(DB.colData||{}).forEach(nom=>{
+    const T=totalesColegio(DB.colData[nom]);
+    ventasCol+=T.tv; costoVendidoCol+=T.costo; comisionCol+=T.totalColegio;
+  });
+  const ventasRegs=f(DB.regs).filter(r=>r.tipo==='venta').reduce((a,r)=>a+r.total,0);
+  const ventas=ventasCol+ventasRegs;
   compararLiquidacionConsolidado(anioFil,ventas);
   const comprasEdit=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').reduce((a,r)=>a+r.total,0);
   const totalNC=DB.notasCredito.reduce((a,n)=>a+n.total,0);
-  const costoNeto=Math.max(0,comprasEdit-totalNC);
-  const comisiones=f(DB.comisiones).reduce((a,c)=>a+c.monto,0);
+  const costoNeto=Math.max(0,costoVendidoCol);   // costo de lo YA vendido
+  const comisiones=comisionCol+f(DB.comisiones).reduce((a,c)=>a+c.monto,0);
   const otrosGastos=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria!=='Textos escolares').reduce((a,r)=>a+r.total,0);
   const utilidad=ventas-costoNeto-comisiones-otrosGastos;
   document.getElementById('liq-ventas').textContent=fmt(ventas);
@@ -8161,13 +8179,12 @@ function renderLiquidacion(){
   const uEl=document.getElementById('liq-utilidad');
   uEl.textContent=fmt(utilidad);uEl.className='sc-val '+(utilidad>=0?'cg':'cr');
   document.getElementById('liq-detalle').innerHTML=`
-    <div class="pf"><span>Total ventas</span><span class="cg">${fmt(ventas)}</span></div>
-    <div class="pf"><span>Compras editorial</span><span class="cr">− ${fmt(comprasEdit)}</span></div>
-    <div class="pf"><span>Notas de crédito (devoluciones)</span><span class="cg">+ ${fmt(totalNC)}</span></div>
-    <div class="pf" style="border-top:2px solid var(--bd);font-weight:700"><span>Costo editorial neto</span><span class="cr">− ${fmt(costoNeto)}</span></div>
-    <div class="pf"><span>Comisiones / capacitación</span><span class="cr">− ${fmt(comisiones)}</span></div>
+    <div class="pf"><span>Total vendido a colegios${ventasRegs?' (+ ventas manuales '+fmt(ventasRegs)+')':''}</span><span class="cg">${fmt(ventas)}</span></div>
+    <div class="pf" style="border-top:2px solid var(--bd);font-weight:700"><span>Costo de esos libros (lo ya vendido)</span><span class="cr">− ${fmt(costoNeto)}</span></div>
+    <div class="pf"><span>Comisión a colegios + capacitación</span><span class="cr">− ${fmt(comisiones)}</span></div>
     <div class="pf"><span>Otros gastos negocio</span><span class="cr">− ${fmt(otrosGastos)}</span></div>
-    <div class="pf" style="border-top:2px solid var(--bd);font-weight:700;font-size:14px;padding:10px 0"><span>UTILIDAD ESTIMADA</span><span class="${utilidad>=0?'cg':'cr'}">${fmt(utilidad)}</span></div>`;
+    <div class="pf" style="border-top:2px solid var(--bd);font-weight:700;font-size:14px;padding:10px 0"><span>UTILIDAD ESTIMADA</span><span class="${utilidad>=0?'cg':'cr'}">${fmt(utilidad)}</span></div>
+    <div class="pf" style="font-size:11px;color:var(--mu);padding-top:8px"><span>Le debes a la editorial por todo lo comprado (facturas ${fmt(comprasEdit)} − NC ${fmt(totalNC)})</span><span>${fmt(Math.max(0,comprasEdit-totalNC))}</span></div>`;
   // Por editorial — claves normalizadas para evitar duplicados por mayúsculas/espacios
   const normK=s=>(s||'').trim().toLowerCase();
   const porEditMap={};
