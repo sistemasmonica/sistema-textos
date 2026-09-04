@@ -6659,6 +6659,17 @@ function renderControl(){
       <button class="btn btn-s btn-sm" onclick="traerCostosDeCatalogo('${nombre}')"><i class="ti ti-download"></i> Traer los costos del Catálogo</button>
       <span style="font-size:11px;color:#1565c0">El PVP se lo pones tú (es lo que te paga ESTE colegio). El <b>costo</b> lo que te cobra la editorial es el mismo para todos — este botón lo copia del Catálogo emparejando por título.</span>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#fff7ed;border:1px dashed #fdba74;border-radius:6px;padding:8px 10px">
+      <span style="font-size:11px;font-weight:700;color:#9a3412">📦 Traer de una guía de retiro de este colegio:</span>
+      <select id="ctrl-traer-guia-sel" style="max-width:280px;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:4px">
+        <option value="">— elige una guía —</option>
+        ${DB.guias.filter(g=>(g.cliente||'').trim().toLowerCase()===nombre.trim().toLowerCase())
+          .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
+          .map(g=>`<option value="${g.id}">${(d.guiasTraidas||[]).includes(g.id)?'✔ ':''}${escH(g.numero)} · ${escH(g.fecha||'')} · ${(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0)} libro(s)${(d.guiasTraidas||[]).includes(g.id)?' (ya traída)':''}</option>`).join('')}
+      </select>
+      <button class="btn btn-o btn-sm" onclick="traerGuiaAControl('${nombre}')"><i class="ti ti-truck-delivery"></i> Traer</button>
+      <span style="font-size:11px;color:#9a3412">Suma las cantidades de esa guía a los títulos que ya tienes (o los crea si son nuevos). No repitas la misma guía dos veces.</span>
+    </div>
 
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid #e6c800;border-radius:6px;padding:7px 10px">
       <span style="font-size:11px;font-weight:700;color:#8a7500">COMISIÓN POR MATERIA:</span>
@@ -6849,6 +6860,40 @@ function agregarLineaDesdeInv(nombre,sel){
   sincronizarFinDesdeLinea(d,titulo,p.precioVenta);
   save();renderControl();
   toast(p.nombre+' agregado al control','ok');
+}
+
+// Trae al Control de ventas las líneas de una guía de retiro ya hecha para
+// este colegio: suma la cantidad al título si ya existe, o crea la fila si es
+// nueva. Recuerda qué guías ya se trajeron para no sumarlas dos veces.
+function traerGuiaAControl(nombre){
+  const sel=document.getElementById('ctrl-traer-guia-sel');
+  const guiaId=sel?.value;
+  if(!guiaId)return toast('Elige una guía de la lista','err');
+  const g=DB.guias.find(x=>x.id===guiaId);
+  if(!g)return toast('Guía no encontrada','err');
+  initColData();
+  const d=DB.colData[nombre];if(!d)return;
+  d.guiasTraidas=d.guiasTraidas||[];
+  if(d.guiasTraidas.includes(guiaId)&&!confirm(`La guía ${g.numero} ya se trajo antes a este control.\n\n¿Traerla otra vez? (sumaría las cantidades de nuevo)`))return;
+  let nuevas=0,sumadas=0;
+  (g.lineas||[]).forEach(l=>{
+    if(!l.prodId||!l.cantidad)return;
+    const prod=DB.productos.find(p=>p.id===l.prodId);
+    const ln=d.lineas.find(x=>x.prodId===l.prodId);
+    if(ln){ ln.cant=(ln.cant||0)+l.cantidad; sumadas++; }
+    else{
+      const titulo=(prod?.nombre||l.nombre||'(producto borrado)')+(prod?.editorial?' ('+prod.editorial+')':'');
+      d.lineas.push({libro:titulo,cant:l.cantidad,
+        pvp:l.precioVenta>0?l.precioVenta:(parseFloat(prod?.precioVenta)||0),
+        dev:0,costo:parseFloat(prod?.precioCosto)||0,prodId:l.prodId});
+      sincronizarFinDesdeLinea(d,titulo,l.precioVenta||prod?.precioVenta);
+      nuevas++;
+    }
+  });
+  d.guiasTraidas.push(guiaId);
+  logHistorial('Guía traída al Control de ventas',`${nombre} — ${g.numero} — ${nuevas} nuevo(s), ${sumadas} sumado(s)`);
+  save();renderControl();
+  toast(`Guía ${g.numero} traída: ${nuevas} título(s) nuevo(s), ${sumadas} sumado(s) a lo que ya había`,'ok');
 }
 
 // Copia el precio de COSTO (lo que cobra la editorial) del Catálogo a cada línea
