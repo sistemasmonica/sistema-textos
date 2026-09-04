@@ -615,10 +615,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">Valor inventario (costo)</div><div class="sc-val cg" id="rep-valcosto">$0.00</div></div>
       <div class="sc"><div class="sc-lbl">Valor inventario (venta)</div><div class="sc-val cb" id="rep-valventa">$0.00</div></div>
     </div>
+    <div id="rep-split" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px"></div>
     <div id="rep-aviso-dup"></div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Código</th><th>Producto</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th><th></th></tr></thead>
+        <thead><tr><th>Código</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th><th></th></tr></thead>
         <tbody id="tb-rep-stock"></tbody>
       </table>
     </div>
@@ -1381,6 +1382,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="f2">
       <div class="fg"><label>Precio compra $</label><input type="number" id="p-pcosto" placeholder="0.00" step="0.01"></div>
       <div class="fg"><label>Precio venta $</label><input type="number" id="p-pventa" placeholder="0.00" step="0.01"></div>
+    </div>
+    <div class="fg"><label>Tipo de material</label>
+      <select id="p-material">
+        <option value="venta">📗 Para venta</option>
+        <option value="solucionario">📘 Solucionario (va de vuelta a la editorial)</option>
+        <option value="muestra">📙 Muestra del profesor (va de vuelta a la editorial)</option>
+      </select>
     </div>
     <div class="fg"><label>Notas</label><input type="text" id="p-nota" placeholder="Observaciones..."></div>
     <div class="btn-row">
@@ -2865,6 +2873,7 @@ function exportConcilCSV(){
 function abrirModalProducto(editId=null){
   ['p-cod','p-edit','p-nom','p-nivel','p-nota'].forEach(id=>document.getElementById(id).value='');
   ['p-stock','p-pcosto','p-pventa'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p-material').value='venta';
   document.getElementById('p-editid').value='';
   document.getElementById('modal-prod-titulo').textContent='Nuevo producto';
   if(editId){
@@ -2877,6 +2886,7 @@ function abrirModalProducto(editId=null){
       document.getElementById('p-stock').value=prod.stockInicial||0;
       document.getElementById('p-pcosto').value=prod.precioCosto||0;
       document.getElementById('p-pventa').value=prod.precioVenta||0;
+      document.getElementById('p-material').value=clasifMaterial(prod);
       document.getElementById('p-nota').value=prod.nota||'';
       document.getElementById('p-editid').value=editId;
       document.getElementById('modal-prod-titulo').textContent='Editar producto';
@@ -2889,6 +2899,7 @@ function guardarProducto(){
   const nom=document.getElementById('p-nom').value.trim();
   if(!nom)return toast('Ingresa el nombre del producto','err');
   const editId=document.getElementById('p-editid').value;
+  const previo=editId?DB.productos.find(p=>p.id===editId):null;
   const prod={
     id:editId||uid(),
     codigo:document.getElementById('p-cod').value.trim(),
@@ -2898,8 +2909,9 @@ function guardarProducto(){
     stockInicial:parseFloat(document.getElementById('p-stock').value)||0,
     precioCosto:parseFloat(document.getElementById('p-pcosto').value)||0,
     precioVenta:parseFloat(document.getElementById('p-pventa').value)||0,
+    material:document.getElementById('p-material').value||'venta',
     nota:document.getElementById('p-nota').value.trim(),
-    creadoEn:new Date().toISOString()
+    creadoEn:previo?.creadoEn||new Date().toISOString()
   };
   if(editId){
     const idx=DB.productos.findIndex(p=>p.id===editId);
@@ -2919,6 +2931,18 @@ function eliminarProducto(id){
   if(p)logHistorial('Producto eliminado',p.nombre);
   save();renderCatalogo();updateCount();toast('Producto eliminado','ok');
 }
+
+// Clasifica un producto: 'venta' (se vende), 'solucionario' o 'muestra' (van de vuelta
+// a la editorial, no cuentan como inventario vendible). Usa p.material si Mónica lo
+// fijó a mano; si no, lo adivina por el nombre.
+function clasifMaterial(p){
+  if(p&&p.material&&['venta','solucionario','muestra'].includes(p.material))return p.material;
+  const n=((p&&p.nombre)||'').toUpperCase();
+  if(/\bSOLUCIONARIO\b/.test(n))return 'solucionario';
+  if(/\bMUESTRA\b|ORTOGRAF[IÍ]A\s+NE\b|\bNE\s+\d|^GU[IÍ]A\s/.test(n))return 'muestra';
+  return 'venta';
+}
+function esNoVendible(p){return clasifMaterial(p)!=='venta';}
 
 function stockActual(prodId){
   const prod=DB.productos.find(p=>p.id===prodId);
@@ -4592,23 +4616,61 @@ function imprimirRespaldos(){
 }
 
 function renderStockReport(){
-  let totalCosto=0;let totalVenta=0;let totalSalidas=0;let totalStock=0;
   const tb=document.getElementById('tb-rep-stock');
-  if(!DB.productos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin productos en inventario</div></td></tr>';return}
+  if(!DB.productos.length){tb.innerHTML='<tr><td colspan="11"><div class="empty">Sin productos en inventario</div></td></tr>';return}
   const prodsConEntradas=DB.productos.filter(p=>p.editorial!=='Hist.');
-  const rows=prodsConEntradas.map(p=>{
+  const TIPO={venta:{lbl:'📗 Venta',bg:'#dcfce7',fg:'#166534'},
+              solucionario:{lbl:'📘 Solucionario',bg:'#dbeafe',fg:'#1e40af'},
+              muestra:{lbl:'📙 Muestra',bg:'#fef3c7',fg:'#92400e'}};
+  // buckets: 'venta' cuenta como inventario vendible; 'devolver' = solucionarios + muestras
+  const B={venta:{costo:0,venta:0,st:0,n:0}, devolver:{costo:0,venta:0,st:0,n:0}};
+  let totalCosto=0,totalVenta=0,totalSalidas=0,totalStock=0;
+  const enrich=prodsConEntradas.map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
-    const st=p.stockInicial+ent-sal;
-    const valC=st*p.precioCosto;const valV=st*p.precioVenta;
+    const st=(p.stockInicial||0)+ent-sal;
+    const cls=clasifMaterial(p);
+    const valC=st*(p.precioCosto||0), valV=st*(p.precioVenta||0);
     totalCosto+=valC;totalVenta+=valV;totalSalidas+=sal;totalStock+=st;
+    const bk=cls==='venta'?'venta':'devolver';
+    B[bk].costo+=valC;B[bk].venta+=valV;B[bk].st+=st;B[bk].n++;
+    return {p,ent,sal,st,cls,valC};
+  });
+  // venta primero, luego solucionarios/muestras; dentro, por nombre
+  const orden={venta:0,solucionario:1,muestra:2};
+  enrich.sort((a,b)=>(orden[a.cls]-orden[b.cls])||a.p.nombre.localeCompare(b.p.nombre,'es'));
+  const rows=enrich.map(({p,ent,sal,st,cls,valC})=>{
     const rc=st<0?'stock-neg':st===0?'stock-zero':st<=5?'stock-low':'';
-    return`<tr class="${rc}"><td style="font-family:monospace">${p.codigo||'—'}</td><td>${p.nombre}</td><td>${p.editorial||'—'}</td><td>${p.stockInicial+ent}</td><td>${sal}</td><td style="font-weight:700${st<0?';color:#dc2626':''}">${st<0?'⚠ ':''}${st}</td><td style="font-family:monospace">${fmt(p.precioCosto)}</td><td style="font-family:monospace">${fmt(p.precioVenta)}</td><td style="font-family:monospace">${fmt(valC)}</td><td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
+    const t=TIPO[cls];
+    return`<tr class="${rc}">
+      <td style="font-family:monospace">${p.codigo||'—'}</td>
+      <td>${escH(p.nombre)}</td>
+      <td><span class="bdg" style="background:${t.bg};color:${t.fg};font-size:10px">${t.lbl}</span></td>
+      <td>${escH(p.editorial||'—')}</td>
+      <td>${(p.stockInicial||0)+ent}</td><td>${sal}</td>
+      <td style="font-weight:700${st<0?';color:#dc2626':''}">${st<0?'⚠ ':''}${st}</td>
+      <td style="font-family:monospace">${fmt(p.precioCosto)}</td>
+      <td style="font-family:monospace">${fmt(p.precioVenta)}</td>
+      <td style="font-family:monospace">${fmt(valC)}</td>
+      <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
-  tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="3" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
+  tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
+
+  const sp=document.getElementById('rep-split');
+  if(sp)sp.innerHTML=`
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:11px 14px">
+      <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.4px">📗 Inventario para venta</div>
+      <div style="font-size:20px;font-weight:800;font-family:monospace;color:#15803d;margin-top:3px">${fmt(B.venta.costo)} <span style="font-size:12px;color:#64748b;font-weight:600">costo</span></div>
+      <div style="font-size:12px;color:#166534;font-family:monospace">${fmt(B.venta.venta)} a precio de venta · ${B.venta.st} libros</div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:11px 14px">
+      <div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.4px">📘 Muestras y solucionarios</div>
+      <div style="font-size:20px;font-weight:800;font-family:monospace;color:#1d4ed8;margin-top:3px">${fmt(B.devolver.costo)} <span style="font-size:12px;color:#64748b;font-weight:600">costo</span></div>
+      <div style="font-size:12px;color:#1e40af">${B.devolver.st} unidades · <b>por devolver a la editorial</b> (nota de crédito pendiente)</div>
+    </div>`;
 
   // Aviso: productos con "stock inicial" Y además la entrada de su factura → posible doble conteo
   const dup=productosStockInicialDuplicado();
