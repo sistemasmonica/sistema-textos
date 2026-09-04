@@ -3246,6 +3246,21 @@ function _normNombre(s){
     .replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 }
 
+// ¿Este nombre de cliente/colegio es el mismo aunque esté escrito distinto?
+// ("ANTONIO FLORES" = "COLEGIO ANTONIO FLORES", "U.E.SAULO" = "UNIDAD EDUCATIVA
+// PARTICULAR SAULO", tolera hasta una palabra distinta como GONZALES/GONZALEZ).
+function _tokColegio(s){
+  const stop=['COLEGIO','ESCUELA','UNIDAD','EDUCATIVA','INSTITUCION','INSTITUCIÓN',
+    'PARTICULAR','U','E','UE','CDI','JARDIN','JARDÍN','CENTRO','DE','LA','EL','LOS','LAS','Y'];
+  return new Set(_normNombre(s).split(' ').filter(t=>t.length>1&&!stop.includes(t)));
+}
+function _coincideColegio(a,b){
+  const ta=_tokColegio(a), tb=_tokColegio(b);
+  if(!ta.size||!tb.size)return false;
+  let inter=0; ta.forEach(t=>{if(tb.has(t))inter++;});
+  return inter/Math.min(ta.size,tb.size)>=0.6;
+}
+
 // Busca en el catálogo el producto que corresponde a un nombre venido de una
 // factura o de un pedido. Orden: 1) ALIAS aprendido, 2) nombre exacto,
 // 3) uno contiene al otro, 4) parecido difuso (_pareceMismoLibro).
@@ -6661,14 +6676,14 @@ function renderControl(){
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#fff7ed;border:1px dashed #fdba74;border-radius:6px;padding:8px 10px">
       <span style="font-size:11px;font-weight:700;color:#9a3412">📦 Traer de una guía de retiro de este colegio:</span>
-      <select id="ctrl-traer-guia-sel" style="max-width:280px;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:4px">
+      <select id="ctrl-traer-guia-sel" style="max-width:420px;font-size:12px;padding:4px 6px;border:1px solid #ccc;border-radius:4px">
         <option value="">— elige una guía —</option>
-        ${DB.guias.filter(g=>(g.cliente||'').trim().toLowerCase()===nombre.trim().toLowerCase())
+        ${DB.guias.filter(g=>_coincideColegio(g.cliente,nombre))
           .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))
-          .map(g=>`<option value="${g.id}">${(d.guiasTraidas||[]).includes(g.id)?'✔ ':''}${escH(g.numero)} · ${escH(g.fecha||'')} · ${(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0)} libro(s)${(d.guiasTraidas||[]).includes(g.id)?' (ya traída)':''}</option>`).join('')}
+          .map(g=>`<option value="${g.id}">${(d.guiasTraidas||[]).includes(g.id)?'✔ ':''}${escH(g.numero)} · ${escH(g.fecha||'')} · ${escH(g.cliente||'')} · ${(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0)} libro(s)${(d.guiasTraidas||[]).includes(g.id)?' (ya traída)':''}</option>`).join('')}
       </select>
       <button class="btn btn-o btn-sm" onclick="traerGuiaAControl('${nombre}')"><i class="ti ti-truck-delivery"></i> Traer</button>
-      <span style="font-size:11px;color:#9a3412">Suma las cantidades de esa guía a los títulos que ya tienes (o los crea si son nuevos). No repitas la misma guía dos veces.</span>
+      <span style="font-size:11px;color:#9a3412">Incluye guías con nombre parecido (ej. "Colegio Antonio Flores" para "Antonio Flores") — revisa el nombre antes de traer. Suma las cantidades a los títulos que ya tienes o los crea si son nuevos. No repitas la misma guía dos veces.</span>
     </div>
 
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid #e6c800;border-radius:6px;padding:7px 10px">
