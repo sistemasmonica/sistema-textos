@@ -3061,6 +3061,10 @@ function clasifMaterial(p){
   return 'venta';
 }
 function esNoVendible(p){return clasifMaterial(p)!=='venta';}
+function clasifLineaGuia(l){
+  const prod=DB.productos.find(p=>p.id===l.prodId);
+  return clasifMaterial(prod||{nombre:l.nombre});
+}
 
 function stockActual(prodId){
   const prod=DB.productos.find(p=>p.id===prodId);
@@ -4691,6 +4695,13 @@ function renderGuias(){
 function verGuia(id){
   const g=DB.guias.find(x=>x.id===id);if(!g)return;
   document.getElementById('guia-det-titulo').textContent='Guía '+g.numero+' — '+g.cliente;
+  const ventaL=g.lineas.filter(l=>clasifLineaGuia(l)==='venta');
+  const otrasL=g.lineas.filter(l=>clasifLineaGuia(l)!=='venta');
+  const tabla=(arr,conTotal)=>`<table><thead><tr><th>Producto</th><th>Cantidad</th><th>P.Venta</th><th>Subtotal</th></tr></thead>
+    <tbody>
+      ${arr.map(l=>`<tr><td>${l.nombre}</td><td>${l.cantidad}</td><td style="font-family:monospace">${fmt(l.precioVenta)}</td><td style="font-family:monospace;font-weight:600">${fmt(l.cantidad*l.precioVenta)}</td></tr>`).join('')}
+      ${conTotal?`<tr class="total-row"><td colspan="3" style="text-align:right">TOTAL:</td><td style="font-family:monospace">${fmt(g.total)}</td></tr>`:''}
+    </tbody></table>`;
   document.getElementById('guia-det-body').innerHTML=`
     <div class="f3" style="margin-bottom:10px">
       <div><div class="sc-lbl">Fecha</div><div style="font-weight:600">${g.fecha}</div></div>
@@ -4698,11 +4709,8 @@ function verGuia(id){
       <div><div class="sc-lbl">Factura venta</div><div style="font-weight:600">${g.factura||'—'}</div></div>
     </div>
     ${g.observacion?`<div style="font-size:12px;color:var(--mu);margin-bottom:10px">${g.observacion}</div>`:''}
-    <table><thead><tr><th>Producto</th><th>Cantidad</th><th>P.Venta</th><th>Subtotal</th></tr></thead>
-    <tbody>
-      ${g.lineas.map(l=>`<tr><td>${l.nombre}</td><td>${l.cantidad}</td><td style="font-family:monospace">${fmt(l.precioVenta)}</td><td style="font-family:monospace;font-weight:600">${fmt(l.cantidad*l.precioVenta)}</td></tr>`).join('')}
-      <tr class="total-row"><td colspan="3" style="text-align:right">TOTAL:</td><td style="font-family:monospace">${fmt(g.total)}</td></tr>
-    </tbody></table>`;
+    ${ventaL.length?`<div style="font-weight:700;margin-bottom:6px">📗 Para venta</div>${tabla(ventaL,true)}`:''}
+    ${otrasL.length?`<div style="font-weight:700;margin:${ventaL.length?'16px':'0'} 0 6px">📘 Solucionarios / muestras (no se venden, solo revisión)</div>${tabla(otrasL,!ventaL.length)}`:''}`;
   abrirModal('modal-guia-det');
 }
 
@@ -4806,14 +4814,22 @@ function imprimirGuias(){
 
 function imprimirGuia(id){
   const g=DB.guias.find(x=>x.id===id);if(!g)return;
-  const filas=g.lineas.map((l,i)=>`
+  const ventaLineas=g.lineas.filter(l=>clasifLineaGuia(l)==='venta');
+  const otrasLineas=g.lineas.filter(l=>clasifLineaGuia(l)!=='venta');
+  const filas=ventaLineas.map((l,i)=>`
     <tr>
       <td style="text-align:center;border:1px solid #ccc;padding:6px 8px;font-weight:700">${l.cantidad}</td>
       <td style="border:1px solid #ccc;padding:6px 8px">${l.nombre}</td>
       <td style="border:1px solid #ccc;padding:2px 3px"><input class="pu" data-i="${i}" data-cant="${l.cantidad}" data-pv="${(parseFloat(l.precioVenta)||0).toFixed(2)}" value="" inputmode="decimal" placeholder=""></td>
       <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-weight:700" id="ln-${i}"></td>
     </tr>`).join('');
-  const totalUnd=g.lineas.reduce((a,l)=>a+l.cantidad,0);
+  const totalUnd=ventaLineas.reduce((a,l)=>a+l.cantidad,0);
+  const filasOtras=otrasLineas.map(l=>`
+    <tr>
+      <td style="text-align:center;border:1px solid #ccc;padding:6px 8px;font-weight:700">${l.cantidad}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px">${l.nombre}</td>
+    </tr>`).join('');
+  const totalUndOtras=otrasLineas.reduce((a,l)=>a+l.cantidad,0);
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Nota de Entrega ${g.numero}</title>
@@ -4874,7 +4890,7 @@ function imprimirGuia(id){
       ${g.observacion?`<div class="campo"><b>Observación:</b><span>${g.observacion}</span></div>`:''}
     </div>`:''}
   </div>
-  <table class="prod">
+  ${ventaLineas.length?`<table class="prod">
     <thead>
       <tr>
         <th style="text-align:center;width:55px">CANT</th>
@@ -4893,7 +4909,27 @@ function imprimirGuia(id){
       </tr>
     </tfoot>
   </table>
-  <div class="disc">Me comprometo a recibirlos y devolverlos en buen estado en el caso de no adquirirlos</div>
+  <div class="disc">Me comprometo a recibirlos y devolverlos en buen estado en el caso de no adquirirlos</div>`:''}
+  ${otrasLineas.length?`
+  <div class="titulo-doc" style="background:#5a6270">
+    <span>SOLUCIONARIOS / MUESTRAS — SOLO REVISIÓN</span><span>N° &nbsp; ${g.numero}</span>
+  </div>
+  <table class="prod">
+    <thead>
+      <tr>
+        <th style="text-align:center;width:55px">CANT</th>
+        <th>DESCRIPCIÓN</th>
+      </tr>
+    </thead>
+    <tbody>${filasOtras}</tbody>
+    <tfoot>
+      <tr class="tr-total">
+        <td style="text-align:center">${totalUndOtras}</td>
+        <td style="text-align:right">TOTAL SOLUCIONARIOS/MUESTRAS:</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="disc">Estos ejemplares son solo para revisión del docente. No forman parte de la venta y deben devolverse si no se adquieren.</div>`:''}
   <div class="firmas">
     <div class="firma"><div class="firma-linea">ASESOR</div></div>
     <div class="firma"><div class="firma-linea">CLIENTE</div></div>
