@@ -7085,11 +7085,15 @@ function renderKit(){
           <th style="padding:8px 10px;border:1px solid var(--bd);width:90px">NIVEL</th>
           <th style="padding:8px 10px;border:1px solid var(--bd);width:100px">CANTIDAD KITS</th>
           <th style="padding:8px 10px;border:1px solid var(--bd);width:80px">PVP $</th>
+          <th style="padding:8px 10px;border:1px solid var(--bd);width:100px">SUBTOTAL $</th>
         </tr>
       </thead>
       <tbody>`;
 
+  let totalKit=0;
   d.kit.forEach((k,i)=>{
+    const sub=(k.cantKit||0)*(k.pvp||0);
+    totalKit+=sub;
     html+=`<tr style="background:${i%2===0?'#fff':'#f9f9f9'}">
       <td style="padding:5px 8px;border:1px solid #ddd">${k.titulo}</td>
       <td style="border:1px solid #ddd;padding:3px">
@@ -7102,19 +7106,22 @@ function renderKit(){
       </td>
       <td style="border:1px solid #ddd;padding:3px">
         <input type="number" min="0" value="${k.cantKit||0}" style="width:90px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].kit[${i}].cantKit=parseInt(this.value)||0">
+          onchange="DB.colData['${nombre}'].kit[${i}].cantKit=parseInt(this.value)||0;renderKit()">
       </td>
       <td style="border:1px solid #ddd;padding:3px">
         <input type="number" min="0" step="0.01" value="${k.pvp||0}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].kit[${i}].pvp=parseFloat(this.value)||0">
+          onchange="DB.colData['${nombre}'].kit[${i}].pvp=parseFloat(this.value)||0;renderKit()">
       </td>
+      <td style="padding:5px 8px;border:1px solid #ddd;text-align:right;font-family:monospace;font-weight:600">${fmt(sub)}</td>
     </tr>`;
   });
 
   // Empty rows for adding more
   for(let e=0;e<3;e++){
-    html+=`<tr><td style="padding:5px;border:1px solid #ddd"><input type="text" placeholder="Agregar título..." style="width:100%;padding:3px;border:none;font-size:12px" onchange="agregarKitLinea('${nombre}',this.value,this)"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td></tr>`;
+    html+=`<tr><td style="padding:5px;border:1px solid #ddd"><input type="text" placeholder="Agregar título..." style="width:100%;padding:3px;border:none;font-size:12px" onchange="agregarKitLinea('${nombre}',this.value,this)"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td><td style="border:1px solid #ddd"></td></tr>`;
   }
+
+  html+=`<tr class="total-row"><td colspan="5" style="padding:8px;border:1px solid #ddd;text-align:right">TOTAL PEDIDO:</td><td style="padding:8px;border:1px solid #ddd;text-align:right;font-family:monospace">${fmt(totalKit)}</td></tr>`;
 
   html+=`</tbody></table></div>
   </div>
@@ -7148,8 +7155,9 @@ function imprimirKit(nombre){
   @media print{button{display:none}}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Pedido / Kit',nombre)}
   <table>
-  <tr><th style="text-align:left;width:45%">TÍTULOS</th><th>COLECCIÓN</th><th>NIVEL</th><th>CANTIDAD KITS</th><th>PVP</th></tr>
-  ${d.kit.map(k=>`<tr><td>${k.titulo}</td><td style="text-align:center">${k.coleccion||''}</td><td style="text-align:center">${k.nivel||''}</td><td style="text-align:center">${k.cantKit||''}</td><td style="text-align:center">${k.pvp?'$'+k.pvp.toFixed(2):''}</td></tr>`).join('')}
+  <tr><th style="text-align:left;width:40%">TÍTULOS</th><th>COLECCIÓN</th><th>NIVEL</th><th>CANTIDAD KITS</th><th>PVP</th><th>SUBTOTAL</th></tr>
+  ${d.kit.map(k=>`<tr><td>${k.titulo}</td><td style="text-align:center">${k.coleccion||''}</td><td style="text-align:center">${k.nivel||''}</td><td style="text-align:center">${k.cantKit||''}</td><td style="text-align:center">${k.pvp?'$'+k.pvp.toFixed(2):''}</td><td style="text-align:right;font-family:monospace">${(k.cantKit||0)*(k.pvp||0)?'$'+((k.cantKit||0)*(k.pvp||0)).toFixed(2):''}</td></tr>`).join('')}
+  <tr style="font-weight:bold;background:#e8f5e9"><td colspan="5" style="text-align:right">TOTAL PEDIDO:</td><td style="text-align:right;font-family:monospace">$${d.kit.reduce((a,k)=>a+(k.cantKit||0)*(k.pvp||0),0).toFixed(2)}</td></tr>
   </table>
   <\/body><\/html>`);
   win.document.close();
