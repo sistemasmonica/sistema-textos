@@ -309,9 +309,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="btn-row"><button class="btn btn-p" onclick="saveVenta()"><i class="ti ti-check"></i> Guardar venta</button></div>
   </div>
   <div class="card" style="text-align:center;background:var(--g4);border-color:#a7f3d0">
-    <div class="sc-lbl">Utilidad acumulada</div>
+    <div class="sc-lbl">Ganancia real</div>
     <div style="font-size:28px;font-weight:700;font-family:monospace;margin:6px 0" id="u-big">$0.00</div>
-    <div style="font-size:11px;color:var(--mu)">Ventas totales − Compras negocio</div>
+    <div style="font-size:11px;color:var(--mu)">Igual que en Inicio y Liquidación — ventas de Colegios − costo de lo vendido − gastos − comisiones</div>
   </div>
 </div>
 
@@ -376,6 +376,20 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <table>
         <thead><tr><th>Colegio</th><th>Entregados</th><th>Devoluc.</th><th>Vendidos</th><th>Total $</th><th>Comisión $</th><th>Tu ingreso $</th><th>Costo editorial $</th><th>Pagado $</th><th>Saldo editorial $</th><th></th></tr></thead>
         <tbody id="tb-col-res"></tbody>
+      </table>
+    </div>
+    <div class="sh" style="margin-top:14px">
+      <h2>📋 Detalle por libro — todos los colegios juntos</h2>
+      <button class="btn btn-s btn-sm" onclick="exportColegiosCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
+    </div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Cada libro de cada colegio, en una sola tabla — así no hay que ir escogiendo colegio por colegio. Sale de lo mismo que "Control de ventas", así que siempre coincide con los totales de arriba.</div>
+    <div class="filters">
+      <input type="search" id="col-det-q" placeholder="Buscar colegio o libro..." oninput="renderColDetalleTodos()" style="min-width:220px">
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Colegio</th><th>Libro</th><th>Vendido</th><th>PVP</th><th>Total venta $</th><th>Comisión colegio $</th><th>Costo editorial $</th><th>Tu ganancia $</th></tr></thead>
+        <tbody id="tb-col-detalle"></tbody>
       </table>
     </div>
   </div>
@@ -448,6 +462,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt" onclick="invTab('guias',this)"><i class="ti ti-truck-delivery"></i> Guías de retiro</button>
     <button class="nt" onclick="invTab('respaldo',this)"><i class="ti ti-clipboard-list"></i> Respaldo vendedor</button>
     <button class="nt" onclick="invTab('rep',this)"><i class="ti ti-chart-bar"></i> Reporte stock</button>
+    <button class="nt" onclick="invTab('audit',this)"><i class="ti ti-search"></i> Auditoría</button>
   </div>
 
   <!-- CATÁLOGO -->
@@ -456,6 +471,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <h2>Catálogo de productos</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-p btn-sm" onclick="abrirModalProducto()"><i class="ti ti-plus"></i> Nuevo producto</button>
+        <button class="btn btn-o btn-sm" onclick="abrirPegarProductos()"><i class="ti ti-clipboard-list"></i> Crear varios (pegar lista)</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('fi-excel').click()"><i class="ti ti-file-spreadsheet"></i> Importar lista de precios</button>
         <button class="btn btn-s btn-sm" onclick="exportProductosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
@@ -467,6 +483,26 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div style="background:var(--g4);border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--g1);margin-bottom:10px;display:flex;gap:8px;align-items:flex-start">
       <i class="ti ti-list-check" style="margin-top:1px;flex-shrink:0"></i>
       <span><b>Lista de precios de libros.</b> El stock se actualiza al registrar <b>Entradas</b> y <b>Guías de retiro</b>. Las facturas de compra <b>no modifican</b> esta lista. Para actualizar precios haz clic en el ✏️ de cada fila.</span>
+    </div>
+    <div id="cat-pegar-box" style="display:none;margin-bottom:10px;background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;color:#1565c0;margin-bottom:4px">📋 Crear varios productos nuevos de una vez</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Una línea por libro. Pega desde Excel (con tabulaciones) o escribe: <b>Nombre, Cantidad, Precio compra, Precio venta</b> (los precios son opcionales). Si un producto YA existe en el catálogo (por nombre), <b>no se duplica</b> — se avisa para que lo edites a mano.</div>
+      <div class="f2">
+        <div class="fg" style="margin:0"><label style="font-size:10px">Editorial / proveedor (para todos)</label><input type="text" id="cp-edit" placeholder="Ej: TECH BOOKS"></div>
+        <div class="fg" style="margin:0"><label style="font-size:10px">Tipo de material (para todos)</label>
+          <select id="cp-material">
+            <option value="venta">📗 Para venta</option>
+            <option value="solucionario">📘 Solucionario</option>
+            <option value="muestra">📙 Muestra del profesor</option>
+          </select>
+        </div>
+      </div>
+      <textarea id="cp-txt" rows="8" style="width:100%;font-family:monospace;font-size:12px;padding:6px;border:1px solid var(--bd);border-radius:6px;margin-top:6px" placeholder="WONDER FAMILY SPLIT # 1&#9;46&#9;5.50&#9;8.00&#10;WONDER FAMILY SPLIT # 2&#9;30&#9;5.50&#9;8.00&#10;..."></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn btn-p btn-sm" onclick="procesarPegarProductos()"><i class="ti ti-wand"></i> Crear productos nuevos</button>
+        <button class="btn btn-s btn-sm" onclick="document.getElementById('cat-pegar-box').style.display='none'">Cerrar</button>
+      </div>
+      <div id="cp-result" style="font-size:11px;margin-top:6px"></div>
     </div>
     <div class="filters">
       <input type="search" id="inv-q" placeholder="Buscar producto, editorial, código..." oninput="renderCatalogo()" style="min-width:200px">
@@ -509,7 +545,20 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div id="ent-items">
         <div class="card-t" style="margin-bottom:8px;font-size:12px"><i class="ti ti-package"></i> Productos recibidos</div>
         <div id="ent-lineas"></div>
-        <button class="btn btn-s btn-sm" onclick="agregarLineaEntrada()"><i class="ti ti-plus"></i> Agregar producto</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-s btn-sm" onclick="agregarLineaEntrada()"><i class="ti ti-plus"></i> Agregar producto</button>
+          <button class="btn btn-p btn-sm" onclick="abrirPegarEntrada()"><i class="ti ti-clipboard-list"></i> Pegar lista (nota de entrega)</button>
+        </div>
+        <div id="ent-pegar-box" style="display:none;margin-top:8px;background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:10px 12px">
+          <div style="font-size:12px;font-weight:700;color:#1565c0;margin-bottom:4px">📋 Pega aquí la lista de la nota de entrega</div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Una línea por libro: Nombre, Cantidad y precio de compra (opcional, separados por tab). Los que ya existen en el catálogo se emparejan solos; los que no, salen en rojo y se crean como producto nuevo al dar <b>Registrar entrada</b>.</div>
+          <textarea id="ent-pegar-txt" rows="8" style="width:100%;font-family:monospace;font-size:12px;padding:6px;border:1px solid var(--bd);border-radius:6px" placeholder="WONDER FAMILY SPLIT # 1&#9;46&#10;WONDER FAMILY SPLIT # 2&#9;56&#10;..."></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn btn-p btn-sm" onclick="procesarPegarEntrada()"><i class="ti ti-wand"></i> Cargar a la entrada</button>
+            <button class="btn btn-s btn-sm" onclick="document.getElementById('ent-pegar-box').style.display='none'">Cerrar</button>
+          </div>
+          <div id="ent-pegar-result" style="font-size:11px;margin-top:6px"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn btn-p" onclick="guardarEntrada()"><i class="ti ti-check"></i> Registrar entrada</button>
@@ -539,7 +588,8 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-p btn-sm" onclick="abrirModalGuia()"><i class="ti ti-plus"></i> Nueva guía</button>
         <button class="btn btn-s btn-sm" onclick="exportarGuiasCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirGuias()"><i class="ti ti-printer"></i> Imprimir reporte</button>
-        <button class="btn btn-sm" style="background:#f57c00;color:#fff" onclick="migrarPreciosGuias()" title="Busca el precio en el catálogo actual para guías que muestran $0.00"><i class="ti ti-currency-dollar"></i> Actualizar precios</button>
+        <button class="btn btn-sm" style="background:#6a1b9a;color:#fff" onclick="imprimirResumenGuias()" title="Resumen corto: total de cada producto, separado en Entregas para vender y Muestras/Solucionarios"><i class="ti ti-report"></i> Imprimir resumen</button>
+        <button class="btn btn-sm" style="background:#f57c00;color:#fff" onclick="migrarPreciosGuias()" title="Busca el precio (primero en Control de ventas de cada colegio, luego en el catálogo general) para guías que muestran $0.00"><i class="ti ti-currency-dollar"></i> Actualizar precios</button>
       </div>
     </div>
     <div class="filters">
@@ -605,8 +655,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <!-- REPORTE STOCK -->
   <div id="inv-rep" class="inv-pn" style="display:none">
     <div class="sh"><h2>Reporte de stock actual</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-s btn-sm" onclick="exportStockCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rep-ocultar-cero" onchange="renderStockReport()"> Ocultar agotados (stock en 0)</label>
+        <button class="btn btn-s btn-sm" onclick="exportStockCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
       </div>
     </div>
@@ -623,6 +674,21 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <tbody id="tb-rep-stock"></tbody>
       </table>
     </div>
+  </div>
+
+  <!-- AUDITORÍA -->
+  <div id="inv-audit" class="inv-pn" style="display:none">
+    <div class="sh"><h2>🔎 Auditoría — comparar Entradas, Guías, Stock y Colegios</h2></div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:10px">
+      Compara los 4 números que deberían llevarse bien entre sí y resalta en rojo/amarillo dónde hay un problema. No hace falta que Entradas y Guías sean iguales (lo que no sale, queda en stock) — lo importante es que <b>Stock actual = Inicial + Entradas − Guías − Notas de crédito</b>, y que lo entregado en Guías esté anotado como vendido en Colegios.
+    </div>
+    <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="sc"><div class="sc-lbl">Entradas (compras)</div><div class="sc-val cg" id="aud-entradas">0 u · $0.00</div></div>
+      <div class="sc"><div class="sc-lbl">Guías de retiro</div><div class="sc-val cb" id="aud-guias">0 u · $0.00</div></div>
+      <div class="sc"><div class="sc-lbl">Reporte de stock</div><div class="sc-val cp" id="aud-stock">0 u · $0.00</div></div>
+      <div class="sc"><div class="sc-lbl">Colegios (Control de ventas)</div><div class="sc-val" id="aud-colegios">0 u · $0.00</div></div>
+    </div>
+    <div id="aud-resultado" style="margin-top:14px"></div>
   </div>
 </div>
 
@@ -993,23 +1059,24 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- PANEL: POR COBRAR -->
 <div id="pn-porcobrar" class="pn">
   <div class="card" style="background:#fffbeb;border-color:#fcd34d;padding:10px 14px;margin-bottom:12px">
-    <small style="color:#92400e"><b>ℹ️ Nota:</b> Muestra las facturas de <b>Ventas</b> que aún no han sido pagadas por completo (saldo pendiente > $0), según los pagos registrados en Conciliación bancaria.</small>
+    <small style="color:#92400e"><b>ℹ️ Nota:</b> Por cada colegio: lo que te toca cobrar (venta − comisión del colegio, de <b>Control de ventas</b>) menos lo que ya te han pagado (pestaña <b>Pagos → Cobro</b>).</small>
   </div>
   <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="sc"><div class="sc-lbl">Total por cobrar</div><div class="sc-val cr" id="pc-s-total">$0.00</div></div>
-    <div class="sc"><div class="sc-lbl">Vencido (+30 días)</div><div class="sc-val cr" id="pc-s-vencido">$0.00</div></div>
-    <div class="sc"><div class="sc-lbl">Por vencer</div><div class="sc-val ca" id="pc-s-porvencer">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Colegios con saldo pendiente</div><div class="sc-val ca" id="pc-s-ncol">0</div></div>
+    <div class="sc"><div class="sc-lbl">Cobrado sin colegio identificado</div><div class="sc-val" id="pc-s-sincol">$0.00</div></div>
   </div>
   <div class="sh" style="margin-top:4px">
-    <h2>Clientes que me deben</h2>
-    <input type="search" id="pc-q" placeholder="Buscar cliente..." oninput="renderPorCobrar()" style="min-width:180px">
+    <h2>Colegios que me deben</h2>
+    <input type="search" id="pc-q" placeholder="Buscar colegio..." oninput="renderPorCobrar()" style="min-width:180px">
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Fecha factura</th><th>Cliente / Colegio</th><th>N° Factura</th><th>Total</th><th>Saldo pendiente</th><th>Días</th></tr></thead>
+      <thead><tr><th>Colegio</th><th>Total vendido</th><th>Comisión colegio</th><th>Tu ingreso esperado</th><th>Ya cobrado</th><th>Saldo por cobrar</th></tr></thead>
       <tbody id="tb-porcobrar"></tbody>
     </table>
   </div>
+  <div id="pc-sincolegio-box" style="margin-top:14px"></div>
 </div>
 
 <!-- PANEL: COMISIONES -->
@@ -1155,8 +1222,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <input type="file" id="pago-foto" accept="image/*,application/pdf" onchange="cargarComprobantePago(this)">
       <div id="pago-foto-info" style="font-size:11px;color:var(--mu);margin-top:4px">Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.</div>
     </div>
+    <input type="hidden" id="pago-edit-id">
     <div class="btn-row">
-      <button class="btn btn-p" onclick="guardarPago()"><i class="ti ti-check"></i> Guardar</button>
+      <button class="btn btn-p" id="btn-guardar-pago" onclick="guardarPago()"><i class="ti ti-check"></i> Guardar</button>
+      <button class="btn btn-s" id="btn-cancelar-pago" style="display:none" onclick="cancelarEdicionPago()"><i class="ti ti-x"></i> Cancelar edición</button>
     </div>
   </div>
 
@@ -1189,6 +1258,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <option value="Otro">Otro</option>
       </select>
       <input type="search" id="pg-q" placeholder="Buscar nombre..." oninput="renderPagos()" style="min-width:180px">
+      <select id="pg-cli-fil" onchange="renderPagos()"><option value="">Todos los colegios/clientes</option></select>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -2011,6 +2081,7 @@ function invTab(id,el){
   if(id==='guias')renderGuias();
   if(id==='respaldo')renderRespaldosVendedor();
   if(id==='rep')renderStockReport();
+  if(id==='audit')renderAuditoria();
 }
 
 // ===================================================
@@ -2414,9 +2485,12 @@ function saveVenta(){
 }
 function clearVenta(){['vc','vnf','vs','vi','vt','vd'].forEach(id=>document.getElementById(id).value='')}
 function renderUtilidad(){
-  const sv=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+r.total,0);
-  const sn=DB.regs.filter(r=>r.tipo==='negocio').reduce((a,r)=>a+r.total,0);
-  const u=sv-sn;
+  // Antes restaba TODAS las compras de negocio (incluida toda la deuda editorial
+  // sin vender) de solo las ventas registradas aquí en "Ventas" — como Mónica casi
+  // nunca vende por esta pestaña (vende por Colegios), daba un número gigante en
+  // rojo sin sentido. Ahora usa la misma cuenta real que Inicio y Liquidación
+  // (resumenGanancia().neta), para que no haya 2 números de "utilidad" distintos.
+  const u=resumenGanancia().neta;
   const el=document.getElementById('u-big');
   if(el){el.textContent=fmt(u);el.style.color=u>=0?'var(--g1)':'var(--r1)';}
 }
@@ -3042,10 +3116,73 @@ function guardarProducto(){
   save();cerrarModal('modal-producto');renderCatalogo();updateCount();toast('Producto guardado','ok');
 }
 
+function abrirPegarProductos(){
+  const box=document.getElementById('cat-pegar-box');
+  if(!box)return;
+  box.style.display=box.style.display==='none'?'block':'none';
+  if(box.style.display==='block')document.getElementById('cp-txt').focus();
+}
+
+// Parte una línea pegada en {nombre, cant, costo, venta}. Acepta tabs (Excel) o 2+ espacios.
+function _parseLineaProductoNuevo(line){
+  let parts=line.split('\t');
+  if(parts.length<2)parts=line.split(/\s{2,}/);
+  parts=parts.map(s=>s.trim()).filter(Boolean);
+  if(!parts.length)return null;
+  let cantIdx=-1,cant=0;
+  for(let i=parts.length-1;i>=0;i--){ if(/^\d{1,5}$/.test(parts[i])){ cant=parseInt(parts[i]); cantIdx=i; break; } }
+  const precios=[],idxPrecios=[];
+  parts.forEach((p,i)=>{ if(i!==cantIdx&&/^\$?\s*\d+[.,]\d{1,2}$/.test(p)){ precios.push(parseFloat(p.replace(/[$\s]/g,'').replace(',','.'))); idxPrecios.push(i); } });
+  const excluir=new Set([cantIdx,...idxPrecios]);
+  const nombre=parts.filter((p,i)=>!excluir.has(i)).join(' ').trim();
+  if(!nombre)return null;
+  return {nombre,cant:cant||0,costo:precios[0]||0,venta:precios[1]||0};
+}
+
+function procesarPegarProductos(){
+  const editorial=document.getElementById('cp-edit').value.trim();
+  const material=document.getElementById('cp-material').value||'venta';
+  const txt=document.getElementById('cp-txt').value||'';
+  const lines=txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length)return toast('Pega la lista primero','err');
+  let creados=0; const yaExistian=[];
+  lines.forEach(line=>{
+    const parsed=_parseLineaProductoNuevo(line);
+    if(!parsed)return;
+    const existente=matchProductoPorNombre(parsed.nombre);
+    if(existente){ yaExistian.push(parsed.nombre); return; }
+    DB.productos.push({
+      id:uid(),
+      codigo:'',
+      nombre:parsed.nombre,
+      editorial,
+      nivel:'',
+      stockInicial:parsed.cant,
+      precioCosto:parsed.costo,
+      precioVenta:parsed.venta,
+      material,
+      alias:[],
+      nota:'',
+      creadoEn:new Date().toISOString()
+    });
+    creados++;
+  });
+  if(creados){
+    logHistorial('Productos creados por lote',creados+' producto(s)'+(editorial?' de '+editorial:''));
+    save();renderCatalogo();updateCount();
+  }
+  const rEl=document.getElementById('cp-result');
+  if(rEl)rEl.innerHTML=`<b style="color:var(--g1)">✔ ${creados} producto(s) nuevo(s) creado(s).</b>`
+    +(yaExistian.length?`<div style="color:#f57c00;margin-top:4px"><b>${yaExistian.length} ya exist${yaExistian.length===1?'ía':'ían'} en el catálogo (no se duplicaron):</b><br>${yaExistian.map(escH).join('<br>')}<br><span style="color:var(--mu)">Si en realidad es stock nuevo del mismo libro, edítalo a mano desde el ✏️.</span></div>`:'');
+  if(creados)document.getElementById('cp-txt').value='';
+  toast(creados+' producto(s) creado(s)'+(yaExistian.length?', '+yaExistian.length+' ya existían':''),yaExistian.length&&!creados?'err':'ok');
+}
+
 function eliminarProducto(id){
-  if(!confirm('¿Eliminar este producto?'))return;
   const p=DB.productos.find(x=>x.id===id);
-  DB.productos=DB.productos.filter(p=>p.id!==id);
+  if(!confirm(`¿Eliminar "${p?.nombre||''}"?\n\nTambién se borran sus entradas/salidas de inventario registradas.\nEsta acción no se puede deshacer.`))return;
+  DB.productos=DB.productos.filter(x=>x.id!==id);
+  DB.movInv=DB.movInv.filter(m=>m.prodId!==id);
   if(p)logHistorial('Producto eliminado',p.nombre);
   save();renderCatalogo();updateCount();toast('Producto eliminado','ok');
 }
@@ -3117,7 +3254,10 @@ function renderCatalogo(){
       <td style="font-family:monospace">${fmt(p.precioVenta)}</td>
       <td>${stBadge}</td>
       <td style="font-family:monospace">${valInv}</td>
-      <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button>
+        <button class="btn btn-d btn-sm" onclick="eliminarProducto('${p.id}')"><i class="ti ti-trash"></i></button>
+      </td>
     </tr>`;
   }).join('');
   updateCount();
@@ -3144,6 +3284,56 @@ function agregarLineaEntrada(){
     <div class="fg" style="margin:0"><label>P.Venta $</label><input type="number" id="${id}-venta" step="0.01" placeholder="0.00"></div>
     <button class="btn btn-d btn-sm" style="margin-bottom:10px" onclick="document.getElementById('${id}').remove()"><i class="ti ti-x"></i></button>`;
   document.getElementById('ent-lineas').appendChild(div);
+}
+
+function abrirPegarEntrada(){
+  const box=document.getElementById('ent-pegar-box');
+  if(!box)return;
+  box.style.display=box.style.display==='none'?'block':'none';
+  if(box.style.display==='block')document.getElementById('ent-pegar-txt').focus();
+}
+
+// Igual que traerLineasDeFactura pero la fuente es texto pegado a mano (ej. transcrito de una
+// nota de entrega en papel) en vez del XML de una factura. Reconocidos → fila normal con el
+// producto ya elegido; no reconocidos → fila roja con dataset.newName/newEdit/newCost, que
+// guardarEntrada() ya sabe convertir en producto nuevo al Registrar.
+function procesarPegarEntrada(){
+  const prov=document.getElementById('ent-prov').value.trim();
+  const txt=document.getElementById('ent-pegar-txt').value||'';
+  const lines=txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length)return toast('Pega la lista primero','err');
+  const cont=document.getElementById('ent-lineas');
+  const opciones='<option value="">— seleccionar —</option>'+
+    DB.productos.map(p=>`<option value="${p.id}">${escH(p.nombre)} (${escH(p.editorial||'')})</option>`).join('');
+  const frag=document.createDocumentFragment();
+  let ok=0,nuevos=0;
+  lines.forEach(line=>{
+    const parsed=_parseLineaProductoNuevo(line);
+    if(!parsed||!parsed.cant)return;
+    const best=matchProductoPorNombre(parsed.nombre);
+    editLineasEntrada++;
+    const id='ent-l-'+editLineasEntrada;
+    const div=document.createElement('div');
+    div.id=id;
+    div.style.cssText='display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:end';
+    if(best){ok++;}
+    else{ nuevos++; div.dataset.newName=parsed.nombre; div.dataset.newEdit=prov; div.dataset.newCost=parsed.costo; div.style.background='#fef2f2'; div.style.borderLeft='3px solid #ef4444'; div.style.padding='4px 4px 4px 6px'; }
+    div.innerHTML=`
+      <div class="fg" style="margin:0"><label>${best?'Producto':'<span style="color:#b91c1c">NUEVO: '+escH(parsed.nombre)+'</span>'}</label>
+        <select onchange="autoFillEntrada(this,'${id}')">${opciones}</select>
+      </div>
+      <div class="fg" style="margin:0"><label>Cantidad</label><input type="number" id="${id}-cant" min="1" value="${parsed.cant}"></div>
+      <div class="fg" style="margin:0"><label>P.Costo $</label><input type="number" id="${id}-costo" step="0.01" value="${parsed.costo||(best&&best.precioCosto)||''}"></div>
+      <div class="fg" style="margin:0"><label>P.Venta $</label><input type="number" id="${id}-venta" step="0.01" placeholder="0.00" value="${parsed.venta||(best&&best.precioVenta)||''}"></div>
+      <button class="btn btn-d btn-sm" style="margin-bottom:10px" onclick="document.getElementById('${id}').remove()"><i class="ti ti-x"></i></button>`;
+    if(best)div.querySelector('select').value=best.id;
+    frag.appendChild(div);
+  });
+  cont.appendChild(frag);
+  const rEl=document.getElementById('ent-pegar-result');
+  if(rEl)rEl.innerHTML=`<b style="color:var(--g1)">✔ ${ok+nuevos} línea(s) cargadas.</b> ${ok} ya exist${ok===1?'ía':'ían'} en catálogo, ${nuevos} nueva(s) (en rojo, se crean al dar "Registrar entrada").`;
+  toast(`${ok+nuevos} línea(s) cargadas — ${ok} reconocidas, ${nuevos} nuevas`,nuevos?'err':'ok');
+  document.getElementById('ent-pegar-txt').value='';
 }
 
 function autoFillEntrada(sel,rowId){
@@ -3824,6 +4014,19 @@ function guardarPago(){
   if(!nombre)return toast('Ingresa el nombre del cliente/colegio/proveedor','err');
   if(valor<=0)return toast('Ingresa un valor mayor a 0','err');
   DB.pagos=DB.pagos||[];
+  const editId=document.getElementById('pago-edit-id').value;
+  if(editId){
+    const p=DB.pagos.find(x=>x.id===editId);
+    if(!p)return toast('No se encontró el registro a editar','err');
+    Object.assign(p,{fecha,tipo,nombre,valor,forma,nota});
+    if(pagoComprobante)p.comprobante=pagoComprobante;
+    logHistorial(tipo==='cobro'?'Cobro editado':'Pago editado',`${nombre} — ${fmt(valor)} (${forma})`);
+    save();
+    cancelarEdicionPago();
+    renderPagos();
+    toast((tipo==='cobro'?'Cobro':'Pago')+' actualizado: '+fmt(valor),'ok');
+    return;
+  }
   const reg={id:uid(),fecha,tipo,nombre,valor,forma,nota};
   if(pagoComprobante)reg.comprobante=pagoComprobante;
   DB.pagos.push(reg);
@@ -3837,6 +4040,37 @@ function guardarPago(){
   pagoComprobante=null;
   renderPagos();
   toast((tipo==='cobro'?'Cobro':'Pago')+' registrado: '+fmt(valor),'ok');
+}
+
+function editarPago(id){
+  const p=(DB.pagos||[]).find(x=>x.id===id);if(!p)return;
+  document.getElementById('pago-fecha').value=p.fecha;
+  document.getElementById('pago-tipo').value=p.tipo;
+  document.getElementById('pago-nombre').value=p.nombre;
+  document.getElementById('pago-valor').value=p.valor;
+  document.getElementById('pago-forma').value=p.forma;
+  document.getElementById('pago-nota').value=p.nota||'';
+  document.getElementById('pago-edit-id').value=id;
+  pagoComprobante=null;
+  const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
+  const info=document.getElementById('pago-foto-info');
+  if(info)info.textContent=p.comprobante?'Ya tiene una foto guardada. Solo sube una nueva si quieres reemplazarla.':'Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
+  document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
+  document.getElementById('btn-cancelar-pago').style.display='';
+  document.getElementById('pn-pagos').scrollIntoView({behavior:'smooth',block:'start'});
+  toast('Editando registro de '+p.nombre,'ok');
+}
+
+function cancelarEdicionPago(){
+  document.getElementById('pago-edit-id').value='';
+  document.getElementById('pago-nombre').value='';
+  document.getElementById('pago-valor').value='';
+  document.getElementById('pago-nota').value='';
+  const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
+  const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
+  pagoComprobante=null;
+  document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar';
+  document.getElementById('btn-cancelar-pago').style.display='none';
 }
 
 // Abre el comprobante (imagen o PDF) en una ventana nueva
@@ -3891,9 +4125,15 @@ function renderPagos(){
   const tipoFil=document.getElementById('pg-tipo-fil')?.value||'';
   const formaFil=document.getElementById('pg-forma-fil')?.value||'';
   const q=(document.getElementById('pg-q')?.value||'').toLowerCase();
+  const cliFil=document.getElementById('pg-cli-fil')?.value||'';
+  // Actualizar selector de colegios/clientes con los nombres ya usados en pagos
+  const clientes=[...new Set((DB.pagos||[]).map(p=>p.nombre).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const selCli=document.getElementById('pg-cli-fil');
+  if(selCli){const prev=selCli.value;selCli.innerHTML='<option value="">Todos los colegios/clientes</option>'+clientes.map(c=>`<option${c===prev?' selected':''}>${escH(c)}</option>`).join('');}
   const lista=[...(DB.pagos||[])].filter(p=>{
     if(tipoFil&&p.tipo!==tipoFil)return false;
     if(formaFil&&p.forma!==formaFil)return false;
+    if(cliFil&&p.nombre!==cliFil)return false;
     if(q&&!p.nombre.toLowerCase().includes(q))return false;
     return true;
   }).sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -3917,7 +4157,7 @@ function renderPagos(){
     <td>${p.comprobante
       ?`<button class="btn btn-s btn-sm" title="Ver comprobante" onclick="verComprobantePago('${p.id}')">${p.comprobante.startsWith('data:application/pdf')?'📄':'🖼️'} Ver</button> <button class="btn btn-s btn-sm" title="Quitar comprobante" onclick="quitarComprobantePago('${p.id}')"><i class="ti ti-x"></i></button>`
       :`<button class="btn btn-s btn-sm" title="Agregar foto del comprobante" onclick="agregarComprobantePago('${p.id}')"><i class="ti ti-camera"></i> Agregar</button>`}</td>
-    <td><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
+    <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" title="Editar" onclick="editarPago('${p.id}')"><i class="ti ti-pencil"></i></button><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
   </tr>`).join('');
 }
 
@@ -3937,9 +4177,11 @@ function imprimirPagos(){
   const tipoFil=document.getElementById('pg-tipo-fil')?.value||'';
   const formaFil=document.getElementById('pg-forma-fil')?.value||'';
   const q=(document.getElementById('pg-q')?.value||'').trim();
+  const cliFil=document.getElementById('pg-cli-fil')?.value||'';
   const lista=[...(DB.pagos||[])].filter(p=>{
     if(tipoFil&&p.tipo!==tipoFil)return false;
     if(formaFil&&p.forma!==formaFil)return false;
+    if(cliFil&&p.nombre!==cliFil)return false;
     if(q&&!p.nombre.toLowerCase().includes(q.toLowerCase()))return false;
     return true;
   }).sort((a,b)=>a.fecha.localeCompare(b.fecha));
@@ -3974,7 +4216,7 @@ function imprimirPagos(){
     h3{margin-top:26px;border-top:2px solid #1565c0;padding-top:10px;font-size:13px}
     ${dmPrintCSS()}
   </style></head><body>
-  ${dmPrintHeader('Pagos y cobros', q?('Filtro: "'+q+'"'):'Todos los registros')}
+  ${dmPrintHeader('Pagos y cobros', cliFil?('Colegio/cliente: '+escH(cliFil)):(q?('Filtro: "'+escH(q)+'"'):'Todos los registros'))}
   <table>
     <tr><th>Fecha</th><th>Tipo</th><th>Nombre</th><th>Forma</th><th>Valor</th><th>Nota</th><th>Foto</th></tr>
     ${filas}
@@ -3991,36 +4233,69 @@ function imprimirPagos(){
   win.onload=()=>win.print();
 }
 
+// Cuánto te ha pagado cada colegio (Pagos → Cobro), buscando el nombre del
+// colegio dentro de lo que Mónica escribió en el cobro (tolera nombre parecido,
+// mismo matcher que ya usa la Auditoría de inventario para Guías vs Colegios).
+// Los cobros que no coinciden con NINGÚN colegio (ej. una librería revendedora)
+// se devuelven aparte en "sinColegio" — no son un error, solo no se les puede
+// calcular un saldo pendiente porque no hay ninguna venta registrada para ellos.
+function saldosPorCobrarColegios(){
+  initColData();
+  const cobradoPorNombre={};
+  (DB.pagos||[]).filter(p=>p.tipo==='cobro').forEach(p=>{
+    const k=p.nombre||'(sin nombre)';
+    cobradoPorNombre[k]=(cobradoPorNombre[k]||0)+(parseFloat(p.valor)||0);
+  });
+  const usados=new Set();
+  const filas=colegiosList().map(c=>{
+    const d=DB.colData[c.nombre]; if(!d)return null;
+    const T=totalesColegio(d);
+    let cobrado=0;
+    Object.keys(cobradoPorNombre).forEach(nom=>{
+      if(nom===c.nombre||_coincideColegio(nom,c.nombre)){ cobrado+=cobradoPorNombre[nom]; usados.add(nom); }
+    });
+    return {colegio:c.nombre,vendido:T.tv,comision:T.totalColegio,ingreso:T.ingreso,cobrado,saldo:T.ingreso-cobrado};
+  }).filter(Boolean);
+  const sinColegio=Object.keys(cobradoPorNombre).filter(n=>!usados.has(n))
+    .map(n=>({nombre:n,valor:cobradoPorNombre[n]})).filter(x=>x.valor>0);
+  return {filas,sinColegio};
+}
+
 function renderPorCobrar(){
   const q=(document.getElementById('pc-q')?.value||'').toLowerCase();
-  const hoy=new Date();hoy.setHours(0,0,0,0);
-  const pendientes=DB.regs.filter(r=>r.tipo==='venta'&&saldoPendiente(r)>0.01)
-    .filter(r=>!q||(r.proveedor||'').toLowerCase().includes(q))
-    .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-  let total=0,vencido=0,porVencer=0;
+  const {filas,sinColegio}=saldosPorCobrarColegios();
+  const pendientes=filas.filter(f=>f.saldo>0.01)
+    .filter(f=>!q||f.colegio.toLowerCase().includes(q))
+    .sort((a,b)=>b.saldo-a.saldo);
+  let total=0;
   const tb=document.getElementById('tb-porcobrar');
   if(!pendientes.length){
-    tb.innerHTML='<tr><td colspan="6"><div class="empty">No hay cuentas por cobrar pendientes.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="6"><div class="empty">No hay colegios con saldo pendiente.</div></td></tr>';
   }else{
-    tb.innerHTML=pendientes.map(r=>{
-      const saldo=saldoPendiente(r);
-      total+=saldo;
-      const dias=Math.floor((hoy-parseLocalDate(r.fecha))/(1000*60*60*24));
-      if(dias>30)vencido+=saldo;else porVencer+=saldo;
-      const bdg=dias>30?'bdg-err':dias>0?'bdg-warn':'bdg-ok';
+    tb.innerHTML=pendientes.map(f=>{
+      total+=f.saldo;
       return`<tr>
-        <td style="font-family:monospace;white-space:nowrap">${escH(r.fecha||'-')}</td>
-        <td>${escH(r.proveedor)}</td>
-        <td><span class="chip">${escH(r.numFact||'-')}</span></td>
-        <td style="font-family:monospace">${fmt(r.total)}</td>
-        <td style="font-family:monospace;font-weight:700;color:var(--r1)">${fmt(saldo)}</td>
-        <td><span class="bdg ${bdg}">${dias} días</span></td>
+        <td style="font-weight:600">${escH(f.colegio)}</td>
+        <td style="font-family:monospace">${fmt(f.vendido)}</td>
+        <td style="font-family:monospace;color:var(--a1)">${fmt(f.comision)}</td>
+        <td style="font-family:monospace">${fmt(f.ingreso)}</td>
+        <td style="font-family:monospace;color:var(--g1)">${fmt(f.cobrado)}</td>
+        <td style="font-family:monospace;font-weight:700;color:var(--r1)">${fmt(f.saldo)}</td>
       </tr>`;
     }).join('');
   }
   document.getElementById('pc-s-total').textContent=fmt(total);
-  document.getElementById('pc-s-vencido').textContent=fmt(vencido);
-  document.getElementById('pc-s-porvencer').textContent=fmt(porVencer);
+  document.getElementById('pc-s-ncol').textContent=pendientes.length;
+  const totSinCol=sinColegio.reduce((a,x)=>a+x.valor,0);
+  document.getElementById('pc-s-sincol').textContent=fmt(totSinCol);
+
+  const box=document.getElementById('pc-sincolegio-box');
+  if(box){
+    box.innerHTML=sinColegio.length?`<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e3a5f">
+      <b>ℹ️ ${sinColegio.length} cobro(s) que no coinciden con ningún colegio</b> — probablemente ventas a librerías u otros clientes que no están en Colegios, así que no se les puede calcular saldo pendiente (no hay una venta registrada con la que comparar):<br>
+      ${sinColegio.map(s=>`${escH(s.nombre)}: ${fmt(s.valor)} cobrado`).join('<br>')}
+    </div>`:'';
+  }
 }
 
 function renderHistorial(){
@@ -4051,11 +4326,16 @@ function renderBalance(){
     const st=p.stockInicial+ent-sal;
     invCosto+=st*p.precioCosto;
   });
-  const cxc=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+saldoPendiente(r),0);
+  // Cuentas por cobrar: lo que te deben los colegios de verdad (ingreso esperado
+  // por Control de ventas − lo ya cobrado en Pagos), misma cuenta que "Por Cobrar".
+  // Antes esto buscaba en DB.regs tipo 'venta' (una pestaña que casi no usas) y
+  // siempre daba $0, así que el Patrimonio quedaba subestimado.
+  const cxc=saldosPorCobrarColegios().filas.reduce((a,f)=>a+Math.max(0,f.saldo),0);
   const totalActivos=saldoBanco+invCosto+cxc;
 
-  // Pasivos
-  const deudaEditorial=DB.regs.filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares'&&!r.pagadaEditorial).reduce((a,r)=>a+r.total,0);
+  // Pasivos — se usa resumenEditorial() (misma fuente que Editorial y Auditoría)
+  // para que la deuda ya reste las notas de crédito, en vez de recalcularla aparte.
+  const deudaEditorial=resumenEditorial().deudaReal;
   const deudasPend=DB.deudas.filter(d=>!d.pagada).reduce((a,d)=>{
     const pag=d.abonos.reduce((s,ab)=>s+ab.monto,0);
     return a+Math.max(0,d.montoTotal-pag);
@@ -4432,14 +4712,14 @@ function onProductoGuiaChange(sel){
   const p=col?precioParaGuia(col,prodId):null;
   if(p){
     inp.value=p.precio.toFixed(2);
-    org.innerHTML=p.origen==='lista'
+    org.innerHTML=(p.origen==='lista'
       ? `<span style="color:var(--g1)">✔ precio de ${escAttr(col)}</span>`
-      : `<span style="color:var(--g1)">✔ PVP del Control de ventas</span>`;
+      : `<span style="color:var(--g1)">✔ PVP del Control de ventas</span>`)+infoCostoComisionGuia(col,prodId);
   } else {
     inp.value='';                       // en blanco, obligatorio
-    org.innerHTML=col
+    org.innerHTML=(col
       ? `<span style="color:#c62828">sin precio acordado — escríbelo</span>`
-      : `<span style="color:#f57c00">elige un colegio o escribe el precio</span>`;
+      : `<span style="color:#f57c00">elige un colegio o escribe el precio</span>`)+infoCostoComisionGuia(col,prodId);
   }
   actualizarResumenGuia();
 }
@@ -4458,13 +4738,13 @@ function aplicarPreciosColegio(){
     const p=col?precioParaGuia(col,sel.value):null;
     if(p){
       inp.value=p.precio.toFixed(2);
-      org.innerHTML=p.origen==='lista'
+      org.innerHTML=(p.origen==='lista'
         ? `<span style="color:var(--g1)">✔ precio de ${escAttr(col)}</span>`
-        : `<span style="color:var(--g1)">✔ PVP del Control de ventas</span>`;
+        : `<span style="color:var(--g1)">✔ PVP del Control de ventas</span>`)+infoCostoComisionGuia(col,sel.value);
       rellenados++;
     } else if(!inp.value){
-      org.innerHTML=col?`<span style="color:#c62828">sin precio acordado — escríbelo</span>`
-                       :`<span style="color:#f57c00">elige un colegio o escribe el precio</span>`;
+      org.innerHTML=(col?`<span style="color:#c62828">sin precio acordado — escríbelo</span>`
+                       :`<span style="color:#f57c00">elige un colegio o escribe el precio</span>`)+infoCostoComisionGuia(col,sel.value);
     }
   });
   actualizarResumenGuia();
@@ -4538,9 +4818,9 @@ function editarGuia(id){
     // Se respeta el precio con el que se registró la guía, no se recalcula solo
     const pvGuardado=parseFloat(l.precioVenta);
     if(precioInput) precioInput.value=(isFinite(pvGuardado)&&pvGuardado>0)?pvGuardado.toFixed(2):'';
-    if(origen) origen.innerHTML=(isFinite(pvGuardado)&&pvGuardado>0)
+    if(origen) origen.innerHTML=((isFinite(pvGuardado)&&pvGuardado>0)
       ? '<span style="color:var(--mu)">precio registrado en la guía</span>'
-      : '<span style="color:#c62828">esta guía quedó sin precio — complétalo</span>';
+      : '<span style="color:#c62828">esta guía quedó sin precio — complétalo</span>')+infoCostoComisionGuia(g.cliente,l.prodId);
   });
   marcarColegioGuia();
   actualizarResumenGuia();
@@ -4762,6 +5042,72 @@ function exportarGuiasCSV(){
   XLSX.utils.book_append_sheet(wb,ws2,'Resumen por Producto');
   XLSX.writeFile(wb,'guias_retiro_'+today()+'.xlsx');
   toast('Archivo Excel descargado','ok');
+}
+
+function imprimirResumenGuias(){
+  const q=(document.getElementById('guia-q')?.value||'').toLowerCase();
+  const guias=[...DB.guias].filter(g=>!q||g.cliente.toLowerCase().includes(q)||g.numero.toLowerCase().includes(q));
+  if(!guias.length)return toast('No hay guías registradas','err');
+  const ventaMap=new Map(),muestraMap=new Map();
+  guias.forEach(g=>g.lineas.forEach(l=>{
+    const tipo=clasifLineaGuia(l);
+    const map=tipo==='venta'?ventaMap:muestraMap;
+    const cur=map.get(g.cliente)||{cantidad:0,valor:0};
+    cur.cantidad+=l.cantidad;
+    cur.valor+=l.cantidad*(parseFloat(l.precioVenta)||0);
+    map.set(g.cliente,cur);
+  }));
+  const ventaArr=[...ventaMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  const muestraArr=[...muestraMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  const totVentaUnd=ventaArr.reduce((a,[,v])=>a+v.cantidad,0);
+  const totVentaVal=ventaArr.reduce((a,[,v])=>a+v.valor,0);
+  const totMuestraUnd=muestraArr.reduce((a,[,v])=>a+v.cantidad,0);
+  const filasVenta=ventaArr.map(([nombre,v])=>`<tr>
+      <td>${nombre}</td>
+      <td style="text-align:center">${v.cantidad}</td>
+      <td style="text-align:right;font-weight:600">${v.valor?fmt(v.valor):'—'}</td>
+    </tr>`).join('');
+  const filasMuestra=muestraArr.map(([nombre,v])=>`<tr>
+      <td>${nombre}</td>
+      <td style="text-align:center">${v.cantidad}</td>
+    </tr>`).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Resumen Guías de Retiro</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+      h3{color:#1a6b3c;margin:18px 0 6px}
+      p{color:#666;font-size:11px;margin-bottom:10px}
+      table{width:100%;border-collapse:collapse;margin-bottom:14px}
+      th{background:#1a6b3c;color:#fff;padding:7px 8px;text-align:left;font-size:11px}
+      td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
+      tr:nth-child(even) td{background:#f5faf7}
+      .total-row td{font-weight:700;background:#d4edda;border-top:2px solid #1a6b3c}
+      h3.muestras{color:#5a6270}
+      .muestras+p+table th{background:#5a6270}
+      .muestras+p+table .total-row td{background:#e8eaee;border-top:2px solid #5a6270}
+      @media print{button{display:none}}
+    ${dmPrintCSS()}</style></head><body>
+    ${dmPrintHeader('Resumen de guías de retiro',q?'Filtro: '+escH(q):'Todas las guías','Guías incluidas: '+guias.length)}
+    <h3>📦 Entregas para vender</h3>
+    <p>Total de libros entregados por colegio/cliente (con precio de venta).</p>
+    ${ventaArr.length?`<table>
+      <thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Total libros</th><th style="text-align:right">Valor</th></tr></thead>
+      <tbody>${filasVenta}
+        <tr class="total-row"><td>TOTAL:</td><td style="text-align:center">${totVentaUnd}</td><td style="text-align:right">${fmt(totVentaVal)}</td></tr>
+      </tbody>
+    </table>`:'<p><i>Sin entregas para vender en este filtro.</i></p>'}
+    <h3 class="muestras">📘 Muestras / Solucionarios</h3>
+    <p>Total de libros entregados como muestra por colegio/cliente — solo para revisión, no forman parte de la venta.</p>
+    ${muestraArr.length?`<table>
+      <thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Total libros</th></tr></thead>
+      <tbody>${filasMuestra}
+        <tr class="total-row"><td>TOTAL:</td><td style="text-align:center">${totMuestraUnd}</td></tr>
+      </tbody>
+    </table>`:'<p><i>Sin muestras/solucionarios en este filtro.</i></p>'}
+    <button onclick="window.print()" style="background:#1a6b3c;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+    </body></html>`);
+  win.document.close();
 }
 
 function imprimirGuias(){
@@ -5097,7 +5443,9 @@ function renderStockReport(){
   // venta primero, luego solucionarios/muestras; dentro, por nombre
   const orden={venta:0,solucionario:1,muestra:2};
   enrich.sort((a,b)=>(orden[a.cls]-orden[b.cls])||a.p.nombre.localeCompare(b.p.nombre,'es'));
-  const rows=enrich.map(({p,ent,sal,st,cls,valC})=>{
+  const ocultarCero=document.getElementById('rep-ocultar-cero')?.checked;
+  const enrichVisible=ocultarCero?enrich.filter(e=>e.st!==0):enrich;
+  const rows=enrichVisible.map(({p,ent,sal,st,cls,valC})=>{
     const rc=st<0?'stock-neg':st===0?'stock-zero':st<=5?'stock-low':'';
     const t=TIPO[cls];
     return`<tr class="${rc}">
@@ -5112,7 +5460,7 @@ function renderStockReport(){
       <td style="font-family:monospace">${fmt(valC)}</td>
       <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
-  tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
+  tb.innerHTML=(rows||'<tr><td colspan="11"><div class="empty">No hay productos con stock (todos están en 0)</div></td></tr>')+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
@@ -5204,6 +5552,173 @@ function corregirStockInicialDuplicado(){
   logHistorial('Stock inicial duplicado corregido',`${dup.length} producto(s), −${quitadas} u.`);
   save();renderStockReport();renderCatalogo();
   toast(`${dup.length} producto(s) corregidos — se quitaron ${quitadas} unidades duplicadas`+(conservados?` (${conservados} conservan algo de stock inicial real)`:''),'ok');
+}
+
+// ── AUDITORÍA DE INVENTARIO ─────────────────────────────────────────────────
+// Compara los 4 números que deberían llevarse bien entre sí: lo que entró
+// (Entradas), lo que salió a colegios (Guías de retiro), lo que queda
+// (Reporte de stock) y lo que está anotado como vendido (Colegios).
+
+function resumenEntradasTotal(){
+  let u=0,v=0;
+  DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{u+=m.cantidad||0; v+=(m.cantidad||0)*(parseFloat(m.precioCosto)||0);});
+  return {unidades:u,valor:v};
+}
+
+function resumenGuiasTotal(){
+  let u=0,v=0;
+  DB.guias.forEach(g=>(g.lineas||[]).forEach(l=>{u+=l.cantidad||0; v+=(l.cantidad||0)*(parseFloat(l.precioVenta)||0);}));
+  return {unidades:u,valor:v};
+}
+
+function resumenStockActualTotal(){
+  let u=0,v=0;
+  DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
+    const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
+    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
+    const st=(p.stockInicial||0)+ent-sal;
+    u+=st; v+=st*(p.precioCosto||0);
+  });
+  return {unidades:u,valor:v};
+}
+
+function resumenColegiosTotal(){
+  initColData();
+  let u=0,v=0;
+  colegiosList().forEach(c=>{
+    const d=DB.colData[c.nombre]; if(!d)return;
+    const t=totalesColegio(d);
+    u+=t.cant; v+=t.tv;
+  });
+  return {unidades:u,valor:v};
+}
+
+// Guías cuyo número se repite en 2+ entregas distintas (mismo papel usado dos veces = confusión)
+function guiasNumeroRepetido(){
+  const g={};
+  DB.guias.forEach(x=>{const k=String(x.numero||'').trim();if(!k)return;(g[k]=g[k]||[]).push(x);});
+  return Object.values(g).filter(arr=>arr.length>1);
+}
+
+// Por cada número de guía: ¿lo que dicen sus líneas coincide con lo que
+// realmente se descontó del inventario (movInv salida con esa misma referencia)?
+// Si no coincide, algo se restauró/editó a mano y el stock de ese número no es de fiar.
+function guiasDescuadreStock(){
+  const porNumero={};
+  DB.guias.forEach(g=>{
+    const k=String(g.numero||'').trim(); if(!k)return;
+    porNumero[k]=porNumero[k]||{numero:k,lineasU:0,clientes:new Set()};
+    (g.lineas||[]).forEach(l=>porNumero[k].lineasU+=l.cantidad||0);
+    porNumero[k].clientes.add(g.cliente||'');
+  });
+  const movPorRef={};
+  DB.movInv.filter(m=>m.tipo==='salida').forEach(m=>{
+    const k=String(m.ref||'').trim(); if(!k)return;
+    movPorRef[k]=(movPorRef[k]||0)+(m.cantidad||0);
+  });
+  return Object.values(porNumero).map(g=>{
+    const movU=movPorRef[g.numero]||0;
+    return {...g,movU,dif:g.lineasU-movU,clientes:[...g.clientes]};
+  }).filter(g=>Math.abs(g.dif)>0);
+}
+
+// Por colegio: ¿lo que le entregaste en Guías de retiro coincide con lo que
+// tienes anotado como vendido en Colegios → Control de ventas? No siempre una
+// diferencia es un error (puede que falte transcribir la venta), pero es lo
+// primero que hay que revisar cuando algo no cuadra.
+function comparaGuiasVsColegios(){
+  initColData();
+  const entregadoPorCliente={};
+  DB.guias.forEach(g=>{
+    const u=(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
+    const k=g.cliente||'(sin nombre)';
+    entregadoPorCliente[k]=(entregadoPorCliente[k]||0)+u;
+  });
+  return colegiosList().map(c=>{
+    const d=DB.colData[c.nombre]; if(!d)return null;
+    const registrado=totalesColegio(d).cant;
+    let entregado=0;
+    Object.keys(entregadoPorCliente).forEach(cli=>{
+      if(cli===c.nombre||_coincideColegio(cli,c.nombre)) entregado+=entregadoPorCliente[cli];
+    });
+    return {nombre:c.nombre,entregado,registrado,dif:entregado-registrado};
+  }).filter(x=>x&&Math.abs(x.dif)>0);
+}
+
+function renderAuditoria(){
+  const ent=resumenEntradasTotal(), gu=resumenGuiasTotal(), st=resumenStockActualTotal(), col=resumenColegiosTotal();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('aud-entradas',`${ent.unidades} u · ${fmt(ent.valor)}`);
+  set('aud-guias',`${gu.unidades} u · ${fmt(gu.valor)}`);
+  set('aud-stock',`${st.unidades} u · ${fmt(st.valor)}`);
+  set('aud-colegios',`${col.unidades} u · ${fmt(col.valor)}`);
+
+  const cont=document.getElementById('aud-resultado');
+  if(!cont)return;
+  let html='';
+
+  // 1) Cuenta general: Stock = Inicial + Entradas − Guías − Notas de crédito
+  const salNC=DB.movInv.filter(m=>m.tipo==='salida'&&String(m.ref||'').startsWith('NC-')).reduce((a,m)=>a+(m.cantidad||0),0);
+  const inicial=DB.productos.filter(p=>p.editorial!=='Hist.').reduce((a,p)=>a+(p.stockInicial||0),0);
+  const stockEsperado=inicial+ent.unidades-gu.unidades-salNC;
+  const okStock=stockEsperado===st.unidades;
+  html+=`<div style="background:${okStock?'#f0fdf4':'#fef2f2'};border:1px solid ${okStock?'#86efac':'#fca5a5'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:${okStock?'#166534':'#991b1b'}">
+    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC}) = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
+  </div>`;
+
+  // 2) Guías con número repetido
+  const dupN=guiasNumeroRepetido();
+  if(dupN.length){
+    html+=`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#92400e">
+      <b>⚠️ ${dupN.length} número(s) de guía repetido(s)</b> — cada uno se usó en más de una entrega. Revisa si son copias o entregas distintas que necesitan renumerarse:<br>
+      ${dupN.map(arr=>`${escH(arr[0].numero)}: ${arr.map(g=>escH(g.cliente||'?')+' ('+escH(g.fecha||'')+')').join(' · ')}`).join('<br>')}
+    </div>`;
+  }
+
+  // 3) Guías cuya cantidad guardada no coincide con lo descontado del inventario
+  const desc=guiasDescuadreStock();
+  if(desc.length){
+    html+=`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#991b1b">
+      <b>⚠️ ${desc.length} guía(s) donde lo anotado no coincide con lo descontado del inventario</b> (posible dato restaurado o editado a mano):<br>
+      ${desc.map(g=>`${escH(g.numero)} (${g.clientes.map(c=>escH(c)).join(', ')}): guía dice ${g.lineasU} u., inventario descontó ${g.movU} u. — diferencia ${g.dif>0?'+':''}${g.dif}`).join('<br>')}
+    </div>`;
+  }
+
+  // 4) Diferencias entre lo entregado (Guías) y lo anotado como vendido (Colegios).
+  // Se separan en 2 grupos: "falta anotar" es normal si Mónica registra la venta
+  // días después de entregar — no es una alerta. "Anotado de más" SÍ es raro
+  // (implica que hay más venta registrada que entregas físicas) y merece revisión
+  // — casos típicos: nombre de colegio mal escrito en una guía (no se contó) o
+  // una venta anotada sin su guía correspondiente.
+  const cmpTodo=comparaGuiasVsColegios();
+  const pendientes=cmpTodo.filter(c=>c.dif>0).sort((a,b)=>b.dif-a.dif);
+  const deMas=cmpTodo.filter(c=>c.dif<0).sort((a,b)=>a.dif-b.dif);
+  if(deMas.length){
+    html+=`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#9a3412">
+      <b>🔍 ${deMas.length} colegio(s) con MÁS anotado en Control de ventas que lo entregado en Guías</b> — esto es lo raro, revisa cada uno (suele ser un nombre de colegio mal escrito en alguna guía, que por eso no se contó):<br>
+      ${deMas.map(c=>`${escH(c.nombre)}: entregado ${c.entregado} u. · anotado ${c.registrado} u. · <b>anotado ${-c.dif} de más</b>`).join('<br>')}
+    </div>`;
+  }
+  if(pendientes.length){
+    html+=`<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#1e3a5f">
+      <b>📋 ${pendientes.length} colegio(s) con venta(s) pendientes de anotar en Control de ventas</b> — normal si sueles anotar la venta unos días después de entregar, no es una alerta:<br>
+      ${pendientes.map(c=>`${escH(c.nombre)}: entregado ${c.entregado} u. · anotado ${c.registrado} u. · faltan anotar ${c.dif}`).join('<br>')}
+    </div>`;
+  }
+
+  // 5) Productos con stock negativo (mismo cálculo que Reporte de stock)
+  const neg=productosStockNegativo();
+  if(neg.length){
+    html+=`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#991b1b">
+      <b>⚠️ ${neg.length} producto(s) con stock negativo</b> (vendiste/entregaste más de lo que compraste) — ver detalle en <a href="#" onclick="irAInvTab('rep');return false" style="color:#991b1b;text-decoration:underline">Reporte de stock</a>.
+    </div>`;
+  }
+
+  if(!dupN.length&&!desc.length&&!deMas.length&&!neg.length){
+    html+=`<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;text-align:center;font-size:13px;color:#166534;font-weight:700">✔ No se encontró ningún problema — todo cuadra.</div>`;
+  }
+
+  cont.innerHTML=html;
 }
 
 function imprimirInventario(){
@@ -5434,20 +5949,34 @@ function migrarPreciosGuias(){
   const precioMap={};
   actual.forEach(p=>{if(p.precioVenta>0)precioMap[(p.nombre||'').trim().toUpperCase()]=p.precioVenta;});
   let lineasFixed=0,guiasFixed=0;
+  const noEncontrado=[]; // {colegio,nombre} — para avisar cuáles quedaron sin precio y por qué
   DB.guias=DB.guias.map(g=>{
     let changed=false;
     const lineas=g.lineas.map(l=>{
       if(l.precioVenta>0)return l;
-      const pv=precioMap[(l.nombre||'').trim().toUpperCase()]||0;
+      // Primero el precio ACORDADO con este colegio (Lista de precios o Control
+      // de ventas) — es más exacto que el precio general del catálogo, que a
+      // veces ni siquiera existe porque el producto solo se vende por colegio.
+      const deColegio=precioParaGuia(g.cliente,l.prodId);
+      const pv=(deColegio&&deColegio.precio>0)?deColegio.precio:(precioMap[(l.nombre||'').trim().toUpperCase()]||0);
       if(pv>0){changed=true;lineasFixed++;return{...l,precioVenta:pv};}
+      noEncontrado.push({colegio:g.cliente,nombre:l.nombre});
       return l;
     });
     if(changed){guiasFixed++;const total=lineas.reduce((s,l)=>s+(l.cantidad*l.precioVenta),0);return{...g,lineas,total};}
     return g;
   });
-  if(!lineasFixed)return toast('No hay líneas por actualizar (ya tienen precio o no se encontró equivalente)','ok');
+  if(!lineasFixed&&!noEncontrado.length)return toast('No hay líneas por actualizar (todas ya tienen precio)','ok');
   save();renderGuias();
-  toast('✅ '+lineasFixed+' líneas actualizadas en '+guiasFixed+' guías','ok');
+  toast((lineasFixed?'✅ '+lineasFixed+' líneas actualizadas en '+guiasFixed+' guías. ':'')+(noEncontrado.length?'⚠ '+noEncontrado.length+' sin precio todavía.':''), lineasFixed?'ok':'err');
+  if(noEncontrado.length){
+    const vistos=new Set();
+    const lista=noEncontrado.filter(x=>{const k=x.colegio+'|'+x.nombre;if(vistos.has(k))return false;vistos.add(k);return true;})
+      .sort((a,b)=>a.colegio.localeCompare(b.colegio)||a.nombre.localeCompare(b.nombre));
+    alert('No se encontró precio para '+noEncontrado.length+' línea(s) (mostrando '+lista.length+' combinación(es) distintas de colegio + libro):\n\n'
+      +lista.map(x=>'• '+x.colegio+' — '+x.nombre).join('\n')
+      +'\n\nEsto pasa cuando el nombre del libro en la Guía no coincide exactamente con el nombre escrito en el Control de ventas de ese colegio (por ejemplo "IMAGINA Y APRENDE 3 AÑOS" vs "IMAGINA Y APRENDE NUEVA EDICION 3 AÑOS"). Revisa que el nombre en Control de ventas sea igual, o escribe el precio a mano en la guía.');
+  }
 }
 
 function exportProductosCSV(){
@@ -5456,14 +5985,19 @@ function exportProductosCSV(){
 }
 
 function exportStockCSV(){
+  const ocultarCero=document.getElementById('rep-ocultar-cero')?.checked;
   const rows=[['Codigo','Nombre','Editorial','Nivel','Stock Inicial','Entradas','Salidas','Stock Actual','P.Costo','P.Venta','Valor Costo']];
   DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
+    if(ocultarCero&&st===0)return;
     rows.push([p.codigo,p.nombre,p.editorial,p.nivel,p.stockInicial,ent,sal,st,p.precioCosto,p.precioVenta,st*p.precioCosto]);
   });
-  dlCSV(rows,'reporte_stock.csv');
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Reporte de stock');
+  XLSX.writeFile(wb,'reporte_stock_'+today()+'.xlsx');
 }
 
 // ===================================================
@@ -6156,6 +6690,37 @@ function precioParaGuia(colegio,prodId){
   const acordado=precioAcordado(colegio,prodId);
   if(acordado) return {precio:parseFloat(acordado.precio),origen:'lista'};
   return precioControlVentas(colegio,prodId);
+}
+
+// Info de referencia SOLO para la vendedora (nunca se imprime en la Nota de
+// Entrega del colegio): cuánto cuesta el libro a la editorial y cuál es la
+// comisión pactada con este colegio, tomando los mismos datos que ya se ven
+// en Colegios > Control de ventas.
+function infoCostoComisionGuia(colegio,prodId){
+  if(!colegio||!prodId) return '';
+  const registroPrecio=(DB.preciosCol?.[colegio]||[]).find(p=>p.prodId===prodId);
+  const d=DB.colData?.[colegio];
+  let lineaControl=null;
+  if(d&&Array.isArray(d.lineas)){
+    const prod=DB.productos.find(p=>p.id===prodId);
+    const nom=(prod?.nombre||'').trim().toLowerCase();
+    lineaControl=d.lineas.find(x=>x.prodId===prodId)
+      ||(nom?d.lineas.find(x=>(x.libro||'').trim().toLowerCase()===nom):null);
+  }
+  const costo=parseFloat(registroPrecio?.costo)||parseFloat(lineaControl?.costo)||0;
+  let comisionTxt='';
+  if(lineaControl&&d&&lineaComisiona(lineaControl)){
+    const pct=pctLinea(d,lineaControl);
+    if(pct>0){
+      const pvp=parseFloat(lineaControl.pvp)||0;
+      comisionTxt=`Comisión: ${pct}% ($${(pvp*pct/100).toFixed(2)} c/u)`;
+    }
+  }
+  const partes=[];
+  if(costo>0)partes.push(`Costo editorial: $${costo.toFixed(2)}`);
+  if(comisionTxt)partes.push(comisionTxt);
+  if(!partes.length)return '';
+  return `<div style="color:#8a5a00;margin-top:2px">${partes.join(' · ')}</div>`;
 }
 
 function margenPct(costo,precio){
@@ -7527,6 +8092,51 @@ function renderColResumen(){
     </div>`;
   const tb=document.getElementById('tb-col-res');
   tb.innerHTML=rows+`<tr class="total-row"><td>TOTALES</td><td></td><td></td><td></td><td>${fmt(totalTV)}</td><td>${fmt(totalC)}</td><td>${fmt(totalP)}</td><td>${fmt(totalCostoEd)}</td><td>${fmt(totalPagEd)}</td><td>${fmt(totalSaldoEd)}</td><td></td></tr>`;
+
+  renderColDetalleTodos();
+}
+
+// Tabla plana con cada libro de cada colegio junto — para no tener que ir
+// escogiendo colegio por colegio. Usa la misma cuenta que totalesColegio()/
+// exportColegiosCSV(), así que siempre coincide con los totales de arriba.
+function renderColDetalleTodos(){
+  const tb=document.getElementById('tb-col-detalle');
+  if(!tb)return;
+  initColData();
+  const q=(document.getElementById('col-det-q')?.value||'').toLowerCase();
+  let totV=0,totVenta=0,totCom=0,totCosto=0,totGan=0,n=0;
+  const filas=[];
+  colegiosList().forEach(c=>{
+    const d=DB.colData[c.nombre];if(!d)return;
+    const pvUnit=d.comisionPVUnit??0.5;
+    (d.lineas||[]).forEach(l=>{
+      const vend=(l.cant||0)-(l.dev||0);
+      if(!vend&&!(l.cant||0))return;
+      if(q&&!c.nombre.toLowerCase().includes(q)&&!(l.libro||'').toLowerCase().includes(q))return;
+      const tv=vend*(l.pvp||0);
+      const costo=vend*(l.costo||0);
+      const sc=lineaComisiona(l);
+      const com=sc?(tv*(pctLinea(d,l)/100)+(l.cant||0)*pvUnit):0;
+      const gan=tv-com-costo;
+      filas.push({colegio:c.nombre,libro:l.libro||'(sin título)',vend,pvp:l.pvp||0,tv,com,costo,gan});
+    });
+  });
+  filas.sort((a,b)=>a.colegio.localeCompare(b.colegio,'es')||a.libro.localeCompare(b.libro,'es'));
+  if(!filas.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin resultados</div></td></tr>';return}
+  const html=filas.map(f=>{
+    totV+=f.vend;totVenta+=f.tv;totCom+=f.com;totCosto+=f.costo;totGan+=f.gan;n++;
+    return`<tr>
+      <td>${escH(f.colegio)}</td>
+      <td>${escH(f.libro)}</td>
+      <td style="text-align:center">${f.vend}</td>
+      <td style="font-family:monospace">${fmt(f.pvp)}</td>
+      <td style="font-family:monospace">${fmt(f.tv)}</td>
+      <td style="font-family:monospace;color:var(--a1)">${fmt(f.com)}</td>
+      <td style="font-family:monospace">${fmt(f.costo)}</td>
+      <td style="font-family:monospace;font-weight:600;color:${f.gan>=0?'var(--g1)':'var(--r1)'}">${fmt(f.gan)}</td>
+    </tr>`;
+  }).join('');
+  tb.innerHTML=html+`<tr class="total-row" style="background:var(--g3)"><td colspan="2" style="text-align:right;font-weight:700">TOTALES (${n} línea(s)):</td><td style="font-weight:700">${totV}</td><td></td><td style="font-family:monospace;font-weight:700">${fmt(totVenta)}</td><td style="font-family:monospace;font-weight:700">${fmt(totCom)}</td><td style="font-family:monospace;font-weight:700">${fmt(totCosto)}</td><td style="font-family:monospace;font-weight:700">${fmt(totGan)}</td></tr>`;
 }
 
 function irDetalle(nombre){
@@ -8785,23 +9395,25 @@ function renderLiquidacion(){
   document.getElementById('liq-por-editorial').innerHTML=Object.keys(porEditMap).length===0
     ?'<div class="empty">Sin compras editoriales registradas</div>'
     :Object.values(porEditMap).sort((a,b)=>b.total-a.total).map(e=>`<div class="pf"><span>${escH(e.display)}</span><span class="${e.total>0?'cr':'cg'}">${fmt(e.total)}</span></div>`).join('');
-  // Por colegio — solo registros con proveedor definido (#8 fix)
-  const porCol={};
-  f(DB.regs).filter(r=>r.tipo==='venta'&&r.proveedor).forEach(r=>{porCol[r.proveedor]=(porCol[r.proveedor]||0)+r.total;});
-  document.getElementById('liq-por-colegio').innerHTML=Object.keys(porCol).length===0
+  // Por colegio — antes buscaba en DB.regs tipo 'venta' (la pestaña Ventas, que
+  // casi no usas) y por eso siempre salía "Sin ventas registradas". Ahora usa
+  // Control de ventas de cada colegio (colData), la misma fuente que Colegios →
+  // Resumen general, así los números coinciden en todo el sistema.
+  const porColArr=colegiosList().map(c=>{
+    const d=DB.colData?.[c.nombre]; if(!d)return null;
+    const T=totalesColegio(d);
+    if(!T.tv)return null;
+    return {col:c.nombre,venta:T.tv,com:T.totalColegio,costoEditCol:T.costo,margen:T.ganancia};
+  }).filter(Boolean);
+  document.getElementById('liq-por-colegio').innerHTML=!porColArr.length
     ?'<div class="empty">Sin ventas registradas</div>'
-    :Object.entries(porCol).sort((a,b)=>b[1]-a[1]).map(([col,venta])=>{
-        const com=f(DB.comisiones).filter(c=>c.tipo==='colegio'&&normK(c.beneficiario)===normK(col)).reduce((a,c)=>a+c.monto,0);
-        const colDat=DB.colData?.[col];
-        const costoEditCol=colDat?.lineas?.reduce((a,l)=>a+(l.cant-l.dev)*(l.costo||0),0)||0;
-        const margen=venta-com-costoEditCol;
-        return`<div class="pf"><span><b>${escH(col)}</b></span><span style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
+    :porColArr.sort((a,b)=>b.venta-a.venta).map(({col,venta,com,costoEditCol,margen})=>
+      `<div class="pf"><span><b>${escH(col)}</b></span><span style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <span>Venta: <b class="cg">${fmt(venta)}</b></span>
           <span>Comisión: <b class="cr">${fmt(com)}</b></span>
           ${costoEditCol>0?`<span>Costo editorial: <b class="cr">${fmt(costoEditCol)}</b></span>`:''}
           <span>Ganancia neta: <b class="${margen>=0?'cg':'cr'}">${fmt(margen)}</b></span>
-        </span></div>`;
-      }).join('');
+        </span></div>`).join('');
 }
 
 // ===================================================
