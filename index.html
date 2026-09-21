@@ -1527,6 +1527,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       </div>
     </div>
     <div class="fg"><label>Observación</label><input type="text" id="g-obs" placeholder="Notas adicionales..."></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px;cursor:pointer">
+      <input type="checkbox" id="g-muestra"> 🔬 Esta guía es de <b>MUESTRAS</b> (no cuenta como venta — no se compara contra Control de ventas)
+    </label>
     <input type="hidden" id="g-edit-id" value="">
     <div id="g-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-bottom:10px;display:none"></div>
     <div class="btn-row">
@@ -3203,6 +3206,16 @@ function clasifLineaGuia(l){
   return clasifMaterial(prod||{nombre:l.nombre});
 }
 
+// ¿Esta guía es de muestras (no cuenta como venta)? Prioriza el checkbox
+// explícito; si la guía es vieja y no lo tiene, cae al texto de la nota
+// (así las guías marcadas a mano antes de que existiera el checkbox se
+// siguen reconociendo).
+function esGuiaMuestra(g){
+  if(g.esMuestra===true) return true;
+  if(g.esMuestra===false) return false;
+  return /CONTROL DE MUESTRAS|MUESTRA/i.test(g.observacion||g.nota||'');
+}
+
 function stockActual(prodId){
   const prod=DB.productos.find(p=>p.id===prodId);
   const inicial=prod?.stockInicial||0;
@@ -4600,6 +4613,7 @@ function abrirModalGuia(){
   document.getElementById('g-cliente').value='';
   document.getElementById('g-obs').value='';
   document.getElementById('g-fact').value='';
+  document.getElementById('g-muestra').checked=false;
   document.getElementById('g-edit-id').value='';
   document.getElementById('g-col-aviso').innerHTML='';
   const pb=document.getElementById('g-pegar-box'); if(pb)pb.style.display='none';
@@ -4793,6 +4807,7 @@ function editarGuia(id){
   document.getElementById('g-cliente').value=g.cliente;
   document.getElementById('g-fact').value=g.factura||'';
   document.getElementById('g-obs').value=g.observacion||'';
+  document.getElementById('g-muestra').checked=esGuiaMuestra(g);
   document.getElementById('g-edit-id').value=id;
   document.getElementById('modal-guia-titulo').textContent='Editar guía '+g.numero;
   document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
@@ -4871,6 +4886,7 @@ function guardarGuia(){
   if(!lineas.length)return toast('Agrega al menos un producto','err');
   let numero=document.getElementById('g-num').value;
   const fecha=document.getElementById('g-fecha').value||today();
+  const esMuestra=document.getElementById('g-muestra').checked;
 
   // Evitar número de guía repetido (solo al crear una nueva)
   if(!editId&&DB.guias.some(g=>String(g.numero||'').trim()===String(numero).trim())){
@@ -4892,6 +4908,7 @@ function guardarGuia(){
     DB.guias[idx]={...gOrig,numero,fecha,cliente,
       factura:document.getElementById('g-fact').value,
       observacion:document.getElementById('g-obs').value,
+      esMuestra,
       lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
     // Crear nuevos movimientos de stock
     lineas.forEach(l=>{
@@ -4907,6 +4924,7 @@ function guardarGuia(){
     const guia={id:uid(),numero,fecha,cliente,
       factura:document.getElementById('g-fact').value,
       observacion:document.getElementById('g-obs').value,
+      esMuestra,
       lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
     DB.guias.push(guia);
     lineas.forEach(l=>{
@@ -4960,7 +4978,7 @@ function renderGuias(){
     const esHistorica=g.lineas.some(l=>DB.productos.find(p=>p.id===l.prodId)?.editorial==='Hist.'||!DB.productos.find(p=>p.id===l.prodId));
     const btnEditar=esHistorica?`<span title="Guía histórica (catálogo anterior)" style="color:var(--mu);font-size:10px;padding:2px 4px">hist.</span>`:`<button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button>`;
     return`<tr>
-      <td style="font-family:monospace;font-weight:600">${g.numero}</td>
+      <td style="font-family:monospace;font-weight:600">${g.numero}${esGuiaMuestra(g)?' <span title="No cuenta como venta" style="background:#ede7f6;color:#5e35b1;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">🔬 MUESTRA</span>':''}</td>
       <td style="font-family:monospace">${g.fecha}</td>
       <td>${g.cliente}</td>
       <td style="max-width:180px;font-size:11px">${prods}</td>
@@ -5630,6 +5648,7 @@ function comparaGuiasVsColegios(){
   initColData();
   const entregadoPorCliente={};
   DB.guias.forEach(g=>{
+    if(esGuiaMuestra(g)) return;             // las muestras no son venta, no se comparan
     const u=(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
     const k=g.cliente||'(sin nombre)';
     entregadoPorCliente[k]=(entregadoPorCliente[k]||0)+u;
