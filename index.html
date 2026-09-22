@@ -639,10 +639,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-s btn-sm" onclick="exportarRespaldosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirRespaldos()"><i class="ti ti-printer"></i> Imprimir listado</button>
+        <button class="btn btn-sm" style="background:#6a1b9a;color:#fff" onclick="abrirCuadreVendedora()" title="Suma lo que se llevó (respaldo + guías de sus colegios) contra lo devuelto, por libro"><i class="ti ti-report"></i> Cuadre completo (con guías)</button>
       </div>
     </div>
     <div class="filters">
-      <input type="search" id="rv-q" placeholder="Buscar vendedor..." oninput="renderRespaldosVendedor()" style="min-width:180px">
+      <input type="search" id="rv-q" placeholder="Buscar vendedor... (escribe el nombre aquí antes de pedir el Cuadre completo)" oninput="renderRespaldosVendedor()" style="min-width:280px">
     </div>
     <div class="tbl-wrap">
       <table>
@@ -1072,7 +1073,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Colegio</th><th>Total vendido</th><th>Comisión colegio</th><th>Tu ingreso esperado</th><th>Ya cobrado</th><th>Saldo por cobrar</th></tr></thead>
+      <thead><tr><th>Colegio</th><th>Total vendido</th><th>Comisión colegio</th><th>Tu ingreso esperado</th><th>Ya cobrado</th><th>Saldo por cobrar</th><th></th></tr></thead>
       <tbody id="tb-porcobrar"></tbody>
     </table>
   </div>
@@ -3976,6 +3977,233 @@ function exportarRespaldosCSV(){
   dlCSV(rows,'respaldos_vendedor.csv');
 }
 
+// ── CUADRE POR VENDEDORA (Respaldo vendedor + Guías hechas a nombre de "sus" colegios) ──
+// Algunas vendedoras entregan libros directo en ciertos colegios: la Guía de
+// retiro queda a nombre del COLEGIO (no de la vendedora), así que "Respaldo
+// vendedor" solo no alcanza para saber todo lo que tiene en su poder.
+//
+// A propósito esto NO usa coincidencia difusa (a diferencia de _coincideColegio
+// que se usa en el resto del sistema): con nombres cortos tipo "Liceo X" la
+// difusa puede agarrar por error un colegio totalmente distinto que solo
+// comparte una palabra genérica (pasó de verdad: "Liceo Mediterráneo" agarraba
+// también guías de "Liceo Los Álamos", que no tiene nada que ver). Aquí se usa
+// una lista de grafías EXACTAS ya vistas en los datos reales — si aparece una
+// guía con una forma de escribir el nombre que no está en la lista, avísame y
+// la agrego (o agrega otra vendedora nueva con el mismo caso).
+const VENDEDORES_CONFIG={
+  'EVELYN CEDEÑO':{
+    aliasesVendedora:['EVELYN CEDEÑO','EVELYN CEDENO'],
+    colegios:[
+      {nombre:'CDI Coquitos y Bajitos', alias:['CDI COQUITOS Y BAJITOS']},
+      {nombre:'U.E. Saulo', alias:['U.E.SAULO','U.E. SAULO','UNIDAD EDUCATIVA PARTICULAR SAULO','SAULO']},
+      {nombre:'Liceo Mediterráneo', alias:['LICEO MEDITERRANEO','LICEO MEDITERRÁNEO']},
+      {nombre:'U.E. Florentino', alias:['U.E.FLORENTINOS','U.E. FLORENTINO','U.E.FLORENTINO']},
+      {nombre:'Colegio Nuevo Ecuador', alias:['COLEGIO NUEVO ECUADOR']}
+    ]
+  }
+};
+
+function _configVendedora(vendedor){
+  const t=_normNombre(vendedor);
+  const clave=Object.keys(VENDEDORES_CONFIG).find(k=>{
+    const n=_normNombre(k);
+    return t===n||t.includes(n)||(t.length>=3&&n.includes(t));
+  });
+  return clave?VENDEDORES_CONFIG[clave]:{aliasesVendedora:[vendedor],colegios:[]};
+}
+// Compara contra una lista ya normalizada de grafías exactas conocidas
+// (igualdad, o una contiene a la otra — para tolerar espacios/palabras de más).
+function _esDeVendedora(texto,aliasesNorm){
+  const t=_normNombre(texto||'');
+  if(!t)return false;
+  return aliasesNorm.some(n=>n&&(t===n||t.includes(n)||n.includes(t)));
+}
+
+// Junta TODO lo que tiene en su poder una vendedora, por libro:
+//  - lo que se llevó directo (Respaldo vendedor a su nombre)
+//  - lo que se entregó en los colegios que ella reparte (Guías de retiro)
+//  - lo devuelto, que puede venir de DOS lugares: el botón ↩ Devolución de
+//    Respaldo vendedor, O una ENTRADA de inventario registrada como
+//    "Devolución [vendedora]" (Inventario → Entradas) — esta última SÍ suma
+//    stock real y es como Mónica la registra en la práctica.
+// falta = llevado − devuelto (nunca negativo).
+function resumenVendedora(vendedor){
+  const cfg=_configVendedora(vendedor);
+  const aliasesGuias=[...cfg.aliasesVendedora,...cfg.colegios.flatMap(c=>c.alias)].map(_normNombre);
+  const aliasesVendedoraNorm=cfg.aliasesVendedora.map(_normNombre);
+
+  // "Se llevó" sale SOLO de Guías de retiro — es lo único que de verdad
+  // descuenta inventario. Respaldo vendedor queda fuera a propósito: es un
+  // comprobante informal que NO afecta el stock (ver nota en su propia
+  // pantalla), así que no es una fuente confiable de cuánto tiene en su poder.
+  const guiasUsadas=(DB.guias||[]).filter(g=>_esDeVendedora(g.cliente,aliasesGuias));
+  // "Devuelto" sale de Entradas de inventario (sí es un movimiento real de
+  // stock) con proveedor tipo "Devolución [vendedora]".
+  const vendedorTokens=_normNombre(vendedor).split(' ').filter(t=>t.length>=4);
+  const entradasDevol=(DB.movInv||[]).filter(m=>{
+    if(m.tipo!=='entrada')return false;
+    const p=_normNombre(m.proveedor||'');
+    if(!p.includes('DEVOL'))return false;
+    return vendedorTokens.some(t=>p.includes(t));
+  });
+  const prodNombre={}; (DB.productos||[]).forEach(p=>prodNombre[p.id]=p.nombre);
+
+  const porLibro={};
+  function add(nombre,llevado,devuelto){
+    const k=_normNombre(nombre);
+    if(!porLibro[k])porLibro[k]={nombre,llevado:0,devuelto:0};
+    porLibro[k].llevado+=llevado;
+    porLibro[k].devuelto+=devuelto;
+  }
+  guiasUsadas.forEach(g=>(g.lineas||[]).forEach(l=>add(l.nombre,l.cantidad||0,0)));
+  entradasDevol.forEach(m=>{
+    const nombre=prodNombre[m.prodId]||'(producto eliminado)';
+    add(nombre,0,m.cantidad||0);
+  });
+
+  const libros=Object.values(porLibro).map(x=>({...x,falta:Math.max(0,x.llevado-x.devuelto)}))
+    .sort((a,b)=>b.falta-a.falta||a.nombre.localeCompare(b.nombre));
+
+  // ── Resumen por colegio: SOLO "se llevó" (viene de la Guía, sí sabemos a qué
+  // colegio fue). "Devuelto" NO se puede repartir por colegio con los datos que
+  // hay hoy: la Entrada "Devolución [vendedora]" es un monto GENERAL, sin decir
+  // de cuál colegio salió cada libro devuelto. Por eso ese total va en una fila
+  // aparte, no repartido — inventar el reparto sería adivinar, no un dato real.
+  const porColegio={};
+  function addColegio(nombre,llevado,devuelto){
+    if(!porColegio[nombre]) porColegio[nombre]={nombre,llevado:0,devuelto:0};
+    porColegio[nombre].llevado+=llevado;
+    porColegio[nombre].devuelto+=devuelto;
+  }
+  function grupoDeGuia(g){
+    const t=_normNombre(g.cliente||'');
+    if(aliasesVendedoraNorm.some(n=>n&&(t===n||t.includes(n)||n.includes(t)))) return vendedor+' (directo)';
+    const col=cfg.colegios.find(c=>c.alias.some(a=>{const an=_normNombre(a);return an&&(t===an||t.includes(an)||an.includes(t));}));
+    return col?col.nombre:g.cliente;
+  }
+  guiasUsadas.forEach(g=>{
+    const total=(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
+    addColegio(grupoDeGuia(g),total,0);
+  });
+  const totalEntradasDevol=entradasDevol.reduce((a,m)=>a+(m.cantidad||0),0);
+  if(totalEntradasDevol>0) addColegio('(sin colegio específico — devolución general)',0,totalEntradasDevol);
+
+  const colegios=Object.values(porColegio).map(x=>({...x,falta:Math.max(0,x.llevado-x.devuelto)}))
+    .sort((a,b)=>b.llevado-a.llevado);
+
+  return {
+    vendedor,colegiosAsoc:cfg.colegios.map(c=>c.nombre),guiasUsadas,entradasDevol,libros,colegios,
+    totalLlevado:libros.reduce((a,x)=>a+x.llevado,0),
+    totalDevuelto:libros.reduce((a,x)=>a+x.devuelto,0),
+    totalFalta:libros.reduce((a,x)=>a+x.falta,0)
+  };
+}
+
+// Botón "Cuadre completo": toma el nombre del buscador de Respaldo vendedor
+// (ya NO usa prompt() — eso disparaba el bloqueador de ventanas emergentes de
+// Chrome antes de llegar a abrir el reporte).
+function abrirCuadreVendedora(){
+  const v=(document.getElementById('rv-q')?.value||'').trim();
+  if(!v){
+    toast('Escribe primero el nombre de la vendedora en el buscador de arriba','err');
+    document.getElementById('rv-q')?.focus();
+    return;
+  }
+  imprimirCuadreVendedora(v);
+}
+
+function imprimirCuadreVendedora(vendedor){
+  vendedor=(vendedor||'').trim();
+  if(!vendedor){toast('Escribe el nombre de la vendedora primero','err');return;}
+  const R=resumenVendedora(vendedor);
+  if(!R.libros.length){toast('No encontré guías de retiro para "'+vendedor+'"','err');return;}
+
+  const filas=R.libros.map(l=>`<tr data-falta="${l.falta}" style="${l.falta<=0?'display:none':''}">
+    <td>${escH(l.nombre)}</td>
+    <td style="text-align:center">${l.llevado}</td>
+    <td style="text-align:center">${l.devuelto}</td>
+    <td style="text-align:center;font-weight:700;color:${l.falta>0?'#c62828':'#2e7d32'}">${l.falta}</td>
+  </tr>`).join('');
+
+  // Mensaje corto listo para WhatsApp: solo lo que todavía falta, sin el
+  // resto de la lista (eso es lo que "no era práctico" de la tabla completa).
+  const itemsFalta=R.libros.filter(l=>l.falta>0);
+  const fechaTxt=new Date().toLocaleDateString('es-EC');
+  let wa=`*Cuadre — ${vendedor}*\n${fechaTxt}\n\n`;
+  if(itemsFalta.length){
+    wa+='Pendiente de traer/devolver:\n';
+    itemsFalta.forEach(l=>{ wa+=`- ${l.nombre}: faltan ${l.falta}\n`; });
+    wa+=`\nTOTAL pendiente: ${itemsFalta.reduce((a,l)=>a+l.falta,0)} libros`;
+  }else{
+    wa+='✅ Todo entregado o devuelto. No queda nada pendiente.';
+  }
+
+  const filasColegio=R.colegios.map(c=>`<tr>
+    <td>${escH(c.nombre)}</td>
+    <td style="text-align:center">${c.llevado}</td>
+    <td style="text-align:center">${c.devuelto}</td>
+    <td style="text-align:center;font-weight:700;color:${c.falta>0?'#c62828':'#2e7d32'}">${c.falta}</td>
+  </tr>`).join('');
+
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Cuadre — ${escH(vendedor)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;padding:15px;color:#222}
+    table{width:100%;border-collapse:collapse;margin-top:6px}
+    th{background:#1565c0;color:#fff;padding:6px;text-align:left;font-size:11px}
+    td{padding:5px 6px;border-bottom:1px solid #eee}
+    tr:nth-child(even){background:#f8f9fa}
+    h3{margin-top:22px;font-size:13px;color:#1565c0;border-top:2px solid #1565c0;padding-top:8px}
+    .tot{background:#e3f2fd;font-weight:bold}
+    .nota{background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-size:11px;color:#92400e;margin-bottom:10px}
+    .barra{display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;text-decoration:none;display:inline-block}
+    label.chk{font-size:12px;color:#333;display:flex;align-items:center;gap:5px;cursor:pointer}
+    .falta-box{margin:14px 0;border:3px solid ${R.totalFalta>0?'#c62828':'#2e7d32'};border-radius:8px;padding:14px;text-align:center}
+    .falta-box .lbl{font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+    .falta-box .val{font-size:28px;font-weight:900;color:${R.totalFalta>0?'#c62828':'#2e7d32'};margin-top:2px}
+    .wa-box{margin-top:18px;border-top:2px solid #1565c0;padding-top:10px}
+    .wa-box textarea{width:100%;min-height:110px;font-family:Arial,sans-serif;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:6px;margin-top:6px}
+    @media print{.btn-print,.barra,.wa-box{display:none!important}}
+    ${dmPrintCSS()}
+  </style></head><body>
+  <div class="barra">
+    <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+    <label class="chk"><input type="checkbox" id="chk-todo" onchange="document.querySelectorAll('tr[data-falta]').forEach(function(tr){tr.style.display=(this.checked||parseFloat(tr.getAttribute('data-falta'))>0)?'':'none'}.bind(this))"> Mostrar todo (incluye lo ya devuelto)</label>
+  </div>
+  ${dmPrintHeader('Cuadre de vendedora', escH(vendedor))}
+  ${R.colegiosAsoc.length?`<div class="nota">Solo Guías de retiro (lo que de verdad descontó inventario): entregado directo a <b>${escH(vendedor)}</b> + entregado a nombre de: ${escH(R.colegiosAsoc.join(', '))}. No incluye Respaldo vendedor, que es solo informativo.</div>`:''}
+  <div class="falta-box">
+    <div class="lbl">${R.totalFalta>0?'Total que falta por traer o devolver':'Todo al día'}</div>
+    <div class="val">${R.totalFalta} libros</div>
+  </div>
+  <h3>🏫 Por colegio — lo que se llevó</h3>
+  <div class="nota">La columna <b>Devuelto</b> por colegio solo se llena cuando existe ese dato. Lo que se registró como devolución general (botón ↩ Devolución o Entrada de inventario) no dice de cuál colegio venía cada libro, así que aparece en la fila "sin colegio específico" en vez de repartido — repartirlo sería adivinar, no un dato real. El detalle exacto libro por libro está en la tabla de abajo.</div>
+  <table>
+    <tr><th>Colegio</th><th style="text-align:center">Se llevó</th><th style="text-align:center">Devuelto</th><th style="text-align:center">Falta</th></tr>
+    ${filasColegio}
+    <tr class="tot"><td>TOTALES</td><td style="text-align:center">${R.totalLlevado}</td><td style="text-align:center">${R.totalDevuelto}</td><td style="text-align:center">${R.totalFalta}</td></tr>
+  </table>
+  <h3>📚 Detalle por libro</h3>
+  <table>
+    <tr><th>Libro</th><th style="text-align:center">Se llevó</th><th style="text-align:center">Devuelto</th><th style="text-align:center">Falta</th></tr>
+    ${filas}
+    <tr class="tot"><td>TOTALES</td><td style="text-align:center">${R.totalLlevado}</td><td style="text-align:center">${R.totalDevuelto}</td><td style="text-align:center">${R.totalFalta}</td></tr>
+  </table>
+  ${dmPrintFooter('Fuente: '+R.guiasUsadas.length+' guía(s) de retiro (lo que se llevó) y '+R.entradasDevol.length+' línea(s) de entrada por devolución (lo que trajo). No incluye Respaldo vendedor — es solo informativo, no afecta inventario.')}
+  <div class="wa-box">
+    <b>💬 Para enviar a ${escH(vendedor)}</b>
+    <div class="nota" style="margin-top:8px">Esto manda solo un <b>mensaje de texto</b> con la lista de lo que falta (rápido, sin tablas). Si prefieres mandarle las tablas completas (Por colegio + Detalle por libro) como <b>PDF</b>, usa el botón <b>"🖨 Imprimir"</b> de arriba, elige <b>"Guardar como PDF"</b> en vez de una impresora, y luego adjunta tú ese archivo en WhatsApp.</div>
+    <div class="barra" style="margin-top:8px">
+      <a class="btn-print" style="background:#25D366" href="https://wa.me/?text=${encodeURIComponent(wa)}" target="_blank">💬 Abrir en WhatsApp (solo texto)</a>
+      <button class="btn-print" style="background:#1565c0" onclick="var t=document.getElementById('wa-text');t.select();try{document.execCommand('copy');alert('Copiado. Ahora pégalo en el chat de WhatsApp.');}catch(e){alert('No se pudo copiar solo — toca el mensaje de abajo, selecciona todo y copia a mano.');}">📋 Copiar mensaje</button>
+    </div>
+    <textarea id="wa-text" readonly onclick="this.select()">${escH(wa)}</textarea>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
 // ===================================================
 // MÓDULO: PAGOS Y COBROS
 // ===================================================
@@ -4283,7 +4511,7 @@ function renderPorCobrar(){
   let total=0;
   const tb=document.getElementById('tb-porcobrar');
   if(!pendientes.length){
-    tb.innerHTML='<tr><td colspan="6"><div class="empty">No hay colegios con saldo pendiente.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="7"><div class="empty">No hay colegios con saldo pendiente.</div></td></tr>';
   }else{
     tb.innerHTML=pendientes.map(f=>{
       total+=f.saldo;
@@ -4294,6 +4522,7 @@ function renderPorCobrar(){
         <td style="font-family:monospace">${fmt(f.ingreso)}</td>
         <td style="font-family:monospace;color:var(--g1)">${fmt(f.cobrado)}</td>
         <td style="font-family:monospace;font-weight:700;color:var(--r1)">${fmt(f.saldo)}</td>
+        <td><button class="btn btn-s btn-sm" onclick="imprimirEstadoCuenta('${escAttr(f.colegio)}')" title="Imprimir estado de cuenta para cobrar"><i class="ti ti-printer"></i></button></td>
       </tr>`;
     }).join('');
   }
@@ -4309,6 +4538,175 @@ function renderPorCobrar(){
       ${sinColegio.map(s=>`${escH(s.nombre)}: ${fmt(s.valor)} cobrado`).join('<br>')}
     </div>`:'';
   }
+}
+
+// Documento para que Mónica (o su esposo) lleve a cobrar a un colegio: lo que
+// se le ha entregado a precio público, la comisión que se le descuenta (eso el
+// colegio ya lo conoce, es su propio dinero), los pagos que ya hizo y el saldo
+// pendiente bien grande al final. A diferencia de Control de ventas/Financiero,
+// NO muestra el costo de editorial ni la ganancia de Mónica (eso es interno).
+// La columna DEVOLUCIÓN es editable: en el colegio a veces le devuelven libros
+// que no se vendieron, así que se puede anotar ahí mismo y el saldo se
+// recalcula solo — igual que el precio en blanco de la Nota de Entrega. Ese
+// cambio es solo del documento impreso, NO se guarda en el sistema: si la
+// devolución es real, hay que anotarla también en Colegios → Control de
+// Ventas para que quede guardada.
+function imprimirEstadoCuenta(nombre){
+  initColData();
+  const d=DB.colData[nombre];
+  if(!d) return toast('No encontré datos de ese colegio','err');
+  const T=totalesColegio(d);
+  const lineas=(d.lineas||[]).filter(l=>(l.cant||0)>0);
+  const cobros=(DB.pagos||[]).filter(p=>p.tipo==='cobro'&&(p.nombre===nombre||_coincideColegio(p.nombre,nombre)))
+    .sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')));
+  const cobrado=cobros.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+
+  const filasLibros=lineas.map(l=>{
+    const oi=d.lineas.indexOf(l);
+    const vend=(l.cant||0)-(l.dev||0);
+    const com=lineaComisiona(l)?'1':'0';
+    const pct=pctLinea(d,l);
+    return `<tr>
+      <td>${escH(l.libro)}</td>
+      <td style="text-align:center">${l.cant||0}</td>
+      <td style="text-align:right">$${(l.pvp||0).toFixed(2)}</td>
+      <td style="padding:2px 3px"><input class="devin" data-i="${oi}" data-cant="${l.cant||0}" data-pvp="${l.pvp||0}" data-com="${com}" data-pct="${pct}" value="${l.dev||0}" inputmode="numeric"></td>
+      <td style="text-align:center" id="vend-${oi}">${vend}</td>
+      <td style="text-align:right;font-family:monospace" id="sub-${oi}">$${(vend*(l.pvp||0)).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const filasPagos=cobros.length?cobros.map(p=>`<tr>
+      <td>${escH(p.fecha||'')}</td>
+      <td>${escH(p.forma||'')}</td>
+      <td style="text-align:right">$${(parseFloat(p.valor)||0).toFixed(2)}</td>
+      <td>${escH(p.nota||'')}</td>
+    </tr>`).join(''):`<tr><td colspan="4" style="color:#888;text-align:center;padding:10px">Sin pagos registrados todavía</td></tr>`;
+
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Estado de cuenta — ${escH(nombre)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;padding:15px;color:#222}
+    table{width:100%;border-collapse:collapse;margin-top:6px}
+    th{background:#1565c0;color:#fff;padding:6px;text-align:left;font-size:11px}
+    td{padding:5px 6px;border-bottom:1px solid #eee}
+    tr:nth-child(even){background:#f8f9fa}
+    h3{margin-top:20px;font-size:13px;color:#1565c0;border-top:2px solid #1565c0;padding-top:8px}
+    .tot{background:#e3f2fd;font-weight:bold}
+    .barra{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+    .tip-ed{background:#fff8e1;border:1px solid #f9d71c;color:#7a5b00;font-size:11px;padding:7px 11px;border-radius:6px;margin-bottom:14px}
+    input.devin{width:100%;max-width:60px;border:1px solid #f9d71c;background:#fffde7;text-align:center;font-family:monospace;font-size:12px;padding:4px 3px;outline:none;color:#111;border-radius:4px}
+    input.devin:focus{background:#fff59d}
+    .saldo-box{margin-top:20px;border:3px solid #2e7d32;border-radius:8px;padding:16px;text-align:center}
+    .saldo-box .lbl{font-size:13px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+    .saldo-box .val{font-size:32px;font-weight:900;margin-top:4px}
+    @media print{
+      .btn-print,.barra,.tip-ed{display:none!important}
+      input.devin{border:none!important;background:transparent!important;-webkit-appearance:none;appearance:none;color:#111!important}
+    }
+    ${dmPrintCSS()}
+  </style></head><body>
+  <div class="barra">
+    <button class="btn-print" onclick="window.print()">🖨 Imprimir Estado de Cuenta</button>
+    <button class="btn-print" id="btn-guardar-dev" style="background:#1565c0" onclick="guardarDevEstadoCuenta('${escAttr(nombre)}')">💾 Guardar esta devolución en el sistema</button>
+  </div>
+  <div class="tip-ed">✏️ La columna <b>DEVOLUCIÓN</b> es editable: si el colegio te devuelve libros que no vendió, escribe la cantidad ahí y el saldo se recalcula solo. Al terminar, usa <b>"💾 Guardar esta devolución en el sistema"</b> para que quede registrada en Colegios → Control de Ventas (necesita que la pestaña del sistema siga abierta).</div>
+  ${dmPrintHeader('Estado de Cuenta', escH(nombre))}
+  <h3>📚 Libros entregados</h3>
+  <table>
+    <tr><th>Libro</th><th style="text-align:center">Cant.</th><th style="text-align:right">P. Unit.</th><th style="text-align:center">Devolución</th><th style="text-align:center">Vendido</th><th style="text-align:right">Subtotal</th></tr>
+    ${filasLibros||'<tr><td colspan="6" style="text-align:center;color:#888;padding:10px">Sin libros entregados</td></tr>'}
+    <tr class="tot"><td colspan="5" style="text-align:right">TOTAL VENDIDO</td><td style="text-align:right" id="tv-total">$${T.tv.toFixed(2)}</td></tr>
+    <tr><td colspan="5" style="text-align:right">(−) Comisión del colegio</td><td style="text-align:right" id="tc-total">−$${T.totalColegio.toFixed(2)}</td></tr>
+    <tr class="tot"><td colspan="5" style="text-align:right">TOTAL A PAGAR</td><td style="text-align:right" id="ta-total">$${T.ingreso.toFixed(2)}</td></tr>
+  </table>
+  <h3>💵 Pagos recibidos</h3>
+  <table>
+    <tr><th>Fecha</th><th>Forma</th><th style="text-align:right">Valor</th><th>Nota</th></tr>
+    ${filasPagos}
+    <tr class="tot"><td colspan="2" style="text-align:right">TOTAL PAGADO</td><td style="text-align:right">$${cobrado.toFixed(2)}</td><td></td></tr>
+  </table>
+  <div class="saldo-box" id="saldo-box">
+    <div class="lbl" id="saldo-lbl">Saldo pendiente por cobrar</div>
+    <div class="val" id="saldo-val">$0.00</div>
+  </div>
+  ${dmPrintFooter()}
+  <script>
+  (function(){
+    var pvUnit=${T.pvUnit||0};
+    var cobrado=${cobrado};
+    var inputs=[].slice.call(document.querySelectorAll('input.devin'));
+    function recalc(){
+      var totalVendido=0, totalComision=0;
+      inputs.forEach(function(inp){
+        var i=inp.getAttribute('data-i');
+        var cant=parseFloat(inp.getAttribute('data-cant'))||0;
+        var pvp=parseFloat(inp.getAttribute('data-pvp'))||0;
+        var com=inp.getAttribute('data-com')==='1';
+        var pct=parseFloat(inp.getAttribute('data-pct'))||0;
+        var dev=parseFloat(String(inp.value).replace(',','.'))||0;
+        if(dev<0)dev=0; if(dev>cant)dev=cant;
+        var vend=cant-dev;
+        var sub=vend*pvp;
+        totalVendido+=sub;
+        if(com) totalComision+=sub*pct/100+cant*pvUnit;
+        var vc=document.getElementById('vend-'+i); if(vc)vc.textContent=vend;
+        var sc=document.getElementById('sub-'+i); if(sc)sc.textContent='$'+sub.toFixed(2);
+      });
+      var ingreso=totalVendido-totalComision;
+      var saldo=ingreso-cobrado;
+      var tv=document.getElementById('tv-total'); if(tv)tv.textContent='$'+totalVendido.toFixed(2);
+      var tc=document.getElementById('tc-total'); if(tc)tc.textContent='−$'+totalComision.toFixed(2);
+      var ta=document.getElementById('ta-total'); if(ta)ta.textContent='$'+ingreso.toFixed(2);
+      var color=saldo>0.01?'#c62828':(saldo<-0.01?'#e65100':'#2e7d32');
+      var texto=saldo>0.01?'Saldo pendiente por cobrar':(saldo<-0.01?'Pagó de más (a favor del colegio)':'Al día — sin saldo pendiente');
+      var box=document.getElementById('saldo-box'), lbl=document.getElementById('saldo-lbl'), val=document.getElementById('saldo-val');
+      if(box)box.style.borderColor=color;
+      if(lbl){lbl.style.color=color;lbl.textContent=texto;}
+      if(val){val.style.color=color;val.textContent='$'+Math.abs(saldo).toFixed(2);}
+    }
+    inputs.forEach(function(inp){inp.addEventListener('input',recalc);});
+    recalc();
+  })();
+  function guardarDevEstadoCuenta(nombre){
+    if(!window.opener||window.opener.closed){ alert('Se cerró la pestaña principal del sistema — no se pudo guardar. Abre el Estado de cuenta de nuevo desde ahí.'); return; }
+    var datos={};
+    [].slice.call(document.querySelectorAll('input.devin')).forEach(function(inp){
+      datos[inp.getAttribute('data-i')]=inp.value;
+    });
+    var ok=false;
+    try{ ok=window.opener.guardarDevolucionesControl(nombre,datos); }catch(e){}
+    var b=document.getElementById('btn-guardar-dev');
+    if(ok&&b){ b.textContent='✔ Devolución guardada'; b.style.background='#2e7d32'; b.disabled=true; }
+    else if(b){ alert('No se pudo guardar — abre el Estado de cuenta de nuevo desde el sistema e inténtalo otra vez.'); }
+  }
+  <\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// Llamada desde la ventana de "Estado de cuenta" (botón "Guardar esta
+// devolución en el sistema"): datos = {indiceEnDLineas: cantidadDevuelta}.
+// Solo actualiza el campo dev de las líneas existentes, no crea ni borra nada.
+function guardarDevolucionesControl(nombre,datos){
+  const d=DB.colData[nombre];
+  if(!d) return false;
+  let cambios=0;
+  Object.keys(datos||{}).forEach(k=>{
+    const l=d.lineas[parseInt(k)];
+    if(!l) return;
+    let v=parseInt(datos[k])||0;
+    if(v<0)v=0; if(v>(l.cant||0))v=l.cant||0;
+    if(v!==(l.dev||0)){ l.dev=v; cambios++; }
+  });
+  if(cambios){
+    logHistorial('Devolución registrada desde Estado de Cuenta',nombre+' — '+cambios+' línea(s) actualizadas');
+    save();
+    if(typeof renderControl==='function'&&document.getElementById('col-sel')?.value===nombre) renderControl();
+    toast('Devolución de '+nombre+' guardada ('+cambios+' línea(s))','ok');
+  }
+  return true;
 }
 
 function renderHistorial(){
@@ -7391,6 +7789,7 @@ function renderControl(){
   <div class="btn-row">
     <button class="btn btn-p" onclick="guardarControl('${nombre}')"><i class="ti ti-check"></i> Guardar</button>
     <button class="btn btn-s" onclick="imprimirControl('${nombre}')"><i class="ti ti-printer"></i> Imprimir</button>
+    <button class="btn btn-s" style="background:#2e7d32;color:#fff" onclick="imprimirEstadoCuenta('${nombre}')" title="Documento para llevar a cobrar: lo vendido, lo pagado y el saldo — sin mostrar tu costo ni ganancia"><i class="ti ti-file-invoice"></i> Estado de cuenta</button>
   </div>`;
 
   document.getElementById('col-control-body').innerHTML=html;
