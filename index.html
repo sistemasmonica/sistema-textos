@@ -3646,14 +3646,13 @@ function imprimirEntrada(key){
   const lineas=DB.movInv.filter(m=>m.tipo==='entrada'&&m.fecha===fecha&&(m.ref||'')===(ref||'')&&(m.proveedor||'')===(prov||''));
   if(!lineas.length)return;
   const totalUnd=lineas.reduce((a,m)=>a+m.cantidad,0);
-  const totalVal=lineas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
-  const filas=lineas.map(m=>{
+  const filas=lineas.map((m,i)=>{
     const prod=DB.productos.find(p=>p.id===m.prodId);
     return`<tr>
       <td style="text-align:center;border:1px solid #ccc;padding:6px 8px;font-weight:700">${m.cantidad}</td>
       <td style="border:1px solid #ccc;padding:6px 8px">${prod?.nombre||'N/A'}</td>
-      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace">${fmt(m.precioCosto||0)}</td>
-      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-weight:700">${fmt(m.cantidad*(m.precioCosto||0))}</td>
+      <td style="border:1px solid #ccc;padding:2px 3px"><input class="pu" data-i="${i}" data-cant="${m.cantidad}" data-pv="${(parseFloat(m.precioCosto)||0).toFixed(2)}" value="${(parseFloat(m.precioCosto)||0).toFixed(2)}" inputmode="decimal" placeholder=""></td>
+      <td style="text-align:right;border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-weight:700" id="ln-${i}"></td>
     </tr>`;
   }).join('');
   const win=window.open('','_blank');
@@ -3680,10 +3679,24 @@ function imprimirEntrada(key){
     .firmas{display:flex;justify-content:space-between;margin-top:44px}
     .firma{text-align:center;width:42%}
     .firma-linea{border-top:1px solid #333;padding-top:5px;font-size:11px;font-weight:700;letter-spacing:2px}
-    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:16px}
-    @media print{.btn-print{display:none!important}body{padding:10px}}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+    .barra{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+    .barra label{font-size:12px;color:#333;display:flex;align-items:center;gap:5px;cursor:pointer}
+    .tip-ed{background:#fff8e1;border:1px solid #f9d71c;color:#7a5b00;font-size:11px;padding:7px 11px;border-radius:6px;margin-bottom:14px;max-width:640px}
+    input.pu{width:100%;border:none;background:#fffde7;text-align:right;font-family:monospace;font-size:11px;padding:4px 5px;outline:none;color:#111}
+    input.pu:focus{background:#fff59d}
+    @media print{
+      .btn-print,.barra,.tip-ed{display:none!important}
+      body{padding:10px}
+      input.pu{background:transparent!important;-webkit-appearance:none;appearance:none;color:#111!important}
+    }
   </style></head><body>
-  <button class="btn-print" onclick="window.print()">🖨 Imprimir Comprobante</button>
+  <div class="barra">
+    <button class="btn-print" onclick="window.print()">🖨 Imprimir Comprobante</button>
+    <label><input type="checkbox" id="chk-sist" checked> Rellenar con los precios guardados en el sistema</label>
+    <button type="button" id="btn-limpiar" style="background:#eee;border:1px solid #bbb;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px">Borrar precios</button>
+  </div>
+  <div class="tip-ed">✏️ Las casillas amarillas de <b>P. COSTO</b> vienen con el precio guardado en el sistema — puedes cambiarlas a mano o darle "Borrar precios" si prefieres un comprobante sin valores. El TOTAL se recalcula solo. Al imprimir no se ve el fondo amarillo.</div>
   <table class="hdr-t">
     <tr>
       <td class="empresa"><h1 style="font-size:24px;letter-spacing:3px">${prov.toUpperCase()}</h1></td>
@@ -3714,7 +3727,7 @@ function imprimirEntrada(key){
         <td style="text-align:center">${totalUnd}</td>
         <td style="text-align:right">TOTAL RECIBIDO:</td>
         <td></td>
-        <td style="text-align:right;font-family:monospace">${fmt(totalVal)}</td>
+        <td style="text-align:right;font-family:monospace" id="tot-gen"></td>
       </tr>
     </tfoot>
   </table>
@@ -3723,6 +3736,40 @@ function imprimirEntrada(key){
     <div class="firma"><div class="firma-linea">EDITORIAL</div></div>
     <div class="firma"><div class="firma-linea">RECEPTOR</div></div>
   </div>
+  <script>
+  (function(){
+    var inputs=[].slice.call(document.querySelectorAll('input.pu'));
+    function recalc(){
+      var tot=0;
+      inputs.forEach(function(inp){
+        var cant=parseFloat(inp.getAttribute('data-cant'))||0;
+        var pu=parseFloat(String(inp.value).replace(',','.'))||0;
+        var sub=cant*pu;
+        tot+=sub;
+        var cell=document.getElementById('ln-'+inp.getAttribute('data-i'));
+        if(cell)cell.textContent=pu?('$'+sub.toFixed(2)):'';
+      });
+      var tc=document.getElementById('tot-gen');
+      if(tc)tc.textContent=tot?('$'+tot.toFixed(2)):'';
+    }
+    inputs.forEach(function(inp){inp.addEventListener('input',recalc);});
+    var chk=document.getElementById('chk-sist');
+    if(chk)chk.addEventListener('change',function(){
+      inputs.forEach(function(inp){
+        var pv=parseFloat(inp.getAttribute('data-pv'))||0;
+        inp.value=(chk.checked&&pv>0)?pv.toFixed(2):'';
+      });
+      recalc();
+    });
+    var btn=document.getElementById('btn-limpiar');
+    if(btn)btn.addEventListener('click',function(){
+      if(chk)chk.checked=false;
+      inputs.forEach(function(inp){inp.value='';});
+      recalc();
+    });
+    recalc();
+  })();
+  <\/script>
   </body></html>`);
   win.document.close();
 }
