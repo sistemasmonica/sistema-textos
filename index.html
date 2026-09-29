@@ -597,7 +597,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>N° Guía</th><th>Fecha</th><th>Cliente / Colegio</th><th>Productos</th><th>Total unid.</th><th>Valor</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>N° Guía</th><th>N° Control</th><th>Fecha</th><th>Cliente / Colegio</th><th>Productos</th><th>Total unid.</th><th>Valor</th><th>Acciones</th></tr></thead>
         <tbody id="tb-guias"></tbody>
       </table>
     </div>
@@ -1529,8 +1529,12 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="fg"><label>Observación</label><input type="text" id="g-obs" placeholder="Notas adicionales..."></div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px;cursor:pointer">
-      <input type="checkbox" id="g-muestra"> 🔬 Esta guía es de <b>MUESTRAS</b> (no cuenta como venta — no se compara contra Control de ventas)
+      <input type="checkbox" id="g-muestra" onchange="document.getElementById('g-control-wrap').style.display=this.checked?'block':'none'"> 🔬 Esta guía es de <b>MUESTRAS</b> (no cuenta como venta — no se compara contra Control de ventas)
     </label>
+    <div class="fg" id="g-control-wrap" style="display:none">
+      <label>N° Control de muestras</label>
+      <input type="text" id="g-control" placeholder="Ej. 045">
+    </div>
     <input type="hidden" id="g-edit-id" value="">
     <div id="g-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-bottom:10px;display:none"></div>
     <div class="btn-row">
@@ -5059,6 +5063,8 @@ function abrirModalGuia(){
   document.getElementById('g-obs').value='';
   document.getElementById('g-fact').value='';
   document.getElementById('g-muestra').checked=false;
+  document.getElementById('g-control').value='';
+  document.getElementById('g-control-wrap').style.display='none';
   document.getElementById('g-edit-id').value='';
   document.getElementById('g-col-aviso').innerHTML='';
   const pb=document.getElementById('g-pegar-box'); if(pb)pb.style.display='none';
@@ -5253,6 +5259,8 @@ function editarGuia(id){
   document.getElementById('g-fact').value=g.factura||'';
   document.getElementById('g-obs').value=g.observacion||'';
   document.getElementById('g-muestra').checked=esGuiaMuestra(g);
+  document.getElementById('g-control').value=g.numControl||'';
+  document.getElementById('g-control-wrap').style.display=esGuiaMuestra(g)?'block':'none';
   document.getElementById('g-edit-id').value=id;
   document.getElementById('modal-guia-titulo').textContent='Editar guía '+g.numero;
   document.getElementById('btn-guardar-guia').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
@@ -5332,6 +5340,7 @@ function guardarGuia(){
   let numero=document.getElementById('g-num').value;
   const fecha=document.getElementById('g-fecha').value||today();
   const esMuestra=document.getElementById('g-muestra').checked;
+  const numControl=document.getElementById('g-control').value.trim();
 
   // Evitar número de guía repetido (solo al crear una nueva)
   if(!editId&&DB.guias.some(g=>String(g.numero||'').trim()===String(numero).trim())){
@@ -5353,7 +5362,7 @@ function guardarGuia(){
     DB.guias[idx]={...gOrig,numero,fecha,cliente,
       factura:document.getElementById('g-fact').value,
       observacion:document.getElementById('g-obs').value,
-      esMuestra,
+      esMuestra,numControl,
       lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
     // Crear nuevos movimientos de stock
     lineas.forEach(l=>{
@@ -5369,7 +5378,7 @@ function guardarGuia(){
     const guia={id:uid(),numero,fecha,cliente,
       factura:document.getElementById('g-fact').value,
       observacion:document.getElementById('g-obs').value,
-      esMuestra,
+      esMuestra,numControl,
       lineas,total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
     DB.guias.push(guia);
     lineas.forEach(l=>{
@@ -5414,7 +5423,7 @@ function renderGuias(){
   let guias=[...DB.guias].filter(g=>!q||g.cliente.toLowerCase().includes(q)||g.numero.toLowerCase().includes(q));
   guias.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const tb=document.getElementById('tb-guias');
-  if(!guias.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Sin guías registradas</div></td></tr>`;return}
+  if(!guias.length){tb.innerHTML=`<tr><td colspan="8"><div class="empty">Sin guías registradas</div></td></tr>`;return}
   let totalUnidadesAll=0;let totalValorAll=0;
   const rows=guias.map(g=>{
     const prods=g.lineas.map(l=>`${l.nombre} (${l.cantidad})`).join(', ');
@@ -5424,6 +5433,7 @@ function renderGuias(){
     const btnEditar=esHistorica?`<span title="Guía histórica (catálogo anterior)" style="color:var(--mu);font-size:10px;padding:2px 4px">hist.</span>`:`<button class="btn btn-s btn-sm" onclick="editarGuia('${g.id}')" title="Editar guía"><i class="ti ti-pencil"></i></button>`;
     return`<tr>
       <td style="font-family:monospace;font-weight:600">${g.numero}${esGuiaMuestra(g)?' <span title="No cuenta como venta" style="background:#ede7f6;color:#5e35b1;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">🔬 MUESTRA</span>':''}</td>
+      <td style="font-family:monospace">${g.numControl?escH(g.numControl):(esGuiaMuestra(g)?'<span style="color:#c0392b;font-weight:700">falta</span>':'—')}</td>
       <td style="font-family:monospace">${g.fecha}</td>
       <td>${g.cliente}</td>
       <td style="max-width:180px;font-size:11px">${prods}</td>
@@ -5450,6 +5460,7 @@ function verGuia(id){
       <div><div class="sc-lbl">Fecha</div><div style="font-weight:600">${g.fecha}</div></div>
       <div><div class="sc-lbl">Cliente</div><div style="font-weight:600">${g.cliente}</div></div>
       <div><div class="sc-lbl">Factura venta</div><div style="font-weight:600">${g.factura||'—'}</div></div>
+      ${esGuiaMuestra(g)?`<div><div class="sc-lbl">N° Control muestras</div><div style="font-weight:600">${g.numControl||'—'}</div></div>`:''}
     </div>
     ${g.observacion?`<div style="font-size:12px;color:var(--mu);margin-bottom:10px">${g.observacion}</div>`:''}
     ${ventaL.length?`<div style="font-weight:700;margin-bottom:6px">📗 Para venta</div>${tabla(ventaL,true)}`:''}
@@ -6208,6 +6219,7 @@ function imprimirInventario(){
       <td style="text-align:right">$${p.precioCosto.toFixed(2)}</td>
       <td style="text-align:right">$${p.precioVenta.toFixed(2)}</td>
       <td style="text-align:right">$${valC.toFixed(2)}</td>
+      <td style="border-left:2px solid #999"></td>
     </tr>`;
   }).join('');
   win.document.write(`<html><head><title>Inventario DM BOOKS</title>
@@ -6248,11 +6260,13 @@ function imprimirInventario(){
       <th style="text-align:center">Stock</th>
       <th style="text-align:right">P.Costo</th><th style="text-align:right">PVP</th>
       <th style="text-align:right">Valor (costo)</th>
+      <th style="border-left:2px solid #999;min-width:70px">Conteo<br>físico</th>
     </tr>
     ${filas}
     <tr class="total-row">
       <td colspan="8" style="text-align:right">TOTAL VALOR INVENTARIO (costo):</td>
       <td style="text-align:right">$${totalCosto.toFixed(2)}</td>
+      <td style="border-left:2px solid #999"></td>
     </tr>
   </table>
   <\/body><\/html>`);
@@ -7590,6 +7604,24 @@ function setPctLinea(nombre,i,v){
   recalcControl(nombre);save();
 }
 
+// % de descuento que te da la editorial sobre el PVP — al ponerlo, calcula solo
+// el Costo Distr. $ (PVP menos ese %) para que se vea de dónde sale cada número
+// en vez de tener que escribir el costo ya calculado a mano.
+function setDescPctLinea(nombre,i,v){
+  const d=DB.colData[nombre];if(!d)return;
+  const l=d.lineas[i];if(!l)return;
+  const s=String(v??'').trim();
+  l.descPct = s===''?null:(parseFloat(s)||0);
+  if(l.descPct){
+    // Trunca el descuento a 2 decimales (igual que hacen las editoriales en sus
+    // documentos) y resta — así "PVP x % = descuento" y "PVP - descuento = costo"
+    // siempre cuadran exacto en la pantalla, sin diferencias de 1 centavo.
+    const desc=Math.floor(l.pvp*l.descPct/100*100)/100;
+    l.costo = Math.round((l.pvp-desc)*100)/100;
+  }
+  recalcControl(nombre);save();
+}
+
 // ── CONTROL DE VENTAS (tabla amarilla) ──────────────────────────────────────
 function renderControl(){
   initColData();
@@ -7625,6 +7657,17 @@ function renderControl(){
       <div style="background:#fdecea;border:1px solid #f5c6cb;border-radius:6px;padding:8px 10px;text-align:center">
         <div style="font-size:9px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:.3px">− Le pagas a la editorial</div>
         <div style="font-family:monospace;font-size:17px;font-weight:700;color:#b71c1c;margin-top:3px" id="ctrl-top-ed">$${tvCosto.toFixed(2)}</div>
+        ${(()=>{
+          const gEdTop=(l)=>{
+            if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+            const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+          };
+          const porGrupo={};
+          d.lineas.forEach(l=>{ const ed=gEdTop(l)||'General'; porGrupo[ed]=(porGrupo[ed]||0)+(l.cant-l.dev)*l.costo; });
+          const grupos=Object.keys(porGrupo);
+          if(grupos.length<2) return '';
+          return grupos.map(ed=>`<div style="font-size:9px;color:#b71c1c;margin-top:2px">${escH(ed)}: $${porGrupo[ed].toFixed(2)}</div>`).join('');
+        })()}
       </div>
       <div style="background:${gananciaNet>=0?'#e8f5e9':'#fdecea'};border:2px solid ${gananciaNet>=0?'#66bb6a':'#e57373'};border-radius:6px;padding:8px 10px;text-align:center" id="ctrl-top-gan-box">
         <div style="font-size:9px;font-weight:700;color:${gananciaNet>=0?'#1b5e20':'#b71c1c'};text-transform:uppercase;letter-spacing:.3px">= TE QUEDA (ganancia)</div>
@@ -7649,12 +7692,37 @@ function renderControl(){
           <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:90px">TOTAL VENDIDO $</th>
           <th style="padding:7px 6px;text-align:center;border:1px solid #e6c800;width:110px" title="Desmarca las materias por las que NO le pagas comisión al colegio">¿COMISIÓN?</th>
           <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:90px">COMIS. $</th>
-          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:90px">COSTO DISTR. $</th>
-          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:90px">V.TOTAL $</th>
+          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:100px" title="PVP menos la comisión del colegio — lo que te queda a TI por cada libro (no es lo que pagas a la editorial)">TE QUEDA/LIBRO $</th>
+          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:100px" title="Vendidos × TE QUEDA/LIBRO — el total que te queda de esta fila">TE QUEDA<br>TOTAL $</th>
+          <th style="padding:7px 6px;text-align:center;border:1px solid #e6c800;width:80px" title="Escribe el % que te descuenta la editorial sobre el PVP y el Costo Distr. se calcula solo">% DCTO. EDIT.</th>
+          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:110px" title="Lo que te cobra la editorial por CADA libro (valor unitario)">VALOR UNIT. EDITORIAL $</th>
+          <th style="padding:7px 10px;text-align:right;border:1px solid #e6c800;width:90px" title="Lo que le debes pagar a la editorial por este libro">EDITORIAL $</th>
           <th style="padding:7px 4px;text-align:center;border:1px solid #e6c800;width:34px"></th>
         </tr>
       </thead>
       <tbody>`;
+
+  // Agrupa líneas por editorial (del prodId, o del texto "Título (EDITORIAL)")
+  // para poder mostrar un subtotal cuando cambia de grupo — ej. Didáctica
+  // primero, Robótica después, cada uno sumado por separado en el mismo cuadro.
+  const gEd=(l)=>{
+    if(l.prodId){
+      const p=DB.productos.find(x=>x.id===l.prodId);
+      if(p&&p.editorial) return p.editorial;
+    }
+    const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/);
+    return m?m[1].trim():'';
+  };
+  const mostrarSubtotales=new Set(d.lineas.map(gEd)).size>1;
+  const nuevoGrupoSum=()=>({cant:0,totalF:0,dev:0,vend:0,tv:0,com:0,neto:0,vtot:0});
+  let gSum=nuevoGrupoSum();
+
+  // Guías de retiro de este colegio (mismo emparejado por nombre que usa "Traer
+  // guía") — para poder mostrar de dónde sale la CANTIDAD de cada línea y que
+  // se vea clarito si de verdad se sumaron todas las guías que corresponden.
+  // Las guías marcadas "muestra" NO cuentan aquí — a propósito no se anotan en
+  // Control de Ventas, así que compararlas aquí daría una alerta falsa.
+  const guiasCol=DB.guias.filter(g=>_coincideColegio(g.cliente,nombre)&&!esGuiaMuestra(g));
 
   d.lineas.forEach((l,i)=>{
     const totalF=l.cant*l.pvp;
@@ -7664,6 +7732,8 @@ function renderControl(){
     const com=lineaComisiona(l);
     const pctL=com?pctLinea(d,l):(parseFloat(d.comisionPct)||0);
     const comLine=com?(tvLine*(pctL/100)+l.cant*pvUnit):0;
+    const neto=com?l.pvp-Math.floor(l.pvp*pctL/100*100)/100:0;
+    const netoTotal=com?vendidos*neto:0;
     const bg=com?(i%2===0?'#fffde7':'#fff'):'#f3f4f6';
     html+=`<tr style="background:${bg}">
       <td style="padding:3px;border:1px solid #f0e060">
@@ -7673,6 +7743,14 @@ function renderControl(){
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" value="${l.cant}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
           onchange="DB.colData['${nombre}'].lineas[${i}].cant=parseInt(this.value)||0;recalcControl('${nombre}')">
+        ${(()=>{
+          if(!l.prodId) return '';
+          const gs=guiasCol.map(g=>{ const gl=(g.lineas||[]).find(x=>x.prodId===l.prodId); return gl?{numero:g.numero,cant:gl.cantidad||0}:null; }).filter(Boolean);
+          if(!gs.length) return '';
+          const sumaG=gs.reduce((a,x)=>a+x.cant,0);
+          const ok=sumaG===l.cant;
+          return `<div style="font-size:9px;color:${ok?'#8a7500':'#c0392b'};margin-top:2px;white-space:nowrap" title="Guías que le corresponden a este colegio y este producto">${gs.map(x=>x.numero+':'+x.cant).join(' + ')} = ${sumaG}${ok?'':' ⚠️ (aquí dice '+l.cant+')'}</div>`;
+        })()}
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" step="0.01" value="${l.pvp}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
@@ -7694,15 +7772,50 @@ function renderControl(){
           onchange="setPctLinea('${nombre}',${i},this.value)"><span style="font-size:10px;color:#8a7500">%</span>
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace;color:var(--a1)" id="ctrl-com-${i}">$${comLine.toFixed(2)}</td>
+      <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace">
+        ${com?`$${neto.toFixed(2)}<div style="font-size:8px;color:#8a7500;font-weight:normal">${l.pvp.toFixed(2)}−${pctL}%=${neto.toFixed(2)}</div>`:'—'}
+      </td>
+      <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace;font-weight:600">
+        ${com?`$${netoTotal.toFixed(2)}<div style="font-size:8px;color:#8a7500;font-weight:normal">${vendidos}×${neto.toFixed(2)}</div>`:'—'}
+      </td>
+      <td style="border:1px solid #f0e060;padding:3px;text-align:center">
+        <input type="number" min="0" max="100" step="0.01" value="${l.descPct??''}" placeholder="—" title="% que te descuenta la editorial sobre el PVP"
+          style="width:56px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
+          onchange="setDescPctLinea('${nombre}',${i},this.value)">
+      </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" step="0.01" value="${l.costo}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
           onchange="DB.colData['${nombre}'].lineas[${i}].costo=parseFloat(this.value)||0;recalcControl('${nombre}')">
+        ${l.descPct?`<div style="font-size:9px;color:#8a7500;margin-top:2px;white-space:nowrap">${l.pvp.toFixed(2)} × ${l.descPct}% = ${(l.pvp-l.costo).toFixed(2)}<br>${l.pvp.toFixed(2)} − ${(l.pvp-l.costo).toFixed(2)} = ${l.costo.toFixed(2)}</div>`:''}
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace" id="ctrl-vtot-${i}">$${vtotal.toFixed(2)}</td>
       <td style="border:1px solid #f0e060;padding:3px;text-align:center">
         <button title="Quitar este producto" style="background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;border-radius:4px;cursor:pointer;padding:3px 6px;font-size:12px" onclick="eliminarLineaControl('${nombre}',${i})">🗑</button>
       </td>
     </tr>`;
+
+    gSum.cant+=l.cant;gSum.totalF+=totalF;gSum.dev+=l.dev;gSum.vend+=vendidos;gSum.tv+=tvLine;gSum.com+=comLine;gSum.neto+=netoTotal;gSum.vtot+=vtotal;
+    const edAct=gEd(l);
+    const edSig=i+1<d.lineas.length?gEd(d.lineas[i+1]):null;
+    if(mostrarSubtotales&&edSig!==edAct){
+      html+=`<tr style="background:#fff3cd;font-weight:700">
+        <td style="padding:5px 8px;border:1px solid #f0e060">Subtotal${edAct?' — '+escH(edAct):''}</td>
+        <td style="border:1px solid #f0e060;text-align:center">${gSum.cant}</td>
+        <td style="border:1px solid #f0e060"></td>
+        <td style="border:1px solid #f0e060;text-align:right;font-family:monospace">$${gSum.totalF.toFixed(2)}</td>
+        <td style="border:1px solid #f0e060;text-align:center">${gSum.dev}</td>
+        <td style="border:1px solid #f0e060;text-align:center">${gSum.vend}</td>
+        <td style="border:1px solid #f0e060;text-align:right;font-family:monospace">$${gSum.tv.toFixed(2)}</td>
+        <td style="border:1px solid #f0e060"></td>
+        <td style="border:1px solid #f0e060;text-align:right;font-family:monospace">$${gSum.com.toFixed(2)}</td>
+        <td style="border:1px solid #f0e060;text-align:right;font-family:monospace">$${gSum.neto.toFixed(2)}</td>
+        <td style="border:1px solid #f0e060"></td>
+        <td style="border:1px solid #f0e060"></td>
+        <td style="border:1px solid #f0e060;text-align:right;font-family:monospace">$${gSum.vtot.toFixed(2)}</td>
+        <td style="border:1px solid #f0e060"></td>
+      </tr>`;
+      gSum=nuevoGrupoSum();
+    }
   });
 
   html+=`</tbody>
@@ -7717,6 +7830,8 @@ function renderControl(){
           <td style="border:1px solid #e6c800;text-align:right;font-family:monospace" id="ctrl-s-tv">$${tv.toFixed(2)}</td>
           <td style="border:1px solid #e6c800;text-align:center;font-size:10px" id="ctrl-s-sincom">${sinComision?sinComision+' sin comis.':'todas'}</td>
           <td style="border:1px solid #e6c800;text-align:right;font-family:monospace" id="ctrl-s-com">$${totalColegio.toFixed(2)}</td>
+          <td style="border:1px solid #e6c800;text-align:right;font-family:monospace">$${d.lineas.reduce((a,l)=>{ if(!lineaComisiona(l))return a; const pctL2=pctLinea(d,l); const vend=l.cant-l.dev; return a+vend*(l.pvp-Math.floor(l.pvp*pctL2/100*100)/100); },0).toFixed(2)}</td>
+          <td style="border:1px solid #e6c800"></td>
           <td style="border:1px solid #e6c800"></td>
           <td style="border:1px solid #e6c800;text-align:right;font-family:monospace" id="ctrl-s-vtot">$${tvCosto.toFixed(2)}</td>
           <td style="border:1px solid #e6c800"></td>
@@ -7837,6 +7952,7 @@ function renderControl(){
     <button class="btn btn-p" onclick="guardarControl('${nombre}')"><i class="ti ti-check"></i> Guardar</button>
     <button class="btn btn-s" onclick="imprimirControl('${nombre}')"><i class="ti ti-printer"></i> Imprimir</button>
     <button class="btn btn-s" style="background:#2e7d32;color:#fff" onclick="imprimirEstadoCuenta('${nombre}')" title="Documento para llevar a cobrar: lo vendido, lo pagado y el saldo — sin mostrar tu costo ni ganancia"><i class="ti ti-file-invoice"></i> Estado de cuenta</button>
+    <button class="btn btn-s" style="background:#6a1b9a;color:#fff" onclick="imprimirComoEditorial('${nombre}')" title="Mismo formato que usan las editoriales (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio final), agrupado y con subtotales — para mandarle a la rectora o al colegio en el formato que ya conocen"><i class="ti ti-file-text"></i> Formato editorial</button>
   </div>`;
 
   document.getElementById('col-control-body').innerHTML=html;
@@ -8046,12 +8162,18 @@ function eliminarPagoEdit(nombre,id){
 
 function imprimirControl(nombre){
   const d=DB.colData[nombre];if(!d)return;
+  const verEditorial=confirm('¿Incluir en el impreso lo que le pagas a la editorial (costo, saldo, ganancia)?\n\nAceptar = sí incluirlo\nCancelar = no incluirlo (solo lo que vendiste y la comisión del colegio)');
   const win=window.open('','_blank');
   const T=totalesColegio(d);
   const tv=T.tv,comision=T.comision,pvUnit=T.pvUnit,comisionPV=T.comisionPV;
   const totalCol=T.totalColegio,pago=T.ingreso,costoEdit=T.costo;
   const ganancia=T.ganancia,pagadoEdit=T.pagado,saldoEdit=T.saldoEdit;
   const sinComP=d.lineas.filter(l=>!lineaComisiona(l));
+  // El % general del colegio (d.comisionPct) puede no ser el que realmente se
+  // usa si cada línea tiene su propio %. Se muestra el/los % que de verdad
+  // aplicaron, no el default, para que el impreso no diga algo distinto a lo cobrado.
+  const pctsUsados=[...new Set(d.lineas.filter(lineaComisiona).map(l=>pctLinea(d,l)))];
+  const comisionLabel=pctsUsados.length?pctsUsados.map(p=>p+'%').join(' / '):(d.comisionPct+'%');
   win.document.write(`<html><head><title>Control ${nombre}</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;padding:15px}
   h2{text-align:center;background:#f9d71c;padding:8px;margin-bottom:12px}
@@ -8059,25 +8181,68 @@ function imprimirControl(nombre){
   th{background:#f9d71c;padding:5px;border:1px solid #ccc;text-align:center}
   td{padding:4px 6px;border:1px solid #ddd}
   tr:nth-child(even){background:#fffde7}
-  .total-row{background:#f9d71c;font-weight:bold}
+  .total-row{background:#1565c0;color:#fff;font-weight:bold}
+  .total-row td{border-color:#0d47a1}
   .resumen{margin-top:15px;width:50%;margin-left:auto}
   .resumen td{padding:4px 8px;border:1px solid #ccc}
   .pago{background:#e8f5e9;font-size:14px;font-weight:bold;padding:10px;margin-top:10px;text-align:right}
   @media print{button{display:none}}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Control de ventas 2026',nombre)}
   <table>
-  <tr><th>DESCRIPCIÓN</th><th>CANT.</th><th>PVP</th><th>TOTAL</th><th>DEVOL.</th><th>VENDIDOS</th><th>TOTAL VENDIDO</th><th>C.DISTR.</th><th>V.TOTAL</th></tr>
-  ${d.lineas.map(l=>{const v=l.cant-l.dev;return`<tr><td>${l.libro}</td><td style="text-align:center">${l.cant}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${(l.cant*l.pvp).toFixed(2)}</td><td style="text-align:center">${l.dev}</td><td style="text-align:center">${v}</td><td style="text-align:right">$${(v*l.pvp).toFixed(2)}</td><td style="text-align:right">$${l.costo.toFixed(2)}</td><td style="text-align:right">$${(v*l.costo).toFixed(2)}</td></tr>`}).join('')}
-  <tr class="total-row"><td>TOTALES</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.cant,0)}</td><td></td><td style="text-align:right">$${d.lineas.reduce((a,l)=>a+l.cant*l.pvp,0).toFixed(2)}</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.dev,0)}</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.cant-l.dev,0)}</td><td style="text-align:right">$${tv.toFixed(2)}</td><td></td><td style="text-align:right">$${d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.costo,0).toFixed(2)}</td></tr>
+  <tr><th>DESCRIPCIÓN</th><th>CANT.</th><th>PVP</th><th>TOTAL</th><th>DEVOL.</th><th>VENDIDOS</th><th>TOTAL VENDIDO</th><th>COMIS. $</th><th>TE QUEDA/<br>LIBRO $</th><th>TE QUEDA<br>TOTAL $</th>${verEditorial?'<th>VALOR UNIT.<br>EDITORIAL</th><th>TOTAL<br>EDITORIAL $</th>':''}</tr>
+  ${(()=>{
+    // Mismo agrupado por editorial que en pantalla (Control de Ventas): subtotal
+    // cuando cambia de grupo, para que impreso se vea igual que en el sistema.
+    const gEd=(l)=>{
+      if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+      const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+    };
+    const mostrarSub=new Set(d.lineas.map(gEd)).size>1;
+    const guiasCol=DB.guias.filter(g=>_coincideColegio(g.cliente,nombre)&&!esGuiaMuestra(g));
+    let g={cant:0,totalF:0,dev:0,vend:0,tv:0,vtot:0};
+    let out='';
+    d.lineas.forEach((l,i)=>{
+      const v=l.cant-l.dev, totalF=l.cant*l.pvp, tvL=v*l.pvp, vtL=v*l.costo;
+      const gs=l.prodId?guiasCol.map(gd=>{ const gl=(gd.lineas||[]).find(x=>x.prodId===l.prodId); return gl?gd.numero+':'+gl.cantidad:null; }).filter(Boolean):[];
+      const notaGuias=gs.length?`<div style="font-size:8px;color:#666;font-weight:normal">${gs.join(' + ')}</div>`:'';
+      const notaFormula=l.descPct?`<div style="font-size:8px;color:#8a7500;font-weight:normal">${l.pvp.toFixed(2)}×${l.descPct}%=${(l.pvp-l.costo).toFixed(2)} → ${l.pvp.toFixed(2)}−${(l.pvp-l.costo).toFixed(2)}=${l.costo.toFixed(2)}</div>`:'';
+      const comL=lineaComisiona(l);
+      const pctL=comL?pctLinea(d,l):0;
+      const comLine=comL?(tvL*(pctL/100)+l.cant*pvUnit):0;
+      const netoLibro=comL?l.pvp-Math.floor(l.pvp*pctL/100*100)/100:null;
+      const netoTotalL=comL?v*netoLibro:0;
+      const notaNeto=comL?`<div style="font-size:8px;color:#8a7500;font-weight:normal">${l.pvp.toFixed(2)}−${pctL}%=${netoLibro.toFixed(2)}</div>`:'';
+      out+=`<tr><td>${l.libro}</td><td style="text-align:center">${l.cant}${notaGuias}</td><td style="text-align:right">$${l.pvp.toFixed(2)}</td><td style="text-align:right">$${totalF.toFixed(2)}</td><td style="text-align:center">${l.dev}</td><td style="text-align:center">${v}</td><td style="text-align:right">$${tvL.toFixed(2)}</td><td style="text-align:right">$${comLine.toFixed(2)}</td><td style="text-align:right">${comL?'$'+netoLibro.toFixed(2)+notaNeto:'—'}</td><td style="text-align:right;font-weight:bold">${comL?'$'+netoTotalL.toFixed(2):'—'}</td>${verEditorial?`<td style="text-align:right">$${l.costo.toFixed(2)}${notaFormula}</td><td style="text-align:right">$${vtL.toFixed(2)}</td>`:''}</tr>`;
+      g.cant+=l.cant;g.totalF+=totalF;g.dev+=l.dev;g.vend+=v;g.tv+=tvL;g.neto=(g.neto||0)+netoTotalL;g.vtot+=vtL;
+      const edAct=gEd(l), edSig=i+1<d.lineas.length?gEd(d.lineas[i+1]):null;
+      if(mostrarSub&&edSig!==edAct){
+        out+=`<tr style="background:#fff3cd;font-weight:bold"><td>Subtotal${edAct?' — '+edAct:''}</td><td style="text-align:center">${g.cant}</td><td></td><td style="text-align:right">$${g.totalF.toFixed(2)}</td><td style="text-align:center">${g.dev}</td><td style="text-align:center">${g.vend}</td><td style="text-align:right">$${g.tv.toFixed(2)}</td><td></td><td></td><td style="text-align:right">$${(g.neto||0).toFixed(2)}</td>${verEditorial?`<td></td><td style="text-align:right">$${g.vtot.toFixed(2)}</td>`:''}</tr>`;
+        g={cant:0,totalF:0,dev:0,vend:0,tv:0,neto:0,vtot:0};
+      }
+    });
+    return out;
+  })()}
+  <tr><td colspan="${verEditorial?12:10}" style="border:none;padding:10px 0"></td></tr>
+  <tr class="total-row"><td>TOTALES</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.cant,0)}</td><td></td><td style="text-align:right">$${d.lineas.reduce((a,l)=>a+l.cant*l.pvp,0).toFixed(2)}</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.dev,0)}</td><td style="text-align:center">${d.lineas.reduce((a,l)=>a+l.cant-l.dev,0)}</td><td style="text-align:right">$${tv.toFixed(2)}</td><td style="text-align:right">$${totalCol.toFixed(2)}</td><td></td><td style="text-align:right">$${d.lineas.reduce((a,l)=>{ if(!lineaComisiona(l))return a; const pctL2=pctLinea(d,l); const vend=l.cant-l.dev; return a+vend*(l.pvp-Math.floor(l.pvp*pctL2/100*100)/100); },0).toFixed(2)}</td>${verEditorial?`<td></td><td style="text-align:right">$${d.lineas.reduce((a,l)=>a+(l.cant-l.dev)*l.costo,0).toFixed(2)}</td>`:''}</tr>
   </table>
   <table class="resumen">
-  <tr><td>COMISIÓN (${d.comisionPct}%)</td><td style="text-align:right">$${comision.toFixed(2)}</td></tr>
+  <tr><td>COMISIÓN (${comisionLabel})</td><td style="text-align:right">$${comision.toFixed(2)}</td></tr>
   <tr><td>COMISIÓN P.VENTA</td><td style="text-align:right">$${comisionPV.toFixed(2)}</td></tr>
   <tr style="font-weight:bold;background:#fff9c4"><td>TOTAL COLEGIO</td><td style="text-align:right">$${totalCol.toFixed(2)}</td></tr>
   </table>
   ${sinComP.length?`<div style="margin-top:8px;font-size:10px;color:#c0392b"><b>Sin comisión para el colegio:</b> ${sinComP.map(l=>escH(l.libro||'(sin título)')).join(', ')}</div>`:''}
   <div class="pago" style="background:#e3f2fd;color:#1565c0">TU INGRESO (ventas − comisión colegio): $${pago.toFixed(2)}</div>
-  <div style="padding:6px 10px;font-size:12px;text-align:right">Costo editorial (libros vendidos): − $${costoEdit.toFixed(2)}</div>
+  ${verEditorial?(()=>{
+    const gEd2=(l)=>{
+      if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+      const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+    };
+    const porGrupo={};
+    d.lineas.forEach(l=>{ const ed=gEd2(l)||'General'; porGrupo[ed]=(porGrupo[ed]||0)+(l.cant-l.dev)*l.costo; });
+    const grupos=Object.keys(porGrupo);
+    const desglose=grupos.length>1?grupos.map(ed=>`<div style="padding:2px 10px;font-size:11px;text-align:right;color:#555">— ${escH(ed)}: $${porGrupo[ed].toFixed(2)}</div>`).join(''):'';
+    return `<div style="padding:6px 10px;font-size:12px;text-align:right">Costo editorial (libros vendidos): − $${costoEdit.toFixed(2)}</div>
+  ${desglose}
   <div style="padding:6px 10px;font-size:12px;text-align:right">Ya pagado a la editorial: $${pagadoEdit.toFixed(2)}</div>
   <div style="padding:6px 10px;font-size:13px;font-weight:bold;text-align:right;background:${saldoEdit>0.005?'#fdecea':'#e8f5e9'}">SALDO POR PAGAR A EDITORIAL: $${saldoEdit.toFixed(2)}</div>
   <div class="pago" style="background:${ganancia>=0?'#e8f5e9':'#fef2f2'};color:${ganancia>=0?'#1b5e20':'#c0392b'}">TU GANANCIA NETA: $${ganancia.toFixed(2)}</div>
@@ -8087,10 +8252,91 @@ function imprimirControl(nombre){
   <tr><th>FECHA</th><th>EDITORIAL</th><th>N° FACTURA</th><th>MONTO</th><th>NOTA</th></tr>
   ${[...d.pagosEdit].sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))).map(p=>`<tr><td>${escH(p.fecha||'')}</td><td>${escH(p.editorial||'')}</td><td>${escH(p.factura||'')}</td><td style="text-align:right">$${(parseFloat(p.monto)||0).toFixed(2)}</td><td>${escH(p.nota||'')}</td></tr>`).join('')}
   <tr class="total-row"><td colspan="3" style="text-align:right">TOTAL PAGADO</td><td style="text-align:right">$${pagadoEdit.toFixed(2)}</td><td></td></tr>
-  </table>`:''}
+  </table>`:''}`;
+  })():''}
   <\/body><\/html>`);
   win.document.close();
   win.onload=()=>win.print();
+}
+
+// Documento en el mismo formato que usan las editoriales al enviar un estado
+// de cuenta (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio
+// final), agrupado por editorial con subtotal cada una — para mandarle al
+// colegio/rectora en el formato que ya conocen y no se confundan con el de
+// Control de Ventas. "Precio final" = Costo Distr. si la línea tiene un %
+// de descuento puesto; si no, se usa el PVP tal cual (decisión de Mónica:
+// en Robótica el PVP ES el valor que cuenta, no hay descuento aparte).
+function imprimirComoEditorial(nombre){
+  const d=DB.colData[nombre];if(!d)return;
+  const win=window.open('','_blank');
+  const gEd=(l)=>{
+    if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+    const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+  };
+  const grupos=[];
+  const idxGrupo={};
+  d.lineas.forEach(l=>{
+    const ed=gEd(l)||'General';
+    if(!(ed in idxGrupo)){ idxGrupo[ed]=grupos.length; grupos.push({nombre:ed,lineas:[]}); }
+    grupos[idxGrupo[ed]].lineas.push(l);
+  });
+  let granTotal=0;
+  const bloques=grupos.map(g=>{
+    let sCant=0,sDev=0,sFinal=0,sValor=0;
+    const filas=g.lineas.map(l=>{
+      const vend=l.cant-l.dev;
+      // "Precio final" de este documento = PVP menos la comisión del colegio
+      // (lo que te queda a ti por libro) — NO es lo que cobra la editorial.
+      const com=lineaComisiona(l);
+      const pct=com?pctLinea(d,l):0;
+      const descuento=pct?Math.floor(l.pvp*pct/100*100)/100:0;
+      const pFinal=l.pvp-descuento;
+      const valor=vend*pFinal;
+      sCant+=l.cant;sDev+=l.dev;sFinal+=vend;sValor+=valor;
+      return `<tr>
+        <td>${escH(l.libro)}</td>
+        <td style="text-align:center">${l.cant}</td>
+        <td style="text-align:center">${l.dev}</td>
+        <td style="text-align:center">${vend}</td>
+        <td style="text-align:right">$${l.pvp.toFixed(2)}</td>
+        <td style="text-align:center">${pct?pct+'%':'—'}</td>
+        <td style="text-align:right">$${pFinal.toFixed(2)}</td>
+        <td style="text-align:right">$${valor.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+    granTotal+=sValor;
+    return `<h3>${escH(g.nombre)}</h3>
+    <table>
+      <tr><th>TEXTO</th><th>CANTIDAD<br>INICIAL</th><th>DEVUELTOS</th><th>CANTIDAD<br>FINAL</th><th>PVP</th><th>%<br>DESCUENTO</th><th>PRECIO<br>FINAL</th><th>VALOR<br>TOTAL</th></tr>
+      ${filas}
+      <tr class="sub-row"><td colspan="7" style="text-align:right">Subtotal — ${escH(g.nombre)}</td><td style="text-align:right">$${sValor.toFixed(2)}</td></tr>
+    </table>`;
+  }).join('<div style="height:14px"></div>');
+
+  win.document.write(`<html><head><title>Estado de cuenta — ${escH(nombre)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;padding:15px;color:#222}
+    h3{margin:14px 0 4px;font-size:12px;color:#333}
+    table{width:100%;border-collapse:collapse}
+    th{background:#e3e3e3;padding:5px;border:1px solid #ccc;text-align:center;font-size:10px}
+    td{padding:4px 6px;border:1px solid #ddd}
+    tr:nth-child(even){background:#fafafa}
+    .sub-row{background:#f8d7da;font-weight:bold}
+    .total-row{background:#1565c0;color:#fff;font-weight:bold}
+    .btn-print{background:#6a1b9a;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:14px}
+    ${dmPrintCSS()}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+  ${dmPrintHeader('Estado de cuenta',nombre)}
+  ${bloques}
+  <div style="height:10px"></div>
+  <table><tr class="total-row"><td colspan="7" style="text-align:right">TOTAL</td><td style="text-align:right">$${granTotal.toFixed(2)} usd</td></tr></table>
+  <div style="margin-top:14px;border:2px solid #1565c0;border-radius:6px;padding:10px 14px;text-align:right;font-size:15px;font-weight:800;color:#1565c0">
+    VALOR A CANCELARSE: $${granTotal.toFixed(2)} usd
+  </div>
+  ${dmPrintFooter()}
+  <\/body><\/html>`);
+  win.document.close();
 }
 
 // ── KIT / PEDIDO ─────────────────────────────────────────────────────────────
@@ -8621,6 +8867,14 @@ function exportColegiosCSV(){
     const d=DB.colData[c.nombre];if(!d)return;
     const T=totalesColegio(d);
     const tv=T.tv,com=T.totalColegio,costoEd=T.costo,pagEd=T.pagado,pvUnit=T.pvUnit;
+    // Mismo agrupado por editorial que en pantalla — fila de Subtotal cuando
+    // cambia de grupo, para que el Excel se vea separado igual que el sistema.
+    const gEd=(l)=>{
+      if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+      const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+    };
+    const mostrarSub=new Set(d.lineas.map(gEd)).size>1;
+    let g={cant:0,vend:0,tv:0,costo:0};
     d.lineas.forEach((l,i)=>{
       const v=l.cant-l.dev;
       const sc=lineaComisiona(l);
@@ -8630,6 +8884,12 @@ function exportColegiosCSV(){
         sc?'SI':'NO', pctL, comL.toFixed(2),
         l.costo,(v*l.costo).toFixed(2),
         i===0?com.toFixed(2):'', i===0?(tv-com).toFixed(2):'', i===0?pagEd.toFixed(2):'', i===0?(costoEd-pagEd).toFixed(2):'']);
+      g.cant+=l.cant;g.vend+=v;g.tv+=v*l.pvp;g.costo+=v*l.costo;
+      const edAct=gEd(l), edSig=i+1<d.lineas.length?gEd(d.lineas[i+1]):null;
+      if(mostrarSub&&edSig!==edAct){
+        rows.push([c.nombre,'SUBTOTAL'+(edAct?' - '+edAct:''),g.cant,'','',g.vend,g.tv.toFixed(2),'','','','',g.costo.toFixed(2),'','','','']);
+        g={cant:0,vend:0,tv:0,costo:0};
+      }
     });
   });
   dlCSV(rows,'ventas_colegios_2026.csv');
