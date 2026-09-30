@@ -1216,7 +1216,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="fg"><label>Nombre (cliente, colegio, librería o proveedor)</label><input type="text" id="pago-nombre" placeholder="Ej: Colegio San José, Editorial Norma..."></div>
     </div>
     <div class="f3">
-      <div class="fg"><label>Valor ($)</label><input type="number" id="pago-valor" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="fg"><label>Valor ($)</label><input type="text" inputmode="decimal" id="pago-valor" placeholder="Ej: 10.000 o 250,50" oninput="previewValorPago()" autocomplete="off"><small id="pago-valor-prev" style="font-size:11px;color:var(--g1);font-weight:700"></small></div>
       <div class="fg"><label>Forma de pago</label>
         <select id="pago-forma">
           <option value="Efectivo">💵 Efectivo</option>
@@ -4306,11 +4306,35 @@ function cargarComprobantePago(input){
   });
 }
 
+// Lee un monto escrito a la manera de Ecuador: "10.000" = diez mil,
+// "10.000,50" = diez mil con 50 ctvs, "250,5" = 250.50. También acepta
+// "10,000.50" y "$" o espacios. Antes la casilla era type=number y el
+// navegador leía "10.000" como 10.
+function leerMonto(txt){
+  let s=String(txt??'').replace(/[$\s]/g,'');
+  if(!s)return 0;
+  const uP=s.lastIndexOf('.'),uC=s.lastIndexOf(',');
+  if(uP>=0&&uC>=0){
+    s=uC>uP?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+  }else if(uC>=0){
+    s=/^\d{1,3}(,\d{3})+$/.test(s)?s.replace(/,/g,''):s.replace(',','.');
+  }else if(uP>=0){
+    if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+  }
+  const n=parseFloat(s);
+  return isFinite(n)?Math.round(n*100)/100:0;
+}
+function previewValorPago(){
+  const el=document.getElementById('pago-valor-prev');if(!el)return;
+  const txt=document.getElementById('pago-valor').value;
+  el.textContent=txt.trim()?'= '+fmt(leerMonto(txt)):'';
+}
+
 function guardarPago(){
   const fecha=document.getElementById('pago-fecha').value||today();
   const tipo=document.getElementById('pago-tipo').value;
   const nombre=(document.getElementById('pago-nombre').value||'').trim();
-  const valor=parseFloat(document.getElementById('pago-valor').value)||0;
+  const valor=leerMonto(document.getElementById('pago-valor').value);
   const forma=document.getElementById('pago-forma').value;
   const nota=(document.getElementById('pago-nota').value||'').trim();
   if(!nombre)return toast('Ingresa el nombre del cliente/colegio/proveedor','err');
@@ -4335,7 +4359,7 @@ function guardarPago(){
   logHistorial(tipo==='cobro'?'Cobro registrado':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma})`+(pagoComprobante?' + comprobante':''));
   save();
   document.getElementById('pago-nombre').value='';
-  document.getElementById('pago-valor').value='';
+  document.getElementById('pago-valor').value='';previewValorPago();
   document.getElementById('pago-nota').value='';
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
   const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
@@ -4349,7 +4373,7 @@ function editarPago(id){
   document.getElementById('pago-fecha').value=p.fecha;
   document.getElementById('pago-tipo').value=p.tipo;
   document.getElementById('pago-nombre').value=p.nombre;
-  document.getElementById('pago-valor').value=p.valor;
+  document.getElementById('pago-valor').value=String(p.valor).replace('.',',');previewValorPago();
   document.getElementById('pago-forma').value=p.forma;
   document.getElementById('pago-nota').value=p.nota||'';
   document.getElementById('pago-edit-id').value=id;
@@ -4366,7 +4390,7 @@ function editarPago(id){
 function cancelarEdicionPago(){
   document.getElementById('pago-edit-id').value='';
   document.getElementById('pago-nombre').value='';
-  document.getElementById('pago-valor').value='';
+  document.getElementById('pago-valor').value='';previewValorPago();
   document.getElementById('pago-nota').value='';
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
   const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
