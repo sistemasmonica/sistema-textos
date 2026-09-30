@@ -277,8 +277,8 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="fg"><label>Categoría</label><select id="mc"></select></div>
     </div>
     <div class="f3">
-      <div class="fg"><label>Subtotal $</label><input type="number" id="ms" placeholder="0.00" step="0.01" oninput="calcTotal('ms','mi','mt')"></div>
-      <div class="fg"><label>IVA $</label><input type="number" id="mi" placeholder="0.00" step="0.01" oninput="calcTotal('ms','mi','mt')"></div>
+      <div class="fg"><label>Subtotal $</label><input type="text" inputmode="decimal" autocomplete="off" id="ms" placeholder="0.00" oninput="calcTotal('ms','mi','mt')"></div>
+      <div class="fg"><label>IVA $</label><input type="text" inputmode="decimal" autocomplete="off" id="mi" placeholder="0.00" oninput="calcTotal('ms','mi','mt')"></div>
       <div class="fg"><label>Total $</label><input type="number" id="mt" placeholder="0.00" step="0.01" readonly style="background:var(--lt)"></div>
     </div>
     <div class="fg"><label>Nota</label><input type="text" id="mn" placeholder="Descripción adicional..."></div>
@@ -302,8 +302,8 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="fg"><label>Descripción</label><input type="text" id="vd" placeholder="Textos 2do año, útiles..."></div>
     </div>
     <div class="f3">
-      <div class="fg"><label>Subtotal $</label><input type="number" id="vs" placeholder="0.00" step="0.01" oninput="calcTotal('vs','vi','vt')"></div>
-      <div class="fg"><label>IVA $</label><input type="number" id="vi" placeholder="0.00" step="0.01" oninput="calcTotal('vs','vi','vt')"></div>
+      <div class="fg"><label>Subtotal $</label><input type="text" inputmode="decimal" autocomplete="off" id="vs" placeholder="0.00" oninput="calcTotal('vs','vi','vt')"></div>
+      <div class="fg"><label>IVA $</label><input type="text" inputmode="decimal" autocomplete="off" id="vi" placeholder="0.00" oninput="calcTotal('vs','vi','vt')"></div>
       <div class="fg"><label>Total $</label><input type="number" id="vt" placeholder="0.00" step="0.01" readonly style="background:var(--lt)"></div>
     </div>
     <div class="btn-row"><button class="btn btn-p" onclick="saveVenta()"><i class="ti ti-check"></i> Guardar venta</button></div>
@@ -1049,7 +1049,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <div id="nc-resumen" style="background:var(--g4);border-radius:6px;padding:8px;font-size:12px;margin-top:8px;display:none"></div>
       </div>
       <div class="f2">
-        <div class="fg"><label>Total nota de crédito ($)</label><input type="number" id="nc-total" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="fg"><label>Total nota de crédito ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="nc-total" placeholder="0.00"></div>
         <div class="fg"><label>Nota u observación</label><input type="text" id="nc-nota" placeholder="Ej: Devolución 30 libros Matemáticas"></div>
       </div>
       <div class="btn-row"><button class="btn btn-p" onclick="saveNC()"><i class="ti ti-check"></i> Guardar nota de crédito</button></div>
@@ -1103,7 +1103,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="f3">
       <div class="fg"><label>N° Factura (capacitación)</label><input type="text" id="com-fact" placeholder="F001-001"></div>
-      <div class="fg"><label>Monto sin IVA ($)</label><input type="number" id="com-monto" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="fg"><label>Monto sin IVA ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="com-monto" placeholder="0.00"></div>
       <div class="fg"><label>Nota</label><input type="text" id="com-nota" placeholder="Opcional..."></div>
     </div>
     <div class="btn-row"><button class="btn btn-p" onclick="saveCom()"><i class="ti ti-check"></i> Guardar comisión</button></div>
@@ -1417,7 +1417,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       </div>
     </div>
     <div class="f3">
-      <div class="fg"><label>Monto total de la deuda ($)</label><input type="number" id="deu-total" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="fg"><label>Monto total de la deuda ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="deu-total" placeholder="0.00"></div>
       <div class="fg"><label>Cuota mensual ($)</label><input type="number" id="deu-cuota" step="0.01" min="0" placeholder="0.00"></div>
       <div class="fg"><label>Fecha inicio</label><input type="date" id="deu-fecha"></div>
     </div>
@@ -1654,7 +1654,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div id="modal-abono-info" style="background:var(--lt);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px"></div>
     <div class="f2">
       <div class="fg"><label>Fecha del pago</label><input type="date" id="abo-fecha"></div>
-      <div class="fg"><label>Monto pagado ($)</label><input type="number" id="abo-monto" step="0.01" min="0.01" placeholder="0.00"></div>
+      <div class="fg"><label>Monto pagado ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="abo-monto" placeholder="0.00"></div>
     </div>
     <div class="fg"><label>Nota (opcional)</label><input type="text" id="abo-nota" placeholder="Ej: Cuota de junio, abono parcial..."></div>
     <input type="hidden" id="abo-deu-id">
@@ -2046,8 +2046,8 @@ function parseLocalDate(s){if(!s)return new Date();const[y,m,d]=s.split('-').map
 function mesAnio(d){if(!d)return'';const p=d.split('-');return p[0]+'-'+p[1]}
 function mesLabel(m){if(!m)return'';const mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];const p=m.split('-');return mn[parseInt(p[1])-1]+' '+p[0]}
 function calcTotal(s,i,t){
-  const sv=parseFloat(document.getElementById(s).value)||0;
-  const iv=parseFloat(document.getElementById(i).value)||0;
+  const sv=leerMonto(document.getElementById(s).value);
+  const iv=leerMonto(document.getElementById(i).value);
   document.getElementById(t).value=(sv+iv).toFixed(2);
 }
 function fillCats(id,tipo){
@@ -2478,10 +2478,10 @@ function setTipoMan(tipo){
 }
 function saveMan(){
   const p=document.getElementById('mp').value.trim();
-  const s=parseFloat(document.getElementById('ms').value)||0;
+  const s=leerMonto(document.getElementById('ms')?.value);
   if(!p)return toast('Ingresa el proveedor','err');
   if(!s)return toast('Ingresa el subtotal','err');
-  const iv=parseFloat(document.getElementById('mi').value)||0;
+  const iv=leerMonto(document.getElementById('mi')?.value);
   DB.regs.push({id:uid(),tipo:tipoMan,categoria:document.getElementById('mc').value,fecha:document.getElementById('mf').value||today(),proveedor:p,numFact:document.getElementById('mnf').value,subtotal:s,iva:iv,total:s+iv,nota:document.getElementById('mn').value,origen:'manual'});
   logHistorial(tipoMan==='negocio'?'Compra de negocio registrada':'Gasto personal registrado',`${p} — ${fmt(s+iv)}`);
   save();updateCount();clearMan();renderDash();toast('Registro guardado','ok');
@@ -2493,10 +2493,10 @@ function clearMan(){['mp','mnf','ms','mi','mt','mn'].forEach(id=>document.getEle
 // ===================================================
 function saveVenta(){
   const c=document.getElementById('vc').value.trim();
-  const s=parseFloat(document.getElementById('vs').value)||0;
+  const s=leerMonto(document.getElementById('vs')?.value);
   if(!c)return toast('Ingresa el cliente','err');
   if(!s)return toast('Ingresa el subtotal','err');
-  const iv=parseFloat(document.getElementById('vi').value)||0;
+  const iv=leerMonto(document.getElementById('vi')?.value);
   DB.regs.push({id:uid(),tipo:'venta',categoria:'Venta',fecha:document.getElementById('vf').value||today(),proveedor:c,numFact:document.getElementById('vnf').value,subtotal:s,iva:iv,total:s+iv,nota:document.getElementById('vd').value,origen:'manual'});
   logHistorial('Venta registrada',`${c} — ${fmt(s+iv)}`);
   save();updateCount();clearVenta();renderUtilidad();toast('Venta guardada','ok');
@@ -8010,7 +8010,7 @@ function renderControl(){
           <datalist id="pe-edit-list">${editoriales.map(e=>`<option value="${escH(e)}">`).join('')}</datalist>
         </div>
         <div class="fg" style="margin:0"><label style="font-size:10px">N° factura</label><input type="text" id="pe-fact" placeholder="opcional" style="font-size:12px"></div>
-        <div class="fg" style="margin:0"><label style="font-size:10px">Monto $</label><input type="number" id="pe-monto" min="0" step="0.01" placeholder="0.00" style="font-size:12px"></div>
+        <div class="fg" style="margin:0"><label style="font-size:10px">Monto $</label><input type="text" inputmode="decimal" autocomplete="off" id="pe-monto" placeholder="0.00" style="font-size:12px"></div>
         <div class="fg" style="margin:0"><label style="font-size:10px">Nota</label><input type="text" id="pe-nota" placeholder="opcional (transferencia, cheque…)" style="font-size:12px"></div>
         <button class="btn btn-p btn-sm" style="margin-bottom:2px" onclick="agregarPagoEdit('${nombre}')"><i class="ti ti-plus"></i> Registrar pago</button>
       </div>
@@ -8249,7 +8249,7 @@ function agregarPagoEdit(nombre){
   initColData();
   const d=DB.colData[nombre];if(!d)return;
   if(!d.pagosEdit)d.pagosEdit=[];
-  const monto=parseFloat(document.getElementById('pe-monto')?.value)||0;
+  const monto=leerMonto(document.getElementById('pe-monto')?.value);
   if(monto<=0)return toast('Escribe el monto del pago','err');
   const pago={
     id:uid(),
@@ -10032,7 +10032,7 @@ function actualizarResumenNC(){
   res.style.display='block';
   res.innerHTML=`<b>Productos distintos:</b> ${nprod} &nbsp;|&nbsp; <b>Total unidades:</b> ${items} &nbsp;|&nbsp; <b>Sugerido según costo:</b> ${fmt(costoSugerido)}`;
   const totalEl=document.getElementById('nc-total');
-  if(!totalEl.value||parseFloat(totalEl.value)===ncTotalAuto)totalEl.value=costoSugerido.toFixed(2);
+  if(!totalEl.value||leerMonto(totalEl.value)===ncTotalAuto)totalEl.value=costoSugerido.toFixed(2);
   ncTotalAuto=costoSugerido;
 }
 
@@ -10057,7 +10057,7 @@ function saveNC(){
   const fecha=document.getElementById('nc-fecha').value||today();
   const editorial=document.getElementById('nc-editorial').value.trim();
   const num=document.getElementById('nc-num').value.trim();
-  const total=parseFloat(document.getElementById('nc-total').value)||0;
+  const total=leerMonto(document.getElementById('nc-total')?.value);
   const nota=document.getElementById('nc-nota').value.trim();
   if(!editorial){toast('Ingresa el nombre de la editorial','err');return;}
   if(total<=0){toast('El total debe ser mayor a 0','err');return;}
@@ -10101,7 +10101,7 @@ function saveCom(){
   const benef=document.getElementById('com-benef').value.trim();
   const tipo=document.getElementById('com-tipo').value;
   const fact=document.getElementById('com-fact').value.trim();
-  const monto=parseFloat(document.getElementById('com-monto').value)||0;
+  const monto=leerMonto(document.getElementById('com-monto')?.value);
   const nota=document.getElementById('com-nota').value.trim();
   if(!benef){toast('Ingresa el nombre del beneficiario','err');return;}
   if(monto<=0){toast('El monto debe ser mayor a 0','err');return;}
@@ -10263,7 +10263,7 @@ function renderLiquidacion(){
 function saveDeu(){
   const acreedor=(document.getElementById('deu-acreedor').value||'').trim();
   const tipo=document.getElementById('deu-tipo').value;
-  const montoTotal=parseFloat(document.getElementById('deu-total').value)||0;
+  const montoTotal=leerMonto(document.getElementById('deu-total')?.value);
   const cuota=parseFloat(document.getElementById('deu-cuota').value)||0;
   const fecha=document.getElementById('deu-fecha').value||today();
   const nota=(document.getElementById('deu-nota').value||'').trim();
@@ -10385,7 +10385,7 @@ function abrirAbono(id){
 function guardarAbono(){
   const id=document.getElementById('abo-deu-id').value;
   const d=DB.deudas.find(x=>x.id===id);if(!d)return;
-  const monto=parseFloat(document.getElementById('abo-monto').value)||0;
+  const monto=leerMonto(document.getElementById('abo-monto')?.value);
   const fecha=document.getElementById('abo-fecha').value||today();
   const nota=(document.getElementById('abo-nota').value||'').trim();
   if(monto<=0)return toast('Ingresa un monto mayor a 0','err');
