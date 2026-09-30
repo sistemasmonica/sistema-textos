@@ -1072,18 +1072,24 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="card" style="background:#fffbeb;border-color:#fcd34d;padding:10px 14px;margin-bottom:12px">
     <small style="color:#92400e"><b>ℹ️ Nota:</b> Por cada colegio: lo que te toca cobrar (venta − comisión del colegio, de <b>Control de ventas</b>) menos lo que ya te han pagado (pestaña <b>Pagos → Cobro</b>).</small>
   </div>
-  <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="sc"><div class="sc-lbl">Total por cobrar</div><div class="sc-val cr" id="pc-s-total">$0.00</div></div>
-    <div class="sc"><div class="sc-lbl">Colegios con saldo pendiente</div><div class="sc-val ca" id="pc-s-ncol">0</div></div>
+    <div class="sc" style="cursor:pointer" onclick="filtroPorCobrar('deben')" title="Ver solo los que deben"><div class="sc-lbl">🟡🔴 Colegios que deben</div><div class="sc-val ca" id="pc-s-ncol">0</div></div>
+    <div class="sc" style="cursor:pointer" onclick="filtroPorCobrar('pagados')" title="Ver solo los que ya pagaron todo"><div class="sc-lbl">✅ Ya pagaron todo</div><div class="sc-val cg" style="color:var(--g1)" id="pc-s-npag">0</div></div>
     <div class="sc"><div class="sc-lbl">Cobrado sin colegio identificado</div><div class="sc-val" id="pc-s-sincol">$0.00</div></div>
   </div>
   <div class="sh" style="margin-top:4px">
-    <h2>Colegios que me deben</h2>
-    <input type="search" id="pc-q" placeholder="Buscar colegio..." oninput="renderPorCobrar()" style="min-width:180px">
+    <h2>Estado de pago por colegio</h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" id="pcob-f-todos" onclick="filtroPorCobrar('todos')">Todos</button>
+      <button class="btn btn-sm" id="pcob-f-deben" onclick="filtroPorCobrar('deben')">🟡🔴 Deben</button>
+      <button class="btn btn-sm" id="pcob-f-pagados" onclick="filtroPorCobrar('pagados')">✅ Ya pagaron</button>
+      <input type="search" id="pcob-q" placeholder="Buscar colegio..." oninput="renderPorCobrar()" style="min-width:180px">
+    </div>
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Colegio</th><th>Total vendido</th><th>Comisión colegio</th><th>Tu ingreso esperado</th><th>Ya cobrado</th><th>Saldo por cobrar</th><th></th></tr></thead>
+      <thead><tr><th>Colegio</th><th>Estado</th><th>Total vendido</th><th>Comisión colegio</th><th>Tu ingreso esperado</th><th>Ya cobrado</th><th>Saldo por cobrar</th><th></th></tr></thead>
       <tbody id="tb-porcobrar"></tbody>
     </table>
   </div>
@@ -4587,32 +4593,58 @@ function saldosPorCobrarColegios(){
   return {filas,sinColegio};
 }
 
+// Estado de pago de cada colegio: se muestran TODOS (no solo los que deben),
+// para ver de un vistazo cuáles ya pagaron completo. Diferencias de hasta $1
+// (redondeos de centavos) cuentan como pagado completo.
+const TOL_COBRO=1;
+let _filtroPorCobrar='deben';
+function filtroPorCobrar(f){_filtroPorCobrar=f;renderPorCobrar();}
+function estadoCobroColegio(f){
+  if(f.saldo>TOL_COBRO) return f.cobrado>0.01
+    ?{k:'debe',txt:'🟡 Abonó — debe',color:'#b45309',bg:'#fffbeb'}
+    :{k:'debe',txt:'🔴 No ha pagado',color:'var(--r1)',bg:'#fef2f2'};
+  if(f.saldo<-TOL_COBRO) return {k:'pagado',txt:'🔵 Pagó de más',color:'#1565c0',bg:'#eff6ff'};
+  return {k:'pagado',txt:'✅ Pagado completo',color:'var(--g1)',bg:'#f0faf4'};
+}
 function renderPorCobrar(){
-  const q=(document.getElementById('pc-q')?.value||'').toLowerCase();
+  const q=(document.getElementById('pcob-q')?.value||'').toLowerCase();
   const {filas,sinColegio}=saldosPorCobrarColegios();
-  const pendientes=filas.filter(f=>f.saldo>0.01)
+  // Solo colegios con algo vendido o algún cobro (los vacíos no aportan nada)
+  const conMov=filas.filter(f=>f.vendido>0.005||f.cobrado>0.005);
+  const nDeben=conMov.filter(f=>f.saldo>TOL_COBRO).length;
+  const nPag=conMov.length-nDeben;
+  ['todos','deben','pagados'].forEach(k=>{
+    const b=document.getElementById('pcob-f-'+k);
+    if(b)b.className='btn btn-sm '+(_filtroPorCobrar===k?'btn-p':'btn-s');
+  });
+  const visibles=conMov
+    .filter(f=>_filtroPorCobrar==='todos'||(_filtroPorCobrar==='deben'?f.saldo>TOL_COBRO:f.saldo<=TOL_COBRO))
     .filter(f=>!q||f.colegio.toLowerCase().includes(q))
     .sort((a,b)=>b.saldo-a.saldo);
-  let total=0;
+  let total=conMov.filter(f=>f.saldo>TOL_COBRO).reduce((a,f)=>a+f.saldo,0);
   const tb=document.getElementById('tb-porcobrar');
-  if(!pendientes.length){
-    tb.innerHTML='<tr><td colspan="7"><div class="empty">No hay colegios con saldo pendiente.</div></td></tr>';
+  if(!visibles.length){
+    const msg=_filtroPorCobrar==='deben'?'🎉 Ningún colegio te debe.':(_filtroPorCobrar==='pagados'?'Todavía ningún colegio ha pagado todo.':'No hay colegios con ventas registradas.');
+    tb.innerHTML='<tr><td colspan="8"><div class="empty">'+msg+'</div></td></tr>';
   }else{
-    tb.innerHTML=pendientes.map(f=>{
-      total+=f.saldo;
-      return`<tr>
+    tb.innerHTML=visibles.map(f=>{
+      const e=estadoCobroColegio(f);
+      const saldoTxt=f.saldo>TOL_COBRO?fmt(f.saldo):(f.saldo<-TOL_COBRO?'+'+fmt(-f.saldo)+' a favor':(Math.abs(f.saldo)>=0.005?fmt(0)+'<div style="font-size:9px;font-weight:400;color:var(--mu)">dif. '+(f.saldo<0?'−':'')+fmt(Math.abs(f.saldo))+' por redondeo</div>':fmt(0)));
+      return`<tr style="background:${e.bg}">
         <td style="font-weight:600">${escH(f.colegio)}</td>
+        <td style="font-weight:700;color:${e.color};white-space:nowrap">${e.txt}</td>
         <td style="font-family:monospace">${fmt(f.vendido)}</td>
         <td style="font-family:monospace;color:var(--a1)">${fmt(f.comision)}</td>
         <td style="font-family:monospace">${fmt(f.ingreso)}</td>
         <td style="font-family:monospace;color:var(--g1)">${fmt(f.cobrado)}</td>
-        <td style="font-family:monospace;font-weight:700;color:var(--r1)">${fmt(f.saldo)}</td>
-        <td><button class="btn btn-s btn-sm" onclick="imprimirEstadoCuenta('${escAttr(f.colegio)}')" title="Imprimir estado de cuenta para cobrar"><i class="ti ti-printer"></i></button></td>
+        <td style="font-family:monospace;font-weight:700;color:${e.color}">${saldoTxt}</td>
+        <td><button class="btn btn-s btn-sm" onclick="imprimirEstadoCuenta('${escAttr(f.colegio)}')" title="Imprimir estado de cuenta"><i class="ti ti-printer"></i></button></td>
       </tr>`;
     }).join('');
   }
+  const np=document.getElementById('pc-s-npag');if(np)np.textContent=nPag;
   document.getElementById('pc-s-total').textContent=fmt(total);
-  document.getElementById('pc-s-ncol').textContent=pendientes.length;
+  document.getElementById('pc-s-ncol').textContent=nDeben;
   const totSinCol=sinColegio.reduce((a,x)=>a+x.valor,0);
   document.getElementById('pc-s-sincol').textContent=fmt(totSinCol);
 
