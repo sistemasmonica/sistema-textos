@@ -7742,7 +7742,7 @@ function renderControl(){
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" value="${l.cant}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].cant=parseInt(this.value)||0;recalcControl('${nombre}')">
+          onchange="DB.colData['${nombre}'].lineas[${i}].cant=parseInt(this.value)||0;recalcControl('${nombre}');save()">
         ${(()=>{
           if(!l.prodId) return '';
           const gs=guiasCol.map(g=>{ const gl=(g.lineas||[]).find(x=>x.prodId===l.prodId); return gl?{numero:g.numero,cant:gl.cantidad||0}:null; }).filter(Boolean);
@@ -7754,12 +7754,12 @@ function renderControl(){
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" step="0.01" value="${l.pvp}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].pvp=parseFloat(this.value)||0;recalcControl('${nombre}')">
+          onchange="DB.colData['${nombre}'].lineas[${i}].pvp=parseFloat(this.value)||0;recalcControl('${nombre}');save()">
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace" id="ctrl-tot-${i}">$${totalF.toFixed(2)}</td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" value="${l.dev}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].dev=parseInt(this.value)||0;recalcControl('${nombre}')">
+          onchange="DB.colData['${nombre}'].lineas[${i}].dev=parseInt(this.value)||0;recalcControl('${nombre}');save()">
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:center;font-weight:600" id="ctrl-vend-${i}">${vendidos}</td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace;color:var(--b1)" id="ctrl-tv-${i}">$${tvLine.toFixed(2)}</td>
@@ -7785,7 +7785,7 @@ function renderControl(){
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" step="0.01" value="${l.costo}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].costo=parseFloat(this.value)||0;recalcControl('${nombre}')">
+          onchange="DB.colData['${nombre}'].lineas[${i}].costo=parseFloat(this.value)||0;recalcControl('${nombre}');save()">
         ${l.descPct?`<div style="font-size:9px;color:#8a7500;margin-top:2px;white-space:nowrap">${l.pvp.toFixed(2)} × ${l.descPct}% = ${(l.pvp-l.costo).toFixed(2)}<br>${l.pvp.toFixed(2)} − ${(l.pvp-l.costo).toFixed(2)} = ${l.costo.toFixed(2)}</div>`:''}
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace" id="ctrl-vtot-${i}">$${vtotal.toFixed(2)}</td>
@@ -7879,7 +7879,7 @@ function renderControl(){
         <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px">Le pagas al colegio${sinComision?` <span style="color:#c62828;text-transform:none">(${sinComision} materia${sinComision===1?'':'s'} sin comisión)</span>`:''}</div>
         <table style="width:100%;font-size:12px">
           <tr><td style="padding:3px 0">Comisión general (<input type="number" value="${d.comisionPct}" min="0" max="100" style="width:40px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPct=parseFloat(this.value)||0;renderControl()">%)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comision">$${comision.toFixed(2)}</td></tr>
-          <tr><td style="padding:3px 0">C. P.Venta (x$<input type="number" value="${pvUnit}" min="0" step="0.01" style="width:38px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPVUnit=parseFloat(this.value)||0;recalcControl('${nombre}')">)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comisionpv">$${comisionPV.toFixed(2)}</td></tr>
+          <tr><td style="padding:3px 0">C. P.Venta (x$<input type="number" value="${pvUnit}" min="0" step="0.01" style="width:38px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPVUnit=parseFloat(this.value)||0;recalcControl('${nombre}');save()">)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comisionpv">$${comisionPV.toFixed(2)}</td></tr>
           <tr style="border-top:2px solid #f9d71c"><td style="padding:5px 0;font-weight:700">TOTAL COLEGIO</td><td style="font-family:monospace;font-weight:700;color:var(--a1);text-align:right" id="ctrl-totalcol">$${totalColegio.toFixed(2)}</td></tr>
         </table>
       </div>
