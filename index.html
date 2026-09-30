@@ -334,6 +334,8 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt on" id="col-tab-control" onclick="colTab('control',this)">🟡 Control de ventas</button>
     <button class="nt" id="col-tab-kit" onclick="colTab('kit',this)">📋 Kit / Pedido</button>
     <button class="nt" id="col-tab-precios" onclick="colTab('precios',this)">💲 Lista de precios</button>
+    <button class="nt" id="col-tab-lpdidactica" onclick="colTab('lpdidactica',this)">📘 Lista de precios Didáctica</button>
+    <button class="nt" id="col-tab-lpingles" onclick="colTab('lpingles',this)">🔤 Lista de precios Inglés Tech Books</button>
     <button class="nt" id="col-tab-fin" onclick="colTab('fin',this)">📊 Financiero</button>
     <button class="nt" id="col-tab-res" onclick="colTab('res',this)">📈 Resumen general</button>
   </div>
@@ -351,6 +353,14 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <!-- LISTA DE PRECIOS POR COLEGIO -->
   <div id="col-pn-precios" class="col-pn" style="display:none">
     <div id="col-precios-body"></div>
+  </div>
+
+  <!-- LISTAS DE PRECIOS DE LA EDITORIAL -->
+  <div id="col-pn-lpdidactica" class="col-pn" style="display:none">
+    <div id="col-lpdidactica-body"></div>
+  </div>
+  <div id="col-pn-lpingles" class="col-pn" style="display:none">
+    <div id="col-lpingles-body"></div>
   </div>
 
   <!-- FINANCIERO -->
@@ -7465,6 +7475,72 @@ function imprimirPreciosCol(){
   win.document.close();
 }
 
+// ── LISTAS DE PRECIOS DE LA EDITORIAL (solo para ver/imprimir) ──────────────
+// Copiadas de "LISTA DE PRECIOS DANNY RIOS 2026.xlsx" y "PRECIOS INGLES.xlsx".
+// Cada fila: [título, colección, línea, PVP, precio neto]. No tocan inventario
+// ni la Lista de precios por colegio — son la referencia general de la editorial.
+const LISTA_PRECIOS_DIDACTICA=[["LENGUA Y LITERATURA EGB 2","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 3","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 4","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 5","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 6","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 7","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 8","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 9","EVOLUCION 5.0","EGB",32.5,13],["LENGUA Y LITERATURA EGB 10","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 2","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 3","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 4","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 5","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 6","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 7","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 8","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 9","EVOLUCION 5.0","EGB",32.5,13],["MATEMATICA EGB 10","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 2","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 3","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 4","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 5","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 6","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 7","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 8","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 9","EVOLUCION 5.0","EGB",32.5,13],["CIENCIAS NATURALES EGB 10","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 2","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 3","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 4","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 5","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 6","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 7","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 8","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 9","EVOLUCION 5.0","EGB",32.5,13],["ESTUDIOS SOCIALES EGB 10","EVOLUCION 5.0","EGB",32.5,13],["PROYECTOS STEAM + H EGB 2","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 3","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 4","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 5","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 6","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 7","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 8","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 9","EVOLUCION 5.0","BGU",10,4],["PROYECTOS STEAM + H EGB 10","EVOLUCION 5.0","BGU",10,4],["LENGUA Y LITERATURA 1","EVOLUCION 5.0","BGU",32.5,13],["LENGUA Y LITERATURA 2","EVOLUCION 5.0","BGU",32.5,13],["LENGUA Y LITERATURA 3","EVOLUCION 5.0","BGU",32.5,13],["MATEMATICA 1","EVOLUCION 5.0","BGU",32.5,13],["MATEMATICA 2","EVOLUCION 5.0","BGU",32.5,13],["MATEMATICA 3","EVOLUCION 5.0","BGU",32.5,13],["FISICA 1","EVOLUCION 5.0","BGU",32.5,13],["FISICA 2","EVOLUCION 5.0","BGU",32.5,13],["FISICA 3","EVOLUCION 5.0","BGU",32.5,13],["QUIMICA 1","EVOLUCION 5.0","BGU",32.5,13],["QUIMICA 2","EVOLUCION 5.0","BGU",32.5,13],["QUIMICA 3","EVOLUCION 5.0","BGU",32.5,13],["BIOLOGIA 1","EVOLUCION 5.0","BGU",32.5,13],["BIOLOGIA 2","EVOLUCION 5.0","BGU",32.5,13],["BIOLOGIA 3","EVOLUCION 5.0","BGU",32.5,13],["HISTORIA 1","EVOLUCION 5.0","BGU",32.5,13],["HISTORIA 2","EVOLUCION 5.0","BGU",32.5,13],["HISTORIA 3","EVOLUCION 5.0","BGU",32.5,13],["EDUCACION CULTURAL Y ARTISTICA EGB 1","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 2","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 3","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 4","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 5","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 6","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 7","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 8","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 9","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION CULTURAL Y ARTISTICA EGB 10","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 2","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 3","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 4","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 5","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 6","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 7","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 8","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 9","EVOLUCION 5.0","COMP",12,4.5],["PASAPORTE A LA LECTURA EGB 10","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 1","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 2","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 3","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 4","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 5","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 6","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 7","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 8","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 9","EVOLUCION 5.0","COMP",12,4.5],["CALIGRAFIA EGB 10","EVOLUCION 5.0","COMP",12,4.5],["EDUCACION FINANCIERA EGB 2","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 3","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 4","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 5","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 6","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 7","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 8","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 9","EVOLUCION 5.0","COMP",15,6],["EDUCACION FINANCIERA EGB 10","EVOLUCION 5.0","COMP",15,6],["CIVICA Y ACOMPAÑAMIENTO EGB 2","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 3","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 4","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 5","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 6","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 7","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 8","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 9","EVOLUCION 5.0","COMP",12,4.5],["CIVICA Y ACOMPAÑAMIENTO EGB 10","EVOLUCION 5.0","COMP",12,4.5],["ENGLISH EXPLORERS EGB 1","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 2","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 3","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 4","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 5","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 6","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 7","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 8","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 9","EVOLUCION 5.0","COMP",15,6],["ENGLISH EXPLORERS EGB 10","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA 3 AÑOS","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA 4 AÑOS","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 1","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 2","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 3","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 4","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 5","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 6","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 7","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 8","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 9","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA EGB 10","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA BGU 1","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA BGU 2","EVOLUCION 5.0","COMP",15,6],["EDUCACION RELIGIOSA BGU 3","EVOLUCION 5.0","COMP",15,6],["IMAGINA Y APRENDE 3 AÑOS","CREACIONES","INICIAL",36,14],["IMAGINA Y APRENDE 4 AÑOS","CREACIONES","INICIAL",36,14],["IMAGINA Y APRENDE 5 AÑOS","CREACIONES","INICIAL",36,14],["AVENTURAS INICIALES PRE MATEMATICA","CREACIONES","INICIAL",14,5.5],["AVENTURAS INICIALES PRE ESCRITURA","CREACIONES","INICIAL",14,5.5],["AVENTURAS INICIALES COMPUTACION","CREACIONES","INICIAL",14,5.5]];
+const LISTA_PRECIOS_INGLES=[["WONDER FAMILY 1","","",18,0],["WONDER FAMILY 2","","",18,0],["WONDER FAMILY 3","","",18,0],["WONDER FAMILY 4","","",18,0],["WONDER FAMILY 5","","",18,0],["WONDER FAMILY 6","","",18,0],["LIMITTLES A1.1","","",18,0],["LIMITTLES A1.2","","",18,0],["LIMITTLES A2.1","","",18,0],["LIMITTLES A2.2","","",20,0],["LIMITTLES B1.1","","",20,0],["LIMITTLES B1.2","","",20,0]];
+const LISTAS_PRECIOS_REF={
+  didactica:{titulo:'LISTA DE PRECIOS DIDÁCTICA',datos:LISTA_PRECIOS_DIDACTICA},
+  ingles:{titulo:'LISTA DE PRECIOS INGLÉS TECH BOOKS',datos:LISTA_PRECIOS_INGLES}
+};
+function filasListaRef(tipo){
+  const L=LISTAS_PRECIOS_REF[tipo];
+  const q=(document.getElementById('lpref-q-'+tipo)?.value||'').toLowerCase();
+  return L.datos.filter(r=>!q||r.slice(0,3).join(' ').toLowerCase().includes(q));
+}
+function renderListaRef(tipo){
+  const cont=document.getElementById('col-lp'+tipo+'-body');
+  if(!cont) return;
+  const L=LISTAS_PRECIOS_REF[tipo];
+  const q=document.getElementById('lpref-q-'+tipo)?.value||'';
+  const hayCol=L.datos.some(r=>r[1]), hayNeto=L.datos.some(r=>r[4]>0);
+  const filas=filasListaRef(tipo);
+  let grupoAnt=null;
+  const cuerpo=filas.map(r=>{
+    const grupo=r[1]+(r[2]?' — '+r[2]:'');
+    let sep='';
+    if(hayCol&&grupo!==grupoAnt){sep=`<tr><td colspan="${hayNeto?3:2}" style="background:#e3f2fd;font-weight:700;color:#1565c0;font-size:11px">${escAttr(grupo)}</td></tr>`;grupoAnt=grupo;}
+    return sep+`<tr><td>${escAttr(r[0])}</td><td style="text-align:right;font-family:monospace;font-weight:700">$${r[3].toFixed(2)}</td>${hayNeto?`<td style="text-align:right;font-family:monospace">$${r[4].toFixed(2)}</td>`:''}</tr>`;
+  }).join('');
+  cont.innerHTML=`
+  <div class="sh">
+    <h2>${L.titulo}</h2>
+    <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirListaRef('${tipo}')"><i class="ti ti-printer"></i> Imprimir / PDF</button>
+  </div>
+  <div class="filters"><input type="search" id="lpref-q-${tipo}" placeholder="Buscar libro..." value="${escAttr(q)}" oninput="renderListaRef('${tipo}');const e=document.getElementById('lpref-q-${tipo}');e.focus();e.setSelectionRange(e.value.length,e.value.length)" style="min-width:220px"><span style="font-size:12px;color:var(--mu)">${filas.length} libro(s)</span></div>
+  <div class="tw"><table>
+    <thead><tr><th>Título</th><th style="text-align:right">PVP</th>${hayNeto?'<th style="text-align:right">Precio neto</th>':''}</tr></thead>
+    <tbody>${cuerpo||'<tr><td colspan="3" style="text-align:center;color:var(--mu)">No hay libros con ese nombre</td></tr>'}</tbody>
+  </table></div>`;
+}
+function imprimirListaRef(tipo){
+  const L=LISTAS_PRECIOS_REF[tipo];
+  const filas=filasListaRef(tipo);
+  const hayNeto=L.datos.some(r=>r[4]>0), hayCol=L.datos.some(r=>r[1]);
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${L.titulo}</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;padding:18px;color:#222;margin:0}
+    .btn-print{position:fixed;top:12px;right:12px;background:#1565c0;color:#fff;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    ${dmPrintCSS()}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+    th{background:#1565c0;color:#fff;padding:6px;text-align:left;border:1px solid #0d47a1}
+    td{padding:5px 6px;border:1px solid #ddd}
+    .r{text-align:right;font-family:monospace}
+  </style></head><body>
+  ${dmPrintHeader(L.titulo,'2026')}
+  <table>
+    <thead><tr><th>Título</th>${hayCol?'<th>Colección</th><th>Línea</th>':''}<th class="r">PVP</th>${hayNeto?'<th class="r">Precio neto</th>':''}</tr></thead>
+    <tbody>${filas.map(r=>`<tr><td>${escAttr(r[0])}</td>${hayCol?`<td>${escAttr(r[1])}</td><td>${escAttr(r[2])}</td>`:''}<td class="r">${r[3].toFixed(2)}</td>${hayNeto?`<td class="r">${r[4].toFixed(2)}</td>`:''}</tr>`).join('')}</tbody>
+  </table>
+  ${dmPrintFooter()}
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  </body></html>`);
+  win.document.close();
+}
+
 // Modal genérico reutilizable (para los diálogos de la lista de precios)
 function abrirModalGenerico(titulo,htmlCuerpo,onOk,textoOk){
   let m=document.getElementById('modal-generico');
@@ -7548,6 +7624,8 @@ function renderColViews(){
   if(id==='control') renderControl();
   else if(id==='kit') renderKit();
   else if(id==='precios') renderPreciosCol();
+  else if(id==='lpdidactica') renderListaRef('didactica');
+  else if(id==='lpingles') renderListaRef('ingles');
   else if(id==='fin') renderFin();
   else if(id==='res') renderColResumen();
 }
