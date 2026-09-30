@@ -8016,6 +8016,20 @@ function recalcControl(nombre){
     const lbl=topBox.querySelector('div');if(lbl)lbl.style.color=ganancia>=0?'#1b5e20':'#b71c1c';}
   const topSaldo=document.getElementById('ctrl-top-saldo');
   if(topSaldo){topSaldo.textContent='$'+saldoEdit.toFixed(2);topSaldo.style.color=saldoEdit>0.005?'var(--r1)':'var(--g1)';}
+  // TE QUEDA/LIBRO, TE QUEDA TOTAL, subtotales por editorial y el desglose de
+  // arriba no tienen id — se redibuja toda la tabla para que usen el % y PVP
+  // de cada fila, conservando el campo donde estaba escribiendo y el scroll.
+  const cont=document.getElementById('col-control-body');
+  if(cont&&document.getElementById('col-sel')?.value===nombre){
+    const campos=()=>[...cont.querySelectorAll('input,select,button')];
+    const idxFoco=campos().indexOf(document.activeElement);
+    const sx=window.scrollX,sy=window.scrollY;
+    const tabla=cont.querySelector('div[style*="overflow-x"]'),tsx=tabla?tabla.scrollLeft:0;
+    renderControl();
+    const t2=cont.querySelector('div[style*="overflow-x"]');if(t2)t2.scrollLeft=tsx;
+    if(idxFoco>=0){const el=campos()[idxFoco];if(el){el.focus({preventScroll:true});if(el.select&&el.type!=='checkbox')try{el.select();}catch(e){}}}
+    window.scrollTo(sx,sy);
+  }
 }
 
 function guardarControl(nombre){save();toast('Control de '+nombre+' guardado','ok');}
