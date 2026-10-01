@@ -8087,6 +8087,7 @@ function renderControl(){
     <button class="btn btn-s" onclick="imprimirControl('${nombre}')"><i class="ti ti-printer"></i> Imprimir</button>
     <button class="btn btn-s" style="background:#2e7d32;color:#fff" onclick="imprimirEstadoCuenta('${nombre}')" title="Documento para llevar a cobrar: lo vendido, lo pagado y el saldo — sin mostrar tu costo ni ganancia"><i class="ti ti-file-invoice"></i> Estado de cuenta</button>
     <button class="btn btn-s" style="background:#6a1b9a;color:#fff" onclick="imprimirComoEditorial('${nombre}')" title="Mismo formato que usan las editoriales (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio final), agrupado y con subtotales — para mandarle a la rectora o al colegio en el formato que ya conocen"><i class="ti ti-file-text"></i> Formato editorial</button>
+    <button class="btn btn-s" style="background:#1d6f42;color:#fff" onclick="exportarComoEditorialXLS('${nombre}')" title="El mismo Formato editorial, pero en Excel"><i class="ti ti-file-spreadsheet"></i> Formato editorial Excel</button>
   </div>`;
 
   document.getElementById('col-control-body').innerHTML=html;
@@ -8472,9 +8473,11 @@ function imprimirComoEditorial(nombre){
     .sub-row{background:#f8d7da;font-weight:bold}
     .total-row{background:#1565c0;color:#fff;font-weight:bold}
     .btn-print{background:#6a1b9a;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:14px}
+    @media print{.btn-print{display:none!important}}
     ${dmPrintCSS()}
   </style></head><body>
   <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+  <button class="btn-print" style="background:#1d6f42" onclick="window.opener&&window.opener.exportarComoEditorialXLS(${JSON.stringify(nombre).replace(/"/g,'&quot;')})">📊 Descargar Excel</button>
   ${dmPrintHeader('Estado de cuenta',nombre)}
   ${bloques}
   <div style="height:10px"></div>
@@ -8485,6 +8488,52 @@ function imprimirComoEditorial(nombre){
   ${dmPrintFooter()}
   <\/body><\/html>`);
   win.document.close();
+}
+
+// Mismo "Formato editorial" pero descargado como Excel (.xls, ver bajarXLS).
+// Los cálculos son idénticos a imprimirComoEditorial: precio final = PVP menos
+// la comisión del colegio (descuento truncado a 2 decimales).
+function exportarComoEditorialXLS(nombre){
+  const d=DB.colData[nombre];if(!d)return toast('No encontré datos de ese colegio','err');
+  const gEd=(l)=>{
+    if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
+    const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
+  };
+  const grupos=[],idx={};
+  d.lineas.forEach(l=>{
+    const ed=gEd(l)||'General';
+    if(!(ed in idx)){ idx[ed]=grupos.length; grupos.push({nombre:ed,lineas:[]}); }
+    grupos[idx[ed]].lineas.push(l);
+  });
+  const c='class="c"';
+  let filas='',granTotal=0;
+  grupos.forEach(g=>{
+    let sValor=0;
+    filas+=`<tr><td colspan="8" class="grp">${escH(g.nombre)}</td></tr>`;
+    g.lineas.forEach(l=>{
+      const vend=l.cant-l.dev;
+      const pct=lineaComisiona(l)?pctLinea(d,l):0;
+      const pFinal=l.pvp-(pct?Math.floor(l.pvp*pct/100*100)/100:0);
+      const valor=vend*pFinal; sValor+=valor;
+      filas+=`<tr><td ${c} style="${XLS_TXT}">${escH(l.libro)}</td>
+        <td ${c} style="${XLS_ENT}">${l.cant}</td><td ${c} style="${XLS_ENT}">${l.dev}</td><td ${c} style="${XLS_ENT}">${vend}</td>
+        <td ${c} style="${XLS_NUM}">${l.pvp.toFixed(2)}</td><td ${c} style="text-align:center">${pct?pct+'%':'—'}</td>
+        <td ${c} style="${XLS_NUM}">${pFinal.toFixed(2)}</td><td ${c} style="${XLS_NUM}">${valor.toFixed(2)}</td></tr>`;
+    });
+    granTotal+=sValor;
+    filas+=`<tr><td colspan="7" class="sub-t" style="text-align:right">Subtotal — ${escH(g.nombre)}</td><td class="sub-t" style="${XLS_NUM}">${sValor.toFixed(2)}</td></tr>`;
+  });
+  const html=`<table>
+    <tr><td colspan="8" class="tit">${escH(DM_EMPRESA.nombre)} — ESTADO DE CUENTA</td></tr>
+    <tr><td colspan="8" class="sub">Colegio: ${escH(nombre)} · Emitido: ${xlsFecha(today())}</td></tr>
+    <tr><td colspan="8"></td></tr>
+    <tr><th class="th">TEXTO</th><th class="th">CANTIDAD INICIAL</th><th class="th">DEVUELTOS</th><th class="th">CANTIDAD FINAL</th><th class="th">PVP</th><th class="th">% DESCUENTO</th><th class="th">PRECIO FINAL</th><th class="th">VALOR TOTAL</th></tr>
+    ${filas}
+    <tr><td colspan="7" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}">${granTotal.toFixed(2)}</td></tr>
+  </table>`;
+  const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+' '+today()+'.xls';
+  bajarXLS(html,archivo);
+  toast('Excel descargado: '+archivo,'ok');
 }
 
 // ── KIT / PEDIDO ─────────────────────────────────────────────────────────────
