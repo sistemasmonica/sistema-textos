@@ -1949,7 +1949,7 @@ function save(){
 
 function backupSilencioso(){
   try{
-    const fecha=new Date().toISOString().split('T')[0];
+    const fecha=today();
     const hora=new Date().toTimeString().split(' ')[0].replace(/:/g,'-');
     const toSave={version:'backup_v2',fecha_backup:new Date().toISOString(),
       productos:DB.productos,regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,
@@ -2045,7 +2045,9 @@ function dmPrintFooter(nota){
 // UTILIDADES
 // ===================================================
 function fmt(n){return'$'+(parseFloat(n)||0).toFixed(2)}
-function today(){return new Date().toISOString().split('T')[0]}
+// Fecha de HOY en la hora de la computadora (Ecuador). Antes usaba
+// toISOString(), que es hora UTC: desde las 19:00 ya ponía el día siguiente.
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function uid(){return Date.now()+'_'+Math.random().toString(36).substr(2,6)}
 function escH(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function parseLocalDate(s){if(!s)return new Date();const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
@@ -8086,8 +8088,13 @@ function renderControl(){
     <button class="btn btn-p" onclick="guardarControl('${nombre}')"><i class="ti ti-check"></i> Guardar</button>
     <button class="btn btn-s" onclick="imprimirControl('${nombre}')"><i class="ti ti-printer"></i> Imprimir</button>
     <button class="btn btn-s" style="background:#2e7d32;color:#fff" onclick="imprimirEstadoCuenta('${nombre}')" title="Documento para llevar a cobrar: lo vendido, lo pagado y el saldo — sin mostrar tu costo ni ganancia"><i class="ti ti-file-invoice"></i> Estado de cuenta</button>
-    <button class="btn btn-s" style="background:#6a1b9a;color:#fff" onclick="imprimirComoEditorial('${nombre}')" title="Mismo formato que usan las editoriales (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio final), agrupado y con subtotales — para mandarle a la rectora o al colegio en el formato que ya conocen"><i class="ti ti-file-text"></i> Formato editorial</button>
-    <button class="btn btn-s" style="background:#1d6f42;color:#fff" onclick="exportarComoEditorialXLS('${nombre}')" title="El mismo Formato editorial, pero en Excel"><i class="ti ti-file-spreadsheet"></i> Formato editorial Excel</button>
+    <button class="btn btn-s" style="background:#6a1b9a;color:#fff" onclick="imprimirComoEditorial('${nombre}',parteEditorialSel())" title="Mismo formato que usan las editoriales (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio final), agrupado y con subtotales — para mandarle a la rectora o al colegio en el formato que ya conocen"><i class="ti ti-file-text"></i> Formato editorial</button>
+    <button class="btn btn-s" style="background:#1d6f42;color:#fff" onclick="exportarComoEditorialXLS('${nombre}',parteEditorialSel())" title="El mismo Formato editorial, pero en Excel"><i class="ti ti-file-spreadsheet"></i> Formato editorial Excel</button>
+    <select id="ctrl-parte-ed" title="Qué libros incluir en el Formato editorial (impreso y Excel)" style="padding:6px 8px;border:2px solid #6a1b9a;border-radius:6px;font-size:12px;font-weight:600;color:#6a1b9a" onchange="window._parteEd=this.value">
+      <option value="todo">📚 Todo</option>
+      <option value="es" ${window._parteEd==='es'?'selected':''}>🇪🇨 Solo español</option>
+      <option value="en" ${window._parteEd==='en'?'selected':''}>🔤 Solo inglés</option>
+    </select>
   </div>`;
 
   document.getElementById('col-control-body').innerHTML=html;
@@ -8415,20 +8422,43 @@ function imprimirControl(nombre){
 // Control de Ventas. "Precio final" = Costo Distr. si la línea tiene un %
 // de descuento puesto; si no, se usa el PVP tal cual (decisión de Mónica:
 // en Robótica el PVP ES el valor que cuenta, no hay descuento aparte).
-function imprimirComoEditorial(nombre){
-  const d=DB.colData[nombre];if(!d)return;
-  const win=window.open('','_blank');
+// Libros de inglés Tech Books (Wonder Family, Limitless). English Explorers es
+// de Didáctica y va con español. Sirve para
+// sacar el Formato editorial de un colegio por separado: solo español o solo
+// inglés, porque el colegio los paga/maneja aparte.
+function esLineaIngles(l){
+  let t=String(l.libro||'');
+  if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p) t+=' '+(p.nombre||'')+' '+(p.editorial||''); }
+  return /WONDER|LIMIT+LES|TECH ?BOOKS/i.test(t);
+}
+const PARTES_EDITORIAL={todo:'',es:'Español',en:'Inglés'};
+// Agrupa las líneas del colegio por editorial (y filtra por parte: todo/es/en).
+// Los de inglés sin editorial van al grupo "INGLÉS" en vez de "General".
+function gruposComoEditorial(d,parte){
   const gEd=(l)=>{
     if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
     const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
   };
-  const grupos=[];
-  const idxGrupo={};
+  const grupos=[],idx={};
   d.lineas.forEach(l=>{
-    const ed=gEd(l)||'General';
-    if(!(ed in idxGrupo)){ idxGrupo[ed]=grupos.length; grupos.push({nombre:ed,lineas:[]}); }
-    grupos[idxGrupo[ed]].lineas.push(l);
+    const ing=esLineaIngles(l);
+    if(parte==='es'&&ing) return;
+    if(parte==='en'&&!ing) return;
+    const ed=gEd(l)||(ing?'INGLÉS':'General');
+    if(!(ed in idx)){ idx[ed]=grupos.length; grupos.push({nombre:ed,lineas:[]}); }
+    grupos[idx[ed]].lineas.push(l);
   });
+  return grupos;
+}
+function parteEditorialSel(){ return document.getElementById('ctrl-parte-ed')?.value||'todo'; }
+
+function imprimirComoEditorial(nombre,parte){
+  const d=DB.colData[nombre];if(!d)return;
+  parte=parte||'todo';
+  const grupos=gruposComoEditorial(d,parte);
+  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de inglés':'Este colegio no tiene libros de español','err');
+  const sufijo=PARTES_EDITORIAL[parte]?' — '+PARTES_EDITORIAL[parte]:'';
+  const win=window.open('','_blank');
   let granTotal=0;
   const bloques=grupos.map(g=>{
     let sCant=0,sDev=0,sFinal=0,sValor=0;
@@ -8462,7 +8492,7 @@ function imprimirComoEditorial(nombre){
     </table>`;
   }).join('<div style="height:14px"></div>');
 
-  win.document.write(`<html><head><title>Estado de cuenta — ${escH(nombre)}</title>
+  win.document.write(`<html><head><title>Estado de cuenta — ${escH(nombre)}${escH(sufijo)}</title>
   <style>
     body{font-family:Arial,sans-serif;font-size:11px;padding:15px;color:#222}
     h3{margin:14px 0 4px;font-size:12px;color:#333}
@@ -8477,8 +8507,8 @@ function imprimirComoEditorial(nombre){
     ${dmPrintCSS()}
   </style></head><body>
   <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
-  <button class="btn-print" style="background:#1d6f42" onclick="window.opener&&window.opener.exportarComoEditorialXLS(${JSON.stringify(nombre).replace(/"/g,'&quot;')})">📊 Descargar Excel</button>
-  ${dmPrintHeader('Estado de cuenta',nombre)}
+  <button class="btn-print" style="background:#1d6f42" onclick="window.opener&&window.opener.exportarComoEditorialXLS(${JSON.stringify(nombre).replace(/"/g,'&quot;')},'${parte}')">📊 Descargar Excel</button>
+  ${dmPrintHeader('Estado de cuenta'+sufijo,nombre)}
   ${bloques}
   <div style="height:10px"></div>
   <table><tr class="total-row"><td colspan="7" style="text-align:right">TOTAL</td><td style="text-align:right">$${granTotal.toFixed(2)} usd</td></tr></table>
@@ -8493,18 +8523,12 @@ function imprimirComoEditorial(nombre){
 // Mismo "Formato editorial" pero descargado como Excel (.xls, ver bajarXLS).
 // Los cálculos son idénticos a imprimirComoEditorial: precio final = PVP menos
 // la comisión del colegio (descuento truncado a 2 decimales).
-function exportarComoEditorialXLS(nombre){
+function exportarComoEditorialXLS(nombre,parte){
   const d=DB.colData[nombre];if(!d)return toast('No encontré datos de ese colegio','err');
-  const gEd=(l)=>{
-    if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
-    const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
-  };
-  const grupos=[],idx={};
-  d.lineas.forEach(l=>{
-    const ed=gEd(l)||'General';
-    if(!(ed in idx)){ idx[ed]=grupos.length; grupos.push({nombre:ed,lineas:[]}); }
-    grupos[idx[ed]].lineas.push(l);
-  });
+  parte=parte||'todo';
+  const grupos=gruposComoEditorial(d,parte);
+  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de inglés':'Este colegio no tiene libros de español','err');
+  const sufijo=PARTES_EDITORIAL[parte]?' — '+PARTES_EDITORIAL[parte]:'';
   const c='class="c"';
   let filas='',granTotal=0;
   grupos.forEach(g=>{
@@ -8524,14 +8548,14 @@ function exportarComoEditorialXLS(nombre){
     filas+=`<tr><td colspan="7" class="sub-t" style="text-align:right">Subtotal — ${escH(g.nombre)}</td><td class="sub-t" style="${XLS_NUM}">${sValor.toFixed(2)}</td></tr>`;
   });
   const html=`<table>
-    <tr><td colspan="8" class="tit">${escH(DM_EMPRESA.nombre)} — ESTADO DE CUENTA</td></tr>
+    <tr><td colspan="8" class="tit">${escH(DM_EMPRESA.nombre)} — ESTADO DE CUENTA${escH(sufijo.toUpperCase())}</td></tr>
     <tr><td colspan="8" class="sub">Colegio: ${escH(nombre)} · Emitido: ${xlsFecha(today())}</td></tr>
     <tr><td colspan="8"></td></tr>
     <tr><th class="th">TEXTO</th><th class="th">CANTIDAD INICIAL</th><th class="th">DEVUELTOS</th><th class="th">CANTIDAD FINAL</th><th class="th">PVP</th><th class="th">% DESCUENTO</th><th class="th">PRECIO FINAL</th><th class="th">VALOR TOTAL</th></tr>
     ${filas}
     <tr><td colspan="7" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}">${granTotal.toFixed(2)}</td></tr>
   </table>`;
-  const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+' '+today()+'.xls';
+  const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+(PARTES_EDITORIAL[parte]?' '+PARTES_EDITORIAL[parte]:'')+' '+today()+'.xls';
   bajarXLS(html,archivo);
   toast('Excel descargado: '+archivo,'ok');
 }
@@ -9436,7 +9460,7 @@ function imprimirAnexo(){
 // BACKUP / RESTORE
 // ===================================================
 function backupData(){
-  const fecha=new Date().toISOString().split('T')[0];
+  const fecha=today();
   const hora=new Date().toTimeString().split(' ')[0].replace(/:/g,'-');
   const toSave={
     version:'backup_v2',
