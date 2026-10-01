@@ -693,6 +693,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div id="inv-conteo" class="inv-pn" style="display:none">
     <div class="sh"><h2>📝 Conteo físico</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-sm" style="background:#15803d;color:#fff" onclick="valorConteo()" title="Cuánto dinero es lo contado, con los precios de la editorial"><i class="ti ti-cash"></i> 💰 Valor a devolver</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirResultadoConteo()"><i class="ti ti-printer"></i> Imprimir resultado</button>
         <button class="btn btn-s btn-sm" onclick="exportConteoXLS()"><i class="ti ti-download"></i> Excel</button>
         <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="borrarConteo()"><i class="ti ti-eraser"></i> Empezar conteo nuevo</button>
@@ -6626,6 +6627,76 @@ function exportConteoXLS(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Conteo fisico');
   XLSX.writeFile(wb,'conteo_fisico_'+today()+'.xlsx');
+}
+// Precio de la editorial para un producto: primero la lista oficial
+// (Precios Didáctica / Inglés), si no está, el precio del catálogo.
+function _normLibro(x){
+  return String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()
+    .replace(/LIMITTLES/g,'LIMITLESS').replace(/\s+/g,' ').trim();
+}
+function precioEditorialRef(p){
+  const n=_normLibro(p.nombre);
+  const cand=[...LISTA_PRECIOS_DIDACTICA,...LISTA_PRECIOS_INGLES].filter(r=>_normLibro(r[0])===n);
+  const r=cand.find(r=>_normLibro(r[1])===_normLibro(p.editorial))||cand[0];
+  const neto=(r&&r[4]>0)?r[4]:(p.precioCosto||0);
+  const pvp=(r&&r[3]>0)?r[3]:(p.precioVenta||0);
+  return {neto,pvp,deLista:!!r};
+}
+// Valor de lo contado según precios de la editorial (ventana aparte, no cambia nada)
+function valorConteo(){
+  const filas=_conteoFilasExport().filter(f=>f.c!=null&&f.c>0);
+  if(!filas.length){alert('Todavía no has contado ningún libro.');return;}
+  let totN=0,totP=0,uni=0;const sinPrecio=[];
+  const conPrecio=filas.map(f=>{
+    const pr=precioEditorialRef(f.e.p);
+    if(!pr.neto&&!pr.pvp){sinPrecio.push(f);return null;}
+    const vn=f.c*pr.neto,vp=f.c*pr.pvp;
+    totN+=vn;totP+=vp;uni+=f.c;
+    return {...f,pr,vn,vp};
+  }).filter(Boolean);
+  const m=x=>'$'+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const html=conPrecio.map((f,i)=>`<tr>
+    <td style="text-align:center;color:#888">${i+1}</td><td>${escH(f.e.p.nombre)}${f.pr.deLista?'':' <span style="color:#94a3b8" title="Precio tomado del catálogo (no está en la lista de la editorial)">*</span>'}</td>
+    <td style="text-align:center;font-weight:700">${f.c}</td>
+    <td class="n">${f.pr.neto?m(f.pr.neto):'—'}</td><td class="n b">${f.vn?m(f.vn):'—'}</td>
+    <td class="n">${f.pr.pvp?m(f.pr.pvp):'—'}</td><td class="n b">${f.vp?m(f.vp):'—'}</td></tr>`).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Devolución a la editorial DM BOOKS</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;padding:15px;color:#222}
+    h1{margin:0;font-size:18px;color:#1565c0;text-transform:uppercase}
+    p{margin:2px 0;font-size:11px;color:#555}
+    .cards{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}
+    .card{border-radius:8px;padding:10px 14px;min-width:180px}
+    .card b{display:block;font-size:22px;font-family:monospace}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th{background:#1565c0;color:#fff;padding:5px 6px;font-size:10px;text-align:left}
+    td{padding:4px 5px;border-bottom:1px solid #ddd;font-size:10px}
+    td.n{text-align:right;font-family:monospace}td.b{font-weight:700}
+    .tot td{background:#e3f2fd;font-weight:700;font-size:11px}
+    .btn{background:#1565c0;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer}
+    @media print{.btn{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}}
+  </style></head><body>
+  <button class="btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  <h1 style="margin-top:10px">DM Books — Valor a devolver a la editorial</h1>
+  <p>Fecha: ${fecha} &nbsp;|&nbsp; Según precios de la editorial (lista de precios; los marcados con * usan el precio del catálogo)</p>
+  <div class="cards">
+    <div class="card" style="background:#f0fdf4;border:1px solid #86efac">💰 Total a devolver (precio neto editorial)<b style="color:#15803d">${m(totN)}</b>lo que la editorial te descuenta</div>
+    <div class="card" style="background:#eff6ff;border:1px solid #93c5fd">Referencia: a PVP<b style="color:#1d4ed8">${m(totP)}</b>precio al público</div>
+    <div class="card" style="background:#f8fafc;border:1px solid #cbd5e1">Unidades<b>${uni}</b>${conPrecio.length} libros distintos</div>
+  </div>
+  <table><thead><tr><th>#</th><th>Producto</th><th style="text-align:center">Contado</th><th style="text-align:right">Precio neto</th><th style="text-align:right">Total neto</th><th style="text-align:right">PVP</th><th style="text-align:right">Total PVP</th></tr></thead>
+  <tbody>${html}
+  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td style="text-align:center">${uni}</td><td></td><td class="n">${m(totN)}</td><td></td><td class="n">${m(totP)}</td></tr>
+  </tbody></table>
+  ${sinPrecio.length?`<div style="margin-top:16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">
+    <b>⚠️ ${sinPrecio.length} libro(s) contados SIN precio</b> (no están en la lista de la editorial ni tienen precio en el catálogo, así que no suman al total — ${sinPrecio.reduce((a,f)=>a+f.c,0)} unidades):
+    <div style="margin-top:4px">${sinPrecio.map(f=>escH(f.e.p.nombre)+' ('+f.c+')').join(' · ')}</div>
+    <div style="margin-top:4px;color:#92400e">Si quieres que sumen, ponles precio en Inventario → Catálogo (editar ✏️).</div>
+  </div>`:''}
+  <\/body><\/html>`);
+  win.document.close();
 }
 function imprimirResultadoConteo(){
   const soloDif=confirm('¿Imprimir SOLO los libros que no cuadran?\n\nAceptar = solo los que tienen diferencia\nCancelar = la lista completa');
