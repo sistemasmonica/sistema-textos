@@ -699,7 +699,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       </div>
     </div>
     <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e3a8a;margin-bottom:10px">
-      <b>Si te dictan cartón por cartón:</b> busca el libro, escribe en la casilla <b style="color:#047857">verde</b> lo que hay en ese cartón y presiona <b>Enter</b> — <b>se suma</b> a lo que ya llevabas (si vuelve a salir el mismo libro en otro cartón, se suma otra vez). La casilla <b style="color:#b45309">amarilla</b> es el total; si escribes ahí, reemplaza. Se guarda solo, puedes cerrar y seguir otro día.
+      <b>Si te van dictando:</b> busca el libro, escribe en la casilla <b style="color:#047857">verde</b> las unidades que te dicen y presiona <b>Enter</b> — <b>se suman</b> a lo que ya llevabas (ej. te dicen 6 y luego 2 más → queda 8, sin sumar tú). La casilla <b style="color:#b45309">amarilla</b> es el total; si escribes ahí, reemplaza. Se guarda solo, puedes cerrar y seguir otro día.
       <b>Esto no cambia tu inventario</b> — solo te muestra qué cuadra y qué no. <span id="conteo-inicio" style="color:#64748b"></span>
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -719,7 +719,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>#</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th style="text-align:center">Stock sistema</th><th>➕ Sumar cartón</th><th>Total contado</th><th>Diferencia</th><th>Observación</th></tr></thead>
+        <thead><tr><th>#</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th style="text-align:center">Stock sistema</th><th>➕ Sumar unidades</th><th>Total contado</th><th>Diferencia</th><th>Observación</th></tr></thead>
         <tbody id="tb-conteo"></tbody>
       </table>
     </div>
@@ -6467,7 +6467,7 @@ function _conteoItem(id){
 }
 function _conteoHistHTML(id,h){
   if(!h.length)return '';
-  return `${h.join(' + ')} <a href="#" onclick="conteoDeshacer('${id}');return false" title="Quitar el último cartón sumado" style="color:#dc2626;text-decoration:none;font-weight:700">↩</a>`;
+  return `${h.join(' + ')} <a href="#" onclick="conteoDeshacer('${id}');return false" title="Quitar lo último que sumaste" style="color:#dc2626;text-decoration:none;font-weight:700">↩</a>`;
 }
 function _conteoDifHTML(st,c){
   if(c==null)return '<span style="color:#94a3b8">—</span>';
@@ -6506,7 +6506,7 @@ function renderConteo(){
       <td style="font-size:11px">${TIPO[e.cls]||''}</td>
       <td style="font-size:11px">${escH(e.p.editorial||'—')}</td>
       <td style="text-align:center;font-weight:700">${e.st}</td>
-      <td><input type="number" min="0" inputmode="numeric" class="conteo-add" placeholder="+" onkeydown="conteoSumarTecla(event,this)" title="Escribe lo que hay en este cartón y presiona Enter: se SUMA a lo que ya llevas" style="width:70px;text-align:center;font-size:15px;font-weight:700;padding:5px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px"></td>
+      <td><input type="number" min="0" inputmode="numeric" class="conteo-add" placeholder="+" onkeydown="conteoSumarTecla(event,this)" title="Escribe cuántas unidades te dictan y presiona Enter: se SUMAN a lo que ya llevas" style="width:70px;text-align:center;font-size:15px;font-weight:700;padding:5px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px"></td>
       <td><input type="number" min="0" inputmode="numeric" class="conteo-in" value="${c==null?'':c}" oninput="conteoCambio(this)" onkeydown="conteoTecla(event,this)" style="width:80px;text-align:center;font-size:15px;font-weight:700;padding:5px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px">
         <div class="conteo-hist" style="font-size:10px;color:#64748b;white-space:nowrap;margin-top:2px">${_conteoHistHTML(e.p.id,h)}</div></td>
       <td class="conteo-dif" style="white-space:nowrap">${_conteoDifHTML(e.st,c)}</td>
@@ -6589,7 +6589,7 @@ function conteoDeshacer(id){
   _conteoSet(id,{c,h});
   const tr=document.querySelector(`#tb-conteo tr[data-id="${id}"]`);
   if(tr)_conteoPintarFila(tr);
-  toast('Se quitó el último cartón ('+quitado+')','ok');
+  toast('Se quitó lo último que sumaste ('+quitado+')','ok');
 }
 // Enter en el buscador → salta a la casilla verde del primer libro encontrado
 function conteoBuscarTecla(ev){
@@ -6619,7 +6619,7 @@ function _conteoFilasExport(){
   return _conteoLista().map(e=>{const {c,obs,h}=_conteoItem(e.p.id);return {e,c,obs,h,d:c==null?null:c-e.st};});
 }
 function exportConteoXLS(){
-  const rows=[['Codigo','Producto','Editorial','Stock sistema','Contado','Diferencia','Cartones','Observacion']];
+  const rows=[['Codigo','Producto','Editorial','Stock sistema','Contado','Diferencia','Sumas','Observacion']];
   _conteoFilasExport().forEach(({e,c,obs,h,d})=>rows.push([e.p.codigo||'',e.p.nombre,e.p.editorial||'',e.st,c==null?'':c,d==null?'':d,h.join(' + '),obs]));
   const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[{wch:12},{wch:50},{wch:18},{wch:13},{wch:10},{wch:11},{wch:18},{wch:30}];
