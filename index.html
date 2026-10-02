@@ -6706,14 +6706,17 @@ function valorConteo(){
     .aviso{margin:10px 0;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;font-size:12px}
     .ent{display:none}
     body.entrega .din,body.entrega .ctl{display:none}
-    body.entrega .ent{display:block}body.entrega span.ent{display:inline}
+    body.entrega .ent{display:block}body.entrega span.ent,body.entrega button.ent{display:inline-block}
+    body.entrega .aviso{display:none}
     .firmas{display:flex;gap:40px;margin-top:50px;font-size:11px}
     .firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
     @media print{.btn,.aviso{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}
       input.pu{background:transparent;border:none;padding:0;width:auto}input.pu:placeholder-shown{color:transparent}}
   </style></head><body>
-  <button class="btn" onclick="window.print()" title="Con valores en dólares: para nuestro control">🖨 Imprimir para nuestro control (con valores)</button>
-  <button class="btn" style="background:#15803d;margin-left:8px" onclick="imprimirEntrega()" title="Solo libros y cantidades, sin valores ni DM Books">📦 Imprimir para la editorial (solo cantidades)</button>
+  <button class="btn ctl" onclick="window.print()" title="Con valores en dólares: para nuestro control">🖨 Imprimir para nuestro control (con valores)</button>
+  <button class="btn ctl" style="background:#15803d;margin-left:8px" onclick="verEntrega()" title="Cambia esta hoja a la copia para la editorial: solo libros y cantidades">📦 Ver copia para la editorial (solo cantidades)</button>
+  <button class="btn ent" style="background:#15803d" onclick="window.print()">🖨 Imprimir copia para la editorial</button>
+  <button class="btn ent" style="background:#64748b;margin-left:8px" onclick="verControl()">↩ Volver a nuestro control (con valores)</button>
   <h1 class="ent" style="margin-top:10px">Devolución de libros${edEnt?' — '+escH(edEnt):''}</h1>
   <p class="ent">Fecha: ${fecha}</p>
   <h1 class="ctl" style="margin-top:10px">DM Books — Valor a devolver a la editorial${_conteoEditNombre()?' '+escH(_conteoEditNombre()):''}</h1>
@@ -6745,15 +6748,19 @@ function valorConteo(){
       try{window.opener&&window.opener._conteoPrecioManual(inp.dataset.id,inp.value);}catch(e){}
     }));
     recalc();
-    // Copia para la editorial: oculta valores, título de control y DM Books
-    function imprimirEntrega(){
-      const t=document.title;document.title='Devolución de libros';
+    // Copia para la editorial: la hoja cambia en pantalla (sin valores, sin
+    // título de control ni DM Books) para que se vea lo mismo que se imprime.
+    const tituloCtl=document.title;
+    function verEntrega(){
       document.body.classList.add('entrega');
       document.querySelector('.firmas').style.display='flex';
-      window.print();
+      document.title='Devolución de libros';
+      window.scrollTo(0,0);
+    }
+    function verControl(){
       document.body.classList.remove('entrega');
       document.querySelector('.firmas').style.display='none';
-      document.title=t;
+      document.title=tituloCtl;
     }
   <\/script>
   <\/body><\/html>`);
