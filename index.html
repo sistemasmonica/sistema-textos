@@ -6645,7 +6645,15 @@ function exportConteoXLS(){
 // (Precios Didáctica / Inglés), si no está, el precio del catálogo.
 function _normLibro(x){
   return String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()
-    .replace(/LIMITTLES/g,'LIMITLESS').replace(/\s+/g,' ').trim();
+    .replace(/LIMITTLES/g,'LIMITLESS').replace(/\bSPLIT\s*#?\s*/g,'').replace(/\s+/g,' ').trim();
+}
+// Precio neto escrito a mano en "Valor a devolver" (para libros sin precio,
+// ej. Tech Books). Se guarda solo en el conteo: NO cambia el catálogo.
+function _conteoPrecioManual(id,v){
+  DB.conteo=DB.conteo||{};DB.conteo.precios=DB.conteo.precios||{};
+  const n=parseFloat(String(v).replace(',','.'));
+  if(n>0)DB.conteo.precios[id]=n;else delete DB.conteo.precios[id];
+  _conteoGuardar();
 }
 function precioEditorialRef(p){
   const n=_normLibro(p.nombre);
@@ -6659,20 +6667,25 @@ function precioEditorialRef(p){
 function valorConteo(){
   const filas=_conteoFilasExport().filter(f=>f.c!=null&&f.c>0);
   if(!filas.length){alert('Todavía no has contado ningún libro.');return;}
-  let totN=0,totP=0,uni=0;const sinPrecio=[];
-  const conPrecio=filas.map(f=>{
+  // Todos los libros contados salen en la tabla. Los que no tienen precio
+  // llevan una casilla amarilla para escribirlo (se recuerda en el conteo).
+  const manual=DB.conteo?.precios||{};
+  const rows=filas.map(f=>{
     const pr=precioEditorialRef(f.e.p);
-    if(!pr.neto){sinPrecio.push(f);return null;}
-    const vn=f.c*pr.neto,vp=f.c*pr.pvp;
-    totN+=vn;totP+=vp;uni+=f.c;
-    return {...f,pr,vn,vp};
-  }).filter(Boolean);
+    const neto=pr.neto||manual[f.e.p.id]||0;
+    return {...f,pr,neto,editable:!pr.neto};
+  });
+  const nEdit=rows.filter(r=>r.editable).length;
   const m=x=>'$'+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const html=conPrecio.map((f,i)=>`<tr>
-    <td style="text-align:center;color:#888">${i+1}</td><td>${escH(f.e.p.nombre)}${f.pr.deLista?'':' <span style="color:#94a3b8" title="Precio tomado del catálogo (no está en la lista de la editorial)">*</span>'}</td>
+  const uni=rows.reduce((a,r)=>a+r.c,0);
+  const html=rows.map((f,i)=>`<tr data-c="${f.c}">
+    <td style="text-align:center;color:#888">${i+1}</td><td>${escH(f.e.p.nombre)}${f.pr.deLista||f.editable?'':' <span style="color:#94a3b8" title="Precio tomado del catálogo (no está en la lista de la editorial)">*</span>'}</td>
     <td style="text-align:center;font-weight:700">${f.c}</td>
-    <td class="n">${f.pr.neto?m(f.pr.neto):'—'}</td><td class="n b">${f.vn?m(f.vn):'—'}</td></tr>`).join('');
+    <td class="n">${f.editable
+      ?`<span class="pd">$</span><input class="pu" data-id="${f.e.p.id}" inputmode="decimal" value="${f.neto||''}" placeholder="0.00">`
+      :`<input class="pu" type="hidden" value="${f.neto}">${m(f.neto)}`}</td>
+    <td class="n b vt"></td></tr>`).join('');
   const win=window.open('','_blank');
   win.document.write(`<html><head><title>Devolución a la editorial DM BOOKS</title>
   <style>
@@ -6688,24 +6701,41 @@ function valorConteo(){
     td.n{text-align:right;font-family:monospace}td.b{font-weight:700}
     .tot td{background:#e3f2fd;font-weight:700;font-size:11px}
     .btn{background:#1565c0;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer}
-    @media print{.btn{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}}
+    input.pu{width:70px;text-align:right;font-family:monospace;font-size:12px;padding:3px 5px;background:#fef9c3;border:1px solid #facc15;border-radius:4px}
+    .aviso{margin:10px 0;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;font-size:12px}
+    @media print{.btn,.aviso{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}
+      input.pu{background:transparent;border:none;padding:0;width:auto}input.pu:placeholder-shown{color:transparent}}
   </style></head><body>
   <button class="btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
   <h1 style="margin-top:10px">DM Books — Valor a devolver a la editorial${_conteoEditNombre()?' '+escH(_conteoEditNombre()):''}</h1>
-  <p>Fecha: ${fecha} &nbsp;|&nbsp; Según precios de la editorial (lista de precios; los marcados con * usan el precio del catálogo)</p>
+  <p>Fecha: ${fecha} &nbsp;|&nbsp; Según precios netos de la editorial</p>
+  ${nEdit?`<div class="aviso">✏️ <b>${nEdit} libro(s) no tienen precio en el sistema.</b> Escribe el precio neto en las casillas amarillas y el total se calcula solo. El sistema se acuerda de lo que escribas para la próxima vez. (Las casillas amarillas no salen al imprimir.)</div>`:''}
   <div class="cards">
-    <div class="card" style="background:#f0fdf4;border:1px solid #86efac">💰 Total a devolver (precio neto editorial)<b style="color:#15803d">${m(totN)}</b>lo que la editorial te descuenta</div>
-    <div class="card" style="background:#f8fafc;border:1px solid #cbd5e1">Unidades<b>${uni}</b>${conPrecio.length} libros distintos</div>
+    <div class="card" style="background:#f0fdf4;border:1px solid #86efac">💰 Total a devolver (precio neto editorial)<b style="color:#15803d" id="totA">$0.00</b>lo que la editorial te descuenta</div>
+    <div class="card" style="background:#f8fafc;border:1px solid #cbd5e1">Unidades<b>${uni}</b>${rows.length} libros distintos</div>
   </div>
   <table><thead><tr><th>#</th><th>Producto</th><th style="text-align:center">Contado</th><th style="text-align:right">Precio neto</th><th style="text-align:right">Total neto</th></tr></thead>
   <tbody>${html}
-  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td style="text-align:center">${uni}</td><td></td><td class="n">${m(totN)}</td></tr>
+  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td style="text-align:center">${uni}</td><td></td><td class="n" id="totB">$0.00</td></tr>
   </tbody></table>
-  ${sinPrecio.length?`<div style="margin-top:16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">
-    <b>⚠️ ${sinPrecio.length} libro(s) contados SIN precio</b> (no están en la lista de la editorial ni tienen precio en el catálogo, así que no suman al total — ${sinPrecio.reduce((a,f)=>a+f.c,0)} unidades):
-    <div style="margin-top:4px">${sinPrecio.map(f=>escH(f.e.p.nombre)+' ('+f.c+')').join(' · ')}</div>
-    <div style="margin-top:4px;color:#92400e">Si quieres que sumen, ponles precio en Inventario → Catálogo (editar ✏️).</div>
-  </div>`:''}
+  <script>
+    const m=x=>'$'+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    function recalc(){
+      let t=0;
+      document.querySelectorAll('tbody tr[data-c]').forEach(tr=>{
+        const p=parseFloat(String(tr.querySelector('.pu').value).replace(',','.'))||0;
+        const v=p*Number(tr.dataset.c);t+=v;
+        tr.querySelector('.vt').textContent=v?m(v):'—';
+      });
+      document.getElementById('totA').textContent=m(t);
+      document.getElementById('totB').textContent=m(t);
+    }
+    document.querySelectorAll('input.pu[data-id]').forEach(inp=>inp.addEventListener('input',()=>{
+      recalc();
+      try{window.opener&&window.opener._conteoPrecioManual(inp.dataset.id,inp.value);}catch(e){}
+    }));
+    recalc();
+  <\/script>
   <\/body><\/html>`);
   win.document.close();
 }
