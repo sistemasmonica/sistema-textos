@@ -681,6 +681,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div id="rep-split" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px"></div>
     <div id="rep-aviso-dup"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px">
+      <input id="rep-q" type="text" placeholder="🔍 Buscar materia, libro o código... (varias separadas con coma: CIENCIAS, MATEMATICA)" oninput="renderStockReport()" style="flex:1;min-width:220px">
+      <button class="btn btn-s btn-sm" onclick="document.getElementById('rep-q').value='';renderStockReport()">✕ Limpiar</button>
+    </div>
+    <div id="rep-q-res"></div>
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Código</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th>Entradas</th><th>Salidas</th><th>Stock actual</th><th>P.Costo</th><th>P.Venta</th><th>Valor (costo)</th><th></th></tr></thead>
@@ -6034,7 +6039,19 @@ function renderStockReport(){
   const orden={venta:0,solucionario:1,muestra:2};
   enrich.sort((a,b)=>(orden[a.cls]-orden[b.cls])||a.p.nombre.localeCompare(b.p.nombre,'es'));
   const ocultarCero=document.getElementById('rep-ocultar-cero')?.checked;
-  const enrichVisible=ocultarCero?enrich.filter(e=>e.st!==0):enrich;
+  // Buscador: una o varias materias separadas por coma (sirve cualquiera)
+  const qs=(document.getElementById('rep-q')?.value||'').split(',').map(x=>_normLibro(x)).filter(Boolean);
+  const enrichVisible=enrich.filter(e=>{
+    if(ocultarCero&&e.st===0)return false;
+    if(!qs.length)return true;
+    const t=_normLibro((e.p.nombre||'')+' '+(e.p.codigo||'')+' '+(e.p.editorial||''));
+    return qs.some(q=>t.includes(q));
+  });
+  // Los totales de la tabla son de lo que se ve (si buscas, de lo buscado)
+  const vSal=enrichVisible.reduce((a,e)=>a+e.sal,0),vSt=enrichVisible.reduce((a,e)=>a+e.st,0),vCosto=enrichVisible.reduce((a,e)=>a+e.valC,0);
+  const res=document.getElementById('rep-q-res');
+  if(res)res.innerHTML=qs.length?`<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:10px 14px;margin:6px 0;font-size:14px">
+    🔎 <b>${enrichVisible.length}</b> libro(s) encontrados · Stock: <b style="font-size:18px;color:#6d28d9">${vSt}</b> unidades · Valor a costo: <b>${fmt(vCosto)}</b></div>`:'';
   const rows=enrichVisible.map(({p,ent,sal,st,cls,valC})=>{
     const rc=st<0?'stock-neg':st===0?'stock-zero':st<=5?'stock-low':'';
     const t=TIPO[cls];
@@ -6050,7 +6067,7 @@ function renderStockReport(){
       <td style="font-family:monospace">${fmt(valC)}</td>
       <td><button class="btn btn-s btn-sm" onclick="abrirModalProducto('${p.id}')"><i class="ti ti-pencil"></i></button></td></tr>`;
   }).join('');
-  tb.innerHTML=(rows||'<tr><td colspan="11"><div class="empty">No hay productos con stock (todos están en 0)</div></td></tr>')+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${totalSalidas}</td><td style="font-weight:700;color:var(--g1)">${totalStock}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(totalCosto)}</td><td></td></tr>`;
+  tb.innerHTML=(rows||`<tr><td colspan="11"><div class="empty">${qs.length?'No se encontró ningún libro con esa búsqueda':'No hay productos con stock (todos están en 0)'}</div></td></tr>`)+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTALES:</td><td style="font-weight:700">—</td><td style="font-weight:700;color:var(--r1)">${vSal}</td><td style="font-weight:700;color:var(--g1)">${vSt}</td><td colspan="2"></td><td style="font-family:monospace;font-weight:700">${fmt(vCosto)}</td><td></td></tr>`;
   document.getElementById('rep-nprod').textContent=prodsConEntradas.length;
   document.getElementById('rep-valcosto').textContent=fmt(totalCosto);
   document.getElementById('rep-valventa').textContent=fmt(totalVenta);
