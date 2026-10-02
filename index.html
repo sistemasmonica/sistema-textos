@@ -166,6 +166,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button onclick="backupData()" id="btn-backup" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Guardar todos los datos en un archivo JSON">💾 Backup</button>
     <label id="lbl-restaurar" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
     <button onclick="entrarModoContadora()" id="btn-contadora" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Acceso de solo lectura para la contadora">🔒 Contadora</button>
+    <button onclick="cerrarSesionNube()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Salir: la próxima vez se pide la clave">🚪 Cerrar sesión</button>
   </div>
 </div>
 
@@ -1748,20 +1749,102 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
 // ===================================================
+// CLAVE DE LA NUBE — los datos solo se leen/guardan con clave.
+// Supabase valida la clave del lado del servidor (funciones txe_*); el
+// acceso directo a las tablas está cerrado. Roles: 'duena' y 'contadora'
+// (solo lectura). Fast Line usa sus propias filas fl_* y no pasa por aquí.
+// ===================================================
+let NUBE_CLAVE=sessionStorage.getItem('txe_nube_clave')||localStorage.getItem('txe_nube_clave')||'';
+let NUBE_OK=false;
+async function nubeRpc(fn,args){
+  const{data,error}=await sb.rpc(fn,{p_clave:NUBE_CLAVE,...(args||{})});
+  if(error)throw error;
+  return data;
+}
+// Devuelve {value,updated_at} o null
+async function nubeLeer(tabla,key){return await nubeRpc('txe_leer',{p_tabla:tabla,p_key:key});}
+async function nubeGuardar(tabla,key,value){await nubeRpc('txe_guardar',{p_tabla:tabla,p_key:key,p_value:value});}
+
+// Pantalla de clave: bloquea el sistema hasta poner una clave válida
+function pedirClaveNube(){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');
+    ov.id='login-nube';
+    ov.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.88);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML=`<div style="background:#fff;border-radius:14px;padding:26px 24px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.4);font-family:inherit">
+      <div style="font-size:34px;text-align:center">🔒</div>
+      <h2 style="margin:6px 0 4px;text-align:center;font-size:19px">Textos Escolares</h2>
+      <p style="margin:0 0 16px;text-align:center;color:#64748b;font-size:13px">Escribe tu clave para entrar</p>
+      <input id="login-clave" type="password" autocomplete="current-password" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:11px;font-size:16px;border:1px solid #cbd5e1;border-radius:8px">
+      <label style="display:flex;gap:6px;align-items:center;margin:10px 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" id="login-recordar" checked> Recordar en esta computadora</label>
+      <div id="login-msg" style="min-height:18px;color:#dc2626;font-size:13px;margin:6px 0"></div>
+      <button id="login-btn" style="width:100%;padding:11px;font-size:15px;font-weight:700;background:#1a6b3c;color:#fff;border:none;border-radius:8px;cursor:pointer">Entrar</button>
+    </div>`;
+    document.body.appendChild(ov);
+    const inp=ov.querySelector('#login-clave'),msg=ov.querySelector('#login-msg'),btn=ov.querySelector('#login-btn');
+    inp.focus();
+    const intentar=async()=>{
+      const clave=inp.value.trim();if(!clave){inp.focus();return;}
+      btn.disabled=true;btn.textContent='Revisando...';msg.textContent='';
+      let rol=null;
+      try{const{data,error}=await sb.rpc('txe_verificar',{p_clave:clave});if(error)throw error;rol=data;}
+      catch(e){msg.textContent='No hay conexión con la nube. Revisa tu internet e intenta otra vez.';btn.disabled=false;btn.textContent='Entrar';return;}
+      if(!rol){msg.textContent='Clave incorrecta.';btn.disabled=false;btn.textContent='Entrar';inp.select();return;}
+      NUBE_CLAVE=clave;
+      if(ov.querySelector('#login-recordar').checked)localStorage.setItem('txe_nube_clave',clave);
+      else sessionStorage.setItem('txe_nube_clave',clave);
+      ov.remove();resolve(rol);
+    };
+    btn.onclick=intentar;
+    inp.onkeydown=e=>{if(e.key==='Enter')intentar();};
+  });
+}
+
+// Al abrir: verifica la clave guardada (o la pide) y recién ahí sincroniza
+async function iniciarNube(){
+  if(!SUPA_URL){setSyncStatus('ok');return;}
+  let rol=null;
+  if(NUBE_CLAVE){
+    try{rol=await nubeRpc('txe_verificar',{});}
+    catch(e){setSyncStatus('err',e.message);return;} // sin internet: sigue con lo de esta computadora
+    if(!rol){localStorage.removeItem('txe_nube_clave');sessionStorage.removeItem('txe_nube_clave');NUBE_CLAVE='';}
+  }
+  if(!rol)rol=await pedirClaveNube();
+  if(rol==='contadora'&&!MODO_LECTURA){
+    MODO_LECTURA=true;sessionStorage.setItem('txe_modo','contadora');aplicarModoLectura();
+  }
+  NUBE_OK=true;
+  syncFromCloud();
+}
+function cerrarSesionNube(){
+  if(!confirm('¿Cerrar sesión? Se va a pedir la clave otra vez para entrar.'))return;
+  localStorage.removeItem('txe_nube_clave');sessionStorage.removeItem('txe_nube_clave');sessionStorage.removeItem('txe_modo');
+  location.reload();
+}
+
+// ===================================================
 // MODO CONTADORA — acceso de solo lectura para auditoría
 // ===================================================
-const CLAVE_CONTADORA='Textos2026*';
+// La clave de la contadora se valida en Supabase (rol 'contadora').
 let MODO_LECTURA=sessionStorage.getItem('txe_modo')==='contadora';
 
-function entrarModoContadora(){
+async function entrarModoContadora(){
   const clave=prompt('Clave de acceso para la contadora:');
   if(clave===null)return;
-  if(clave!==CLAVE_CONTADORA){alert('Clave incorrecta.');return;}
+  let rol=null;
+  try{const{data,error}=await sb.rpc('txe_verificar',{p_clave:clave.trim()});if(error)throw error;rol=data;}
+  catch(e){alert('No hay conexión con la nube. Revisa tu internet.');return;}
+  if(rol!=='contadora'){alert('Clave incorrecta.');return;}
+  sessionStorage.setItem('txe_nube_clave',clave.trim());
   sessionStorage.setItem('txe_modo','contadora');
   location.reload();
 }
 function salirModoContadora(){
+  // Si la contadora entró por la pantalla de clave con "Recordar", su clave
+  // quedó guardada: al salir se borra y se vuelve a pedir la clave.
   sessionStorage.removeItem('txe_modo');
+  sessionStorage.removeItem('txe_nube_clave');
+  localStorage.removeItem('txe_nube_clave');
   location.reload();
 }
 function aplicarModoLectura(){
@@ -1788,15 +1871,15 @@ function setSyncStatus(s,detalle){
 let syncCompleted=false;
 
 async function guardarProductosNube(prods){
-  if(!prods?.length)return;
+  if(!prods?.length||!NUBE_OK||MODO_LECTURA)return;
   try{
-    const ts=new Date().toISOString();
-    await sb.from('txe_config').upsert({key:'productos',value:{data:prods},updated_at:ts});
+    await nubeGuardar('txe_config','productos',{data:prods});
     console.log('Productos guardados en nube:',prods.length);
   }catch(e){console.warn('Error guardando productos en nube:',e);}
 }
 
 async function saveToCloud(data){
+  if(!NUBE_OK||MODO_LECTURA)return;
   if(!syncCompleted){
     const hasData=(data.regs?.length||0)+(data.banco?.length||0)+
                   (data.movInv?.length||0)+(data.guias?.length||0)+
@@ -1815,8 +1898,7 @@ async function saveToCloud(data){
       deudas:data.deudas||[],productos:data.productos||[],
       respaldosVendedor:data.respaldosVendedor||[],pagos:data.pagos||[],historial:data.historial||[],reglasBanco:data.reglasBanco||{},conteo:data.conteo||{}
     };
-    const{error}=await sb.from('app_data').upsert({key:'txe_main',value:payload,updated_at:ts});
-    if(error)throw error;
+    await nubeGuardar('app_data','txe_main',payload);
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err',e.message);console.warn('Cloud save error:',e);}
 }
@@ -1824,7 +1906,9 @@ async function saveToCloud(data){
 async function syncFromCloud(){
   try{
     setSyncStatus('load');
-    const{data:main,error:mainErr}=await sb.from('app_data').select('value,updated_at').eq('key','txe_main').maybeSingle();
+    if(!NUBE_OK)return;
+    let main=null,mainErr=null;
+    try{main=await nubeLeer('app_data','txe_main');}catch(e){mainErr=e;}
     if(!mainErr&&main?.value){
       const v=main.value;
       if(v.regs?.length>0)DB.regs=v.regs;
@@ -1846,7 +1930,7 @@ async function syncFromCloud(){
       if(v.productos?.length>0){DB.productos=v.productos;localStorage.setItem('txe_productos',JSON.stringify(DB.productos));}
     } else {
       // Fallback: tabla antigua app_data key txe_v4
-      const{data:old}=await sb.from('app_data').select('value').eq('key','txe_v4').maybeSingle();
+      const old=await nubeLeer('app_data','txe_v4');
       if(old?.value){
         const v=old.value;
         if(v.regs?.length>0)DB.regs=v.regs;
@@ -1881,7 +1965,7 @@ async function syncFromCloud(){
     setSyncStatus('ok');
     // Siempre cargar productos desde Supabase (clave independiente txe_config/productos)
     {
-      const{data:prodRow}=await sb.from('txe_config').select('value').eq('key','productos').maybeSingle();
+      const prodRow=await nubeLeer('txe_config','productos');
       if(prodRow?.value?.data?.length>0){
         DB.productos=prodRow.value.data;
         localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
@@ -1891,7 +1975,7 @@ async function syncFromCloud(){
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
-    const{data:krow}=await sb.from('txe_config').select('value').eq('key','claude_key').maybeSingle();
+    const krow=await nubeLeer('txe_config','claude_key');
     if(krow?.value?.key){
       const inp=document.getElementById('claude-key');
       if(inp&&!inp.value)inp.value=krow.value.key;
@@ -1905,13 +1989,9 @@ function getClaudeKey(){
 }
 
 async function saveClaudeKey(val){
-  if(!val)return;
-  try{await sb.from('txe_config').upsert({key:'claude_key',value:{key:val},updated_at:new Date().toISOString()});}
-  catch(e){
-    // Fallback a app_data si txe_config no existe aún
-    try{await sb.from('app_data').upsert({key:'claude_key',value:{key:val},updated_at:new Date().toISOString()});}
-    catch(e2){console.warn('Error saving key:',e2);}
-  }
+  if(!val||!NUBE_OK||MODO_LECTURA)return;
+  try{await nubeGuardar('txe_config','claude_key',{key:val});}
+  catch(e){console.warn('Error saving key:',e);}
 }
 
 // ===================================================
@@ -2490,8 +2570,9 @@ function abrirGuiaCorreo(){
 
 async function verificarCorreoQueue(){
   try{
-    const{data,error}=await sb.from('txe_xmlqueue').select('id,filename,remitente,created_at').eq('procesado',false).order('created_at',{ascending:true});
-    if(error||!data)return;
+    if(!NUBE_OK)return;
+    const data=await nubeRpc('txe_xml_pendientes',{});
+    if(!Array.isArray(data))return;
     const n=data.length;
     const badge=document.getElementById('badge-correo');
     const box=document.getElementById('correo-queue');
@@ -2510,14 +2591,14 @@ async function procesarCorreoQueue(){
   try{
     const btn=document.querySelector('#correo-queue button');
     if(btn){btn.disabled=true;btn.textContent='Cargando...';}
-    const{data,error}=await sb.from('txe_xmlqueue').select('*').eq('procesado',false).order('created_at',{ascending:true});
-    if(error||!data||!data.length){toast('No hay facturas pendientes','ok');return;}
+    const data=await nubeRpc('txe_xml_pendientes',{});
+    if(!Array.isArray(data)||!data.length){toast('No hay facturas pendientes','ok');return;}
     let ok=0;
     for(const row of data){
       const d=parseXML(row.xml_content);
       if(d){
         addToQueue(d);
-        await sb.from('txe_xmlqueue').update({procesado:true}).eq('id',row.id);
+        await nubeRpc('txe_xml_marcar',{p_id:String(row.id)});
         ok++;
       }
     }
@@ -10026,8 +10107,8 @@ try{
   updateCount();
   renderDash();
   agregarLineaEntrada();
-  syncFromCloud();
   aplicarModoLectura();
+  iniciarNube();
 }catch(initErr){
   console.error('Error de inicio:',initErr);
   document.body.innerHTML='<div style="font-family:Arial;padding:40px;color:#c00"><h2>Error al iniciar la aplicación</h2><p>'+initErr.message+'</p><p>Por favor recarga la página (F5).</p></div>';
