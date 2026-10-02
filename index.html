@@ -6544,7 +6544,25 @@ function renderConteo(){
       <td><input type="text" value="${escH(obs)}" oninput="conteoObs(this)" placeholder="(opcional)" style="width:100%;min-width:120px;font-size:12px;padding:4px"></td>
     </tr>`;
   }).join('')||'<tr><td colspan="9"><div class="empty">No hay productos con ese filtro</div></td></tr>';
+  if(vis.length)tb.innerHTML+=`<tr id="conteo-totrow" style="background:#f1f5f9;font-weight:700">
+      <td></td><td colspan="3" style="text-align:right">TOTAL (${vis.length} libros):</td>
+      <td style="text-align:center" class="t-st"></td><td></td>
+      <td style="text-align:center;font-size:15px;color:#6d28d9" class="t-c"></td>
+      <td class="t-d" style="white-space:nowrap"></td><td></td></tr>`;
   _conteoResumen(lista);
+}
+// Fila TOTAL de la tabla: suma lo que se está viendo (respeta filtros y búsqueda)
+function _conteoTotalFila(){
+  const tr=document.getElementById('conteo-totrow');if(!tr)return;
+  let st=0,c=0,n=0;
+  document.querySelectorAll('#tb-conteo tr[data-id]').forEach(r=>{
+    st+=Number(r.dataset.st)||0;
+    const v=_conteoItem(r.dataset.id).c;if(v!=null){c+=v;n++;}
+  });
+  tr.querySelector('.t-st').textContent=st;
+  tr.querySelector('.t-c').textContent=c;
+  const d=c-st;
+  tr.querySelector('.t-d').innerHTML=!n?'':d===0?'<span style="color:#15803d">✔ Cuadra</span>':`<span style="color:${d<0?'#dc2626':'#c2410c'}">${d>0?'+':''}${d}</span>`;
 }
 function _conteoResumen(lista){
   lista=lista||_conteoLista();
@@ -6555,6 +6573,7 @@ function _conteoResumen(lista){
   set('conteo-ndif',dif);
   set('conteo-faltan',faltan);
   set('conteo-sobran',sobran);
+  _conteoTotalFila();
   const ini=document.getElementById('conteo-inicio');
   if(ini)ini.textContent=DB.conteo?.inicio?('Conteo empezado el '+new Date(DB.conteo.inicio).toLocaleString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+'.'):'Todavía no has anotado nada.';
 }
