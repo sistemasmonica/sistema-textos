@@ -701,6 +701,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-sm" style="background:#15803d;color:#fff" onclick="valorConteo()" title="Cuánto dinero es lo contado, con los precios de la editorial"><i class="ti ti-cash"></i> 💰 Valor a devolver</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirResultadoConteo()"><i class="ti ti-printer"></i> Imprimir resultado</button>
         <button class="btn btn-s btn-sm" onclick="exportConteoXLS()"><i class="ti ti-download"></i> Excel</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6" onclick="copiarConteoMateria()" title="Pone en otras materias las mismas cantidades que contaste en una, grado por grado"><i class="ti ti-copy"></i> Copiar conteo a otras materias</button>
         <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="borrarConteo()"><i class="ti ti-eraser"></i> Empezar conteo nuevo</button>
       </div>
     </div>
@@ -6655,6 +6656,35 @@ function conteoTecla(ev,inp){
   const tr=ev.key==='ArrowUp'?inp.closest('tr').previousElementSibling:inp.closest('tr').nextElementSibling;
   const sig=tr?.querySelector('.conteo-in');
   if(sig){sig.focus();sig.select();}
+}
+// Copia lo contado de una materia a otras, grado por grado y misma editorial
+// (ej. CIENCIAS NATURALES EGB 2 → ESTUDIOS SOCIALES EGB 2). Solo llena las
+// que todavía no tienen conteo; las que ya tienen número no se tocan.
+function copiarConteoMateria(){
+  const orig=prompt('¿De qué materia copio las cantidades?','CIENCIAS NATURALES');
+  if(!orig)return;
+  const dest=prompt('¿A qué materias las copio? (separadas por coma)','ESTUDIOS SOCIALES, MATEMATICA, LENGUA Y LITERATURA');
+  if(!dest)return;
+  const O=_normLibro(orig),D=dest.split(',').map(_normLibro).filter(Boolean);
+  const porNombre={};
+  DB.productos.forEach(p=>{porNombre[_normLibro(p.nombre)+'|'+_normLibro(p.editorial)]=p;});
+  const nuevos=[],yaTenian=[];
+  DB.productos.forEach(p=>{
+    const n=_normLibro(p.nombre);if(!n.startsWith(O+' '))return;
+    const {c}=_conteoItem(p.id);if(c==null)return;
+    D.forEach(d=>{
+      const t=porNombre[d+n.slice(O.length)+'|'+_normLibro(p.editorial)];
+      if(!t)return;
+      if(_conteoItem(t.id).c!=null)yaTenian.push(t.nombre);
+      else nuevos.push({t,c});
+    });
+  });
+  if(!nuevos.length){alert('No encontré libros para copiar.'+(yaTenian.length?'\n\nEstos ya tenían conteo y no los toqué:\n'+yaTenian.join('\n'):''));return;}
+  if(!confirm(`Voy a poner ${nuevos.length} cantidades:\n\n`+nuevos.map(x=>x.t.nombre+' → '+x.c).join('\n')
+    +(yaTenian.length?`\n\n(${yaTenian.length} ya tenían conteo y NO se tocan)`:'')+'\n\n¿Copiar?'))return;
+  nuevos.forEach(({t,c})=>_conteoSet(t.id,{c,h:[c]}));
+  renderConteo();
+  toast(nuevos.length+' cantidades copiadas','ok');
 }
 function borrarConteo(){
   const n=Object.keys(DB.conteo?.items||{}).length;
