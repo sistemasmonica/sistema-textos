@@ -6680,12 +6680,13 @@ function valorConteo(){
   const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
   const uni=rows.reduce((a,r)=>a+r.c,0);
   const html=rows.map((f,i)=>`<tr data-c="${f.c}">
-    <td style="text-align:center;color:#888">${i+1}</td><td>${escH(f.e.p.nombre)}${f.pr.deLista||f.editable?'':' <span style="color:#94a3b8" title="Precio tomado del catálogo (no está en la lista de la editorial)">*</span>'}</td>
+    <td style="text-align:center;color:#888">${i+1}</td><td>${escH(f.e.p.nombre)}${f.pr.deLista||f.editable?'':' <span class="din" style="color:#94a3b8" title="Precio tomado del catálogo (no está en la lista de la editorial)">*</span>'}</td>
     <td style="text-align:center;font-weight:700">${f.c}</td>
-    <td class="n">${f.editable
+    <td class="n din">${f.editable
       ?`<span class="pd">$</span><input class="pu" data-id="${f.e.p.id}" inputmode="decimal" value="${f.neto||''}" placeholder="0.00">`
       :`<input class="pu" type="hidden" value="${f.neto}">${m(f.neto)}`}</td>
-    <td class="n b vt"></td></tr>`).join('');
+    <td class="n b vt din"></td></tr>`).join('');
+  const edEnt={didactica:'Didáctica Textos Escolares',tech:'Tech Books'}[_conteoEditSel()]||'';
   const win=window.open('','_blank');
   win.document.write(`<html><head><title>Devolución a la editorial DM BOOKS</title>
   <style>
@@ -6703,21 +6704,30 @@ function valorConteo(){
     .btn{background:#1565c0;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer}
     input.pu{width:70px;text-align:right;font-family:monospace;font-size:12px;padding:3px 5px;background:#fef9c3;border:1px solid #facc15;border-radius:4px}
     .aviso{margin:10px 0;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;font-size:12px}
+    .ent{display:none}
+    body.entrega .din,body.entrega .ctl{display:none}
+    body.entrega .ent{display:block}body.entrega span.ent{display:inline}
+    .firmas{display:flex;gap:40px;margin-top:50px;font-size:11px}
+    .firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
     @media print{.btn,.aviso{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}
       input.pu{background:transparent;border:none;padding:0;width:auto}input.pu:placeholder-shown{color:transparent}}
   </style></head><body>
-  <button class="btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
-  <h1 style="margin-top:10px">DM Books — Valor a devolver a la editorial${_conteoEditNombre()?' '+escH(_conteoEditNombre()):''}</h1>
-  <p>Fecha: ${fecha} &nbsp;|&nbsp; Según precios netos de la editorial</p>
+  <button class="btn" onclick="window.print()" title="Con valores en dólares: para nuestro control">🖨 Imprimir para nuestro control (con valores)</button>
+  <button class="btn" style="background:#15803d;margin-left:8px" onclick="imprimirEntrega()" title="Solo libros y cantidades, sin valores ni DM Books">📦 Imprimir para la editorial (solo cantidades)</button>
+  <h1 class="ent" style="margin-top:10px">Devolución de libros${edEnt?' — '+escH(edEnt):''}</h1>
+  <p class="ent">Fecha: ${fecha}</p>
+  <h1 class="ctl" style="margin-top:10px">DM Books — Valor a devolver a la editorial${_conteoEditNombre()?' '+escH(_conteoEditNombre()):''}</h1>
+  <p class="ctl">Fecha: ${fecha} &nbsp;|&nbsp; Según precios netos de la editorial</p>
   ${nEdit?`<div class="aviso">✏️ <b>${nEdit} libro(s) no tienen precio en el sistema.</b> Escribe el precio neto en las casillas amarillas y el total se calcula solo. El sistema se acuerda de lo que escribas para la próxima vez. (Las casillas amarillas no salen al imprimir.)</div>`:''}
-  <div class="cards">
+  <div class="cards ctl">
     <div class="card" style="background:#f0fdf4;border:1px solid #86efac">💰 Total a devolver (precio neto editorial)<b style="color:#15803d" id="totA">$0.00</b>lo que la editorial te descuenta</div>
     <div class="card" style="background:#f8fafc;border:1px solid #cbd5e1">Unidades<b>${uni}</b>${rows.length} libros distintos</div>
   </div>
-  <table><thead><tr><th>#</th><th>Producto</th><th style="text-align:center">Contado</th><th style="text-align:right">Precio neto</th><th style="text-align:right">Total neto</th></tr></thead>
+  <table><thead><tr><th>#</th><th>Producto</th><th style="text-align:center"><span class="ctl">Contado</span><span class="ent">Cantidad</span></th><th class="din" style="text-align:right">Precio neto</th><th class="din" style="text-align:right">Total neto</th></tr></thead>
   <tbody>${html}
-  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td style="text-align:center">${uni}</td><td></td><td class="n" id="totB">$0.00</td></tr>
+  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td style="text-align:center">${uni}</td><td class="din"></td><td class="n din" id="totB">$0.00</td></tr>
   </tbody></table>
+  <div class="firmas" style="display:none"><div>Entregado por</div><div>Recibido por</div></div>
   <script>
     const m=x=>'$'+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     function recalc(){
@@ -6735,6 +6745,16 @@ function valorConteo(){
       try{window.opener&&window.opener._conteoPrecioManual(inp.dataset.id,inp.value);}catch(e){}
     }));
     recalc();
+    // Copia para la editorial: oculta valores, título de control y DM Books
+    function imprimirEntrega(){
+      const t=document.title;document.title='Devolución de libros';
+      document.body.classList.add('entrega');
+      document.querySelector('.firmas').style.display='flex';
+      window.print();
+      document.body.classList.remove('entrega');
+      document.querySelector('.firmas').style.display='none';
+      document.title=t;
+    }
   <\/script>
   <\/body><\/html>`);
   win.document.close();
