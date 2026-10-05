@@ -9189,6 +9189,12 @@ function gruposComoEditorial(d,parte){
 }
 function parteEditorialSel(){ return document.getElementById('ctrl-parte-ed')?.value||'todo'; }
 
+// Abonos del colegio = cobros registrados en Pagos cuyo nombre coincide con el
+// colegio (mismo criterio que "Por Cobrar": nombre exacto o _coincideColegio).
+function abonosColegio(nombre){
+  return (DB.pagos||[]).filter(p=>p.tipo==='cobro'&&(p.nombre===nombre||_coincideColegio(p.nombre||'',nombre)))
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
 function imprimirComoEditorial(nombre,parte){
   const d=DB.colData[nombre];if(!d)return;
   parte=parte||'todo';
@@ -9249,9 +9255,28 @@ function imprimirComoEditorial(nombre,parte){
   ${bloques}
   <div style="height:10px"></div>
   <table><tr class="total-row"><td colspan="7" style="text-align:right">TOTAL</td><td style="text-align:right">$${granTotal.toFixed(2)} usd</td></tr></table>
-  <div style="margin-top:14px;border:2px solid #1565c0;border-radius:6px;padding:10px 14px;text-align:right;font-size:15px;font-weight:800;color:#1565c0">
-    VALOR A CANCELARSE: $${granTotal.toFixed(2)} usd
-  </div>
+  ${(()=>{
+    const ab=parte==='todo'?abonosColegio(nombre):[];
+    if(!ab.length) return (parte!=='todo'&&abonosColegio(nombre).length)
+      ?`<div style="margin-top:10px;font-size:11px;color:#555">Nota: los abonos recibidos se descuentan en el estado de cuenta completo (opción "Todo").</div>
+        <div style="margin-top:14px;border:2px solid #1565c0;border-radius:6px;padding:10px 14px;text-align:right;font-size:15px;font-weight:800;color:#1565c0">VALOR A CANCELARSE: $${granTotal.toFixed(2)} usd</div>`
+      :`<div style="margin-top:14px;border:2px solid #1565c0;border-radius:6px;padding:10px 14px;text-align:right;font-size:15px;font-weight:800;color:#1565c0">VALOR A CANCELARSE: $${granTotal.toFixed(2)} usd</div>`;
+    const tAb=ab.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+    const saldo=granTotal-tAb;
+    return `<h3 style="margin-top:18px">ABONOS RECIBIDOS</h3>
+    <table>
+      <tr><th style="width:22%">FECHA</th><th>FORMA DE PAGO</th><th style="width:25%">VALOR</th></tr>
+      ${ab.map(p=>`<tr><td style="text-align:center">${escH(p.fecha.split('-').reverse().join('/'))}</td><td style="text-align:center">${escH(p.forma||'')}</td><td style="text-align:right">$${(parseFloat(p.valor)||0).toFixed(2)}</td></tr>`).join('')}
+      <tr class="sub-row"><td colspan="2" style="text-align:right">TOTAL ABONADO</td><td style="text-align:right">$${tAb.toFixed(2)}</td></tr>
+    </table>
+    <table style="margin-top:14px;font-size:13px">
+      <tr><td style="text-align:right;width:75%">Total del estado de cuenta</td><td style="text-align:right">$${granTotal.toFixed(2)}</td></tr>
+      <tr><td style="text-align:right">(−) Total abonado</td><td style="text-align:right">$${tAb.toFixed(2)}</td></tr>
+    </table>
+    <div style="margin-top:10px;border:2px solid #1565c0;border-radius:6px;padding:10px 14px;text-align:right;font-size:15px;font-weight:800;color:#1565c0">
+      ${saldo>TOL_COBRO?'SALDO A CANCELAR: $'+saldo.toFixed(2)+' usd':(saldo<-TOL_COBRO?'SALDO A FAVOR DEL COLEGIO: $'+(-saldo).toFixed(2)+' usd':'CUENTA CANCELADA — SALDO $0.00')}
+    </div>`;
+  })()}
   ${dmPrintFooter()}
   <\/body><\/html>`);
   win.document.close();
@@ -9290,7 +9315,17 @@ function exportarComoEditorialXLS(nombre,parte){
     <tr><td colspan="8"></td></tr>
     <tr><th class="th">TEXTO</th><th class="th">CANTIDAD INICIAL</th><th class="th">DEVUELTOS</th><th class="th">CANTIDAD FINAL</th><th class="th">PVP</th><th class="th">% DESCUENTO</th><th class="th">PRECIO FINAL</th><th class="th">VALOR TOTAL</th></tr>
     ${filas}
-    <tr><td colspan="7" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}">${granTotal.toFixed(2)}</td></tr>
+    ${(()=>{
+      const ab=parte==='todo'?abonosColegio(nombre):[];
+      if(!ab.length) return `<tr><td colspan="7" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}">${granTotal.toFixed(2)}</td></tr>`;
+      const tAb=ab.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);const saldo=granTotal-tAb;
+      return `<tr><td colspan="7" class="sub-t" style="text-align:right">TOTAL (USD)</td><td class="sub-t" style="${XLS_NUM}">${granTotal.toFixed(2)}</td></tr>
+      <tr><td colspan="8"></td></tr>
+      <tr><td colspan="8" class="grp">ABONOS RECIBIDOS</td></tr>
+      ${ab.map(p=>`<tr><td colspan="6" ${c} style="${XLS_TXT}">${xlsFecha(p.fecha)} — ${escH(p.forma||'')}</td><td ${c}></td><td ${c} style="${XLS_NUM}">${(parseFloat(p.valor)||0).toFixed(2)}</td></tr>`).join('')}
+      <tr><td colspan="7" class="sub-t" style="text-align:right">TOTAL ABONADO</td><td class="sub-t" style="${XLS_NUM}">${tAb.toFixed(2)}</td></tr>
+      <tr><td colspan="7" class="tot" style="text-align:right">${saldo>=0?'SALDO A CANCELAR (USD)':'SALDO A FAVOR DEL COLEGIO (USD)'}</td><td class="tot" style="${XLS_NUM}">${Math.abs(saldo).toFixed(2)}</td></tr>`;
+    })()}
   </table>`;
   const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+(PARTES_EDITORIAL[parte]?' '+PARTES_EDITORIAL[parte]:'')+' '+today()+'.xls';
   bajarXLS(html,archivo);
