@@ -4512,6 +4512,17 @@ function guardarPago(){
   if(tipo==='cobro')verReciboPago(reg.id);
 }
 
+// Aviso visible de "estás editando" sobre el formulario de Pagos (antes solo
+// cambiaba el texto del botón y no se notaba que el formulario estaba en edición).
+function _avisoEdicionPago(p){
+  const card=document.querySelector('#pn-pagos .card');if(!card)return;
+  let av=document.getElementById('pago-edit-aviso');
+  if(!p){if(av)av.remove();card.style.outline='';card.style.background='';return;}
+  if(!av){av=document.createElement('div');av.id='pago-edit-aviso';card.insertBefore(av,card.firstChild);}
+  av.style.cssText='background:#fef3c7;border:2px solid #f59e0b;color:#78350f;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:14px';
+  av.innerHTML='✏️ <b>Estás editando</b> el '+(p.tipo==='cobro'?'cobro':'pago')+' de <b>'+escH(p.nombre)+'</b> ('+fmt(p.valor)+'). Cambia lo que necesites abajo y toca <b>Guardar cambios</b>.';
+  card.style.outline='3px solid #f59e0b';card.style.background='#fffbeb';
+}
 function editarPago(id){
   const p=(DB.pagos||[]).find(x=>x.id===id);if(!p)return;
   document.getElementById('pago-fecha').value=p.fecha;
@@ -4527,7 +4538,9 @@ function editarPago(id){
   if(info)info.textContent=p.comprobante?'Ya tiene una foto guardada. Solo sube una nueva si quieres reemplazarla.':'Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
   document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar cambios';
   document.getElementById('btn-cancelar-pago').style.display='';
+  _avisoEdicionPago(p);
   document.getElementById('pn-pagos').scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>{const v=document.getElementById('pago-valor');if(v)v.focus();},400);
   toast('Editando registro de '+p.nombre,'ok');
 }
 
@@ -4541,6 +4554,7 @@ function cancelarEdicionPago(){
   pagoComprobante=null;
   document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar';
   document.getElementById('btn-cancelar-pago').style.display='none';
+  _avisoEdicionPago(null);
 }
 
 // Abre el comprobante (imagen o PDF) en una ventana nueva
@@ -4627,7 +4641,7 @@ function renderPagos(){
     <td>${p.comprobante
       ?`<button class="btn btn-s btn-sm" title="Ver comprobante" onclick="verComprobantePago('${p.id}')">${p.comprobante.startsWith('data:application/pdf')?'📄':'🖼️'} Ver</button> <button class="btn btn-s btn-sm" title="Quitar comprobante" onclick="quitarComprobantePago('${p.id}')"><i class="ti ti-x"></i></button>`
       :`<button class="btn btn-s btn-sm" title="Agregar foto del comprobante" onclick="agregarComprobantePago('${p.id}')"><i class="ti ti-camera"></i> Agregar</button>`}</td>
-    <td style="display:flex;gap:4px"><button class="btn btn-p btn-sm" title="Ver / imprimir recibo" onclick="verReciboPago('${p.id}')">🧾 Recibo</button><button class="btn btn-s btn-sm" title="Editar" onclick="editarPago('${p.id}')"><i class="ti ti-pencil"></i></button><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
+    <td style="display:flex;gap:4px"><button class="btn btn-p btn-sm" title="Ver / imprimir recibo" onclick="verReciboPago('${p.id}')">🧾 Recibo</button><button class="btn btn-s btn-sm" title="Editar" onclick="editarPago('${p.id}')"><i class="ti ti-pencil"></i> Editar</button><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
   </tr>`).join('');
 }
 
