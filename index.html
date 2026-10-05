@@ -4509,6 +4509,7 @@ function guardarPago(){
   pagoComprobante=null;
   renderPagos();
   toast((tipo==='cobro'?'Cobro':'Pago')+' registrado: '+fmt(valor),'ok');
+  if(tipo==='cobro')verReciboPago(reg.id);
 }
 
 function editarPago(id){
@@ -4626,7 +4627,7 @@ function renderPagos(){
     <td>${p.comprobante
       ?`<button class="btn btn-s btn-sm" title="Ver comprobante" onclick="verComprobantePago('${p.id}')">${p.comprobante.startsWith('data:application/pdf')?'📄':'🖼️'} Ver</button> <button class="btn btn-s btn-sm" title="Quitar comprobante" onclick="quitarComprobantePago('${p.id}')"><i class="ti ti-x"></i></button>`
       :`<button class="btn btn-s btn-sm" title="Agregar foto del comprobante" onclick="agregarComprobantePago('${p.id}')"><i class="ti ti-camera"></i> Agregar</button>`}</td>
-    <td style="display:flex;gap:4px"><button class="btn btn-s btn-sm" title="Editar" onclick="editarPago('${p.id}')"><i class="ti ti-pencil"></i></button><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
+    <td style="display:flex;gap:4px"><button class="btn btn-p btn-sm" title="Ver / imprimir recibo" onclick="verReciboPago('${p.id}')">🧾 Recibo</button><button class="btn btn-s btn-sm" title="Editar" onclick="editarPago('${p.id}')"><i class="ti ti-pencil"></i></button><button class="btn btn-d btn-sm" onclick="eliminarPago('${p.id}')"><i class="ti ti-trash"></i></button></td>
   </tr>`).join('');
 }
 
@@ -4701,6 +4702,121 @@ function imprimirPagos(){
   win.document.close();
   win.onload=()=>win.print();
 }
+
+// ── Recibo de un abono/cobro (o comprobante de un pago) ──────────────────────
+// Se muestra DENTRO del sistema (no abre ventana nueva), porque en el celular
+// las ventanas nuevas + window.print() suelen no funcionar. Desde ahí se puede
+// imprimir / guardar como PDF o mandar el resumen por WhatsApp.
+function _numLetras(n){
+  const U=['','UNO','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE','VEINTIUNO','VEINTIDÓS','VEINTITRÉS','VEINTICUATRO','VEINTICINCO','VEINTISÉIS','VEINTISIETE','VEINTIOCHO','VEINTINUEVE'];
+  const D=['','','','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'];
+  const C=['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+  const menos100=x=>x<30?U[x]:D[Math.floor(x/10)]+(x%10?' Y '+U[x%10]:'');
+  const menos1000=x=>x===100?'CIEN':((x>=100?C[Math.floor(x/100)]+' ':'')+menos100(x%100)).trim();
+  const ent=x=>{
+    if(x===0)return 'CERO';
+    const mill=Math.floor(x/1e6),miles=Math.floor((x%1e6)/1000),resto=x%1000;let t='';
+    if(mill)t+=(mill===1?'UN MILLÓN':ent(mill)+' MILLONES')+' ';
+    if(miles)t+=(miles===1?'MIL':menos1000(miles).replace(/UNO$/,'UN')+' MIL')+' ';
+    if(resto)t+=menos1000(resto);
+    return t.trim();
+  };
+  const v=Math.round((parseFloat(n)||0)*100);
+  return ent(Math.floor(v/100)).replace(/UNO$/,'UN')+' CON '+String(v%100).padStart(2,'0')+'/100 DÓLARES';
+}
+function _reciboDatos(p){
+  // Número correlativo: posición del registro entre los del mismo tipo, por fecha
+  const mismos=(DB.pagos||[]).filter(x=>x.tipo===p.tipo).sort((a,b)=>a.fecha.localeCompare(b.fecha)||String(a.id).localeCompare(String(b.id)));
+  const num=String(mismos.findIndex(x=>x.id===p.id)+1).padStart(4,'0');
+  // Saldo del colegio (solo cobros de un colegio que tenga ventas registradas)
+  let saldo=null;
+  if(p.tipo==='cobro'){
+    try{
+      const {filas}=saldosPorCobrarColegios();
+      const f=filas.find(f=>p.nombre===f.colegio||_coincideColegio(p.nombre,f.colegio));
+      if(f&&f.ingreso>0.005){
+        const pos=mismos.indexOf(p);
+        const hasta=mismos.filter((x,i)=>i<=pos&&(x.nombre===f.colegio||_coincideColegio(x.nombre,f.colegio)))
+          .reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+        saldo={colegio:f.colegio,total:f.ingreso,abonado:hasta,pendiente:f.ingreso-hasta};
+      }
+    }catch(e){saldo=null}
+  }
+  return {num,saldo};
+}
+function verReciboPago(id){
+  const p=(DB.pagos||[]).find(x=>x.id===id);if(!p)return;
+  const {num,saldo}=_reciboDatos(p);
+  const esCobro=p.tipo==='cobro';
+  const titulo=esCobro?'RECIBO DE COBRO':'COMPROBANTE DE PAGO';
+  const fechaTxt=p.fecha.split('-').reverse().join('/');
+  let ov=document.getElementById('recibo-ov');
+  if(!ov){ov=document.createElement('div');ov.id='recibo-ov';document.body.appendChild(ov);}
+  ov.innerHTML=`<style>
+    #recibo-ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;overflow:auto;padding:12px}
+    #recibo-ov .rc-bar{max-width:720px;margin:0 auto 10px;display:flex;gap:8px;flex-wrap:wrap}
+    #recibo-ov .rc-bar button{flex:1 1 140px;font:600 15px 'Segoe UI',Arial;border:0;border-radius:8px;padding:12px;cursor:pointer;color:#fff}
+    #recibo-ov .rc-hoja{max-width:720px;margin:0 auto;background:#fff;color:#222;border-radius:8px;padding:18px;font-family:'Segoe UI',Arial,sans-serif}
+    #recibo-ov .rc-num{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+    #recibo-ov .rc-num b{font-size:18px}
+    #recibo-ov .rc-val{font-size:26px;font-weight:800;color:#1565c0;border:2px solid #1565c0;border-radius:8px;padding:4px 14px}
+    #recibo-ov .rc-row{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid #e5e7eb;font-size:15px}
+    #recibo-ov .rc-row span{flex:none;width:150px;color:#555}
+    #recibo-ov .rc-row div{flex:1;font-weight:600;word-break:break-word}
+    #recibo-ov .rc-saldo{margin-top:14px;background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:14px}
+    #recibo-ov .rc-saldo div{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+    #recibo-ov .rc-firmas{display:flex;gap:30px;margin-top:56px}
+    #recibo-ov .rc-firmas div{flex:1;border-top:1px solid #333;text-align:center;font-size:12px;padding-top:4px}
+    ${dmPrintCSS()}
+    @media (max-width:520px){#recibo-ov .rc-row span{width:110px}#recibo-ov .rc-val{font-size:22px}#recibo-ov .dm-head{flex-wrap:wrap}}
+    @media print{
+      body.rc-imprimiendo>*:not(#recibo-ov){display:none!important}
+      body.rc-imprimiendo #recibo-ov{position:static;background:#fff;padding:0;overflow:visible}
+      #recibo-ov .rc-bar{display:none!important}
+      #recibo-ov .rc-hoja{max-width:none;padding:0;border-radius:0}
+    }
+  </style>
+  <div class="rc-bar">
+    <button style="background:#1565c0" onclick="imprimirReciboPago()">🖨️ Imprimir / Guardar PDF</button>
+    <button style="background:#25d366" onclick="whatsappReciboPago('${p.id}')">📲 Enviar por WhatsApp</button>
+    <button style="background:#64748b" onclick="cerrarReciboPago()">✖ Cerrar</button>
+  </div>
+  <div class="rc-hoja">
+    ${dmPrintHeader(titulo,'N° '+num)}
+    <div class="rc-num"><b>${esCobro?'Valor recibido':'Valor pagado'}</b><div class="rc-val">${fmt(p.valor)}</div></div>
+    <div class="rc-row"><span>Fecha</span><div>${escH(fechaTxt)}</div></div>
+    <div class="rc-row"><span>${esCobro?'Recibí de':'Pagado a'}</span><div>${escH(p.nombre)}</div></div>
+    <div class="rc-row"><span>La cantidad de</span><div>${escH(_numLetras(p.valor))}</div></div>
+    <div class="rc-row"><span>Forma de pago</span><div>${escH(p.forma||'')}</div></div>
+    <div class="rc-row"><span>Concepto</span><div>${escH(p.nota||(esCobro?'Abono a cuenta':'Pago'))}</div></div>
+    ${saldo?`<div class="rc-saldo">
+      <div><span>Total a pagar (${escH(saldo.colegio)})</span><b>${fmt(saldo.total)}</b></div>
+      <div><span>Abonado hasta este recibo</span><b>${fmt(saldo.abonado)}</b></div>
+      <div style="border-top:1px solid #cbd5e1;margin-top:4px;padding-top:6px"><span><b>Saldo pendiente</b></span><b style="color:${saldo.pendiente>TOL_COBRO?'#b45309':'#15803d'}">${saldo.pendiente>TOL_COBRO?fmt(saldo.pendiente):(saldo.pendiente<-TOL_COBRO?'A favor '+fmt(-saldo.pendiente):'$0.00 — Cancelado')}</b></div>
+    </div>`:''}
+    <div class="rc-firmas"><div>${esCobro?'Recibí conforme':'Entregué conforme'}<br>${escH(DM_EMPRESA.nombre)}</div><div>${esCobro?'Entregué conforme':'Recibí conforme'}<br>${escH(p.nombre)}</div></div>
+  </div>`;
+  ov.style.display='block';
+  ov.scrollTop=0;
+}
+function imprimirReciboPago(){
+  document.body.classList.add('rc-imprimiendo');
+  const fin=()=>{document.body.classList.remove('rc-imprimiendo');window.removeEventListener('afterprint',fin);};
+  window.addEventListener('afterprint',fin);
+  setTimeout(()=>window.print(),50);
+}
+function cerrarReciboPago(){const ov=document.getElementById('recibo-ov');if(ov){ov.style.display='none';ov.innerHTML='';}}
+function whatsappReciboPago(id){
+  const p=(DB.pagos||[]).find(x=>x.id===id);if(!p)return;
+  const {num,saldo}=_reciboDatos(p);const esCobro=p.tipo==='cobro';
+  let t=`*${DM_EMPRESA.nombre}*\n${esCobro?'Recibo de cobro':'Comprobante de pago'} N° ${num}\n`+
+    `Fecha: ${p.fecha.split('-').reverse().join('/')}\n${esCobro?'Recibí de':'Pagado a'}: ${p.nombre}\n`+
+    `Valor: *${fmt(p.valor)}* (${p.forma||''})\n`+(p.nota?`Concepto: ${p.nota}\n`:'');
+  if(saldo)t+=`\nTotal a pagar: ${fmt(saldo.total)}\nAbonado hasta hoy: ${fmt(saldo.abonado)}\n*Saldo pendiente: ${saldo.pendiente>TOL_COBRO?fmt(saldo.pendiente):'$0.00 (cancelado)'}*\n`;
+  t+='\n¡Gracias!';
+  window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');
+}
+
 
 // Cuánto te ha pagado cada colegio (Pagos → Cobro), buscando el nombre del
 // colegio dentro de lo que Mónica escribió en el cobro (tolera nombre parecido,
