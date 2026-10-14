@@ -669,6 +669,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div id="inv-rep" class="inv-pn" style="display:none">
     <div class="sh"><h2>Reporte de stock actual</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <select id="rep-edit" onchange="renderStockReport()" title="Ver solo los libros de una editorial (también filtra Exportar, Imprimir y Hoja de conteo)" style="padding:6px 8px;border:2px solid #7c3aed;border-radius:6px;font-size:12px;font-weight:600;color:#6d28d9">
+          <option value="todas">📚 Todas las editoriales</option>
+          <option value="didactica">📘 Solo Didáctica</option>
+          <option value="tech">🔤 Solo Tech Books</option>
+        </select>
         <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rep-ocultar-cero" onchange="renderStockReport()"> Ocultar agotados (stock en 0)</label>
         <button class="btn btn-s btn-sm" onclick="exportStockCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
@@ -6226,10 +6231,16 @@ function imprimirRespaldos(){
   win.document.close();
 }
 
+// Selector "rep-edit" del Reporte de stock: Todas / Didáctica / Tech Books.
+// Mismo criterio que el Conteo físico (_conteoEsTech). Filtra la tabla, las
+// tarjetas de arriba, el Excel, la impresión y la hoja de conteo.
+function _repEditSel(){return document.getElementById('rep-edit')?.value||'todas';}
+function _repEditOk(p){const ed=_repEditSel();return ed==='todas'||(ed==='tech')===_conteoEsTech(p);}
+function _repEditNombre(){return {didactica:'Solo Didáctica',tech:'Solo Tech Books'}[_repEditSel()]||'';}
 function renderStockReport(){
   const tb=document.getElementById('tb-rep-stock');
   if(!DB.productos.length){tb.innerHTML='<tr><td colspan="11"><div class="empty">Sin productos en inventario</div></td></tr>';return}
-  const prodsConEntradas=DB.productos.filter(p=>p.editorial!=='Hist.');
+  const prodsConEntradas=DB.productos.filter(p=>p.editorial!=='Hist.').filter(_repEditOk);
   const TIPO={venta:{lbl:'📗 Venta',bg:'#dcfce7',fg:'#166534'},
               solucionario:{lbl:'📘 Solucionario',bg:'#dbeafe',fg:'#1e40af'},
               muestra:{lbl:'📙 Muestra',bg:'#fef3c7',fg:'#92400e'}};
@@ -6547,7 +6558,7 @@ function imprimirInventario(){
   const win=window.open('','_blank');
   const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
   let totalCosto=0,totalVenta=0;
-  const filas=DB.productos.filter(p=>p.editorial!=='Hist.').map(p=>{
+  const filas=DB.productos.filter(p=>p.editorial!=='Hist.').filter(_repEditOk).map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
@@ -6589,7 +6600,7 @@ function imprimirInventario(){
     ${dmLogoSrc()?`<img src="${dmLogoSrc()}" alt="DM BOOKS" style="height:70px;object-fit:contain" onload="if(window._lp)return;window._lp=1;window.print();" onerror="if(window._lp)return;window._lp=1;window.print();">`:'<div style="font-size:28px;font-weight:900;color:#1565c0;border:3px solid #1565c0;padding:6px 14px">DM BOOKS</div>'}
     <div class="header-info">
       <h1>DM Books — Distribuidora de Textos Escolares</h1>
-      <p>Reporte de Inventario 2026 &nbsp;|&nbsp; Fecha: ${fecha}</p>
+      <p>Reporte de Inventario 2026${_repEditNombre()?' — <b>'+_repEditNombre()+'</b>':''} &nbsp;|&nbsp; Fecha: ${fecha}</p>
       <p>Total productos: <b>${DB.productos.length}</b></p>
     </div>
   </div>
@@ -6621,7 +6632,7 @@ function imprimirInventario(){
 // Hoja para hacer inventario físico: mismo listado del Reporte de stock,
 // SIN precios ni valores. Solo lee datos, no cambia nada.
 function imprimirConteo(){
-  const prods=DB.productos.filter(p=>p.editorial!=='Hist.');
+  const prods=DB.productos.filter(p=>p.editorial!=='Hist.').filter(_repEditOk);
   if(!prods.length){alert('No hay productos para imprimir.');return;}
   const TIPO={venta:'Venta',solucionario:'Solucionario',muestra:'Muestra'};
   const orden={venta:0,solucionario:1,muestra:2};
@@ -6663,7 +6674,7 @@ function imprimirConteo(){
   <div class="header">
     ${dmLogoSrc()?`<img src="${dmLogoSrc()}" alt="DM BOOKS" style="height:60px;object-fit:contain" onload="if(window._lp)return;window._lp=1;window.print();" onerror="if(window._lp)return;window._lp=1;window.print();">`:'<div style="font-size:28px;font-weight:900;color:#1565c0;border:3px solid #1565c0;padding:6px 14px">DM BOOKS</div>'}
     <div class="header-info">
-      <h1>Hoja de conteo de inventario</h1>
+      <h1>Hoja de conteo de inventario${_repEditNombre()?' — '+_repEditNombre():''}</h1>
       <p>Fecha: ${fecha} &nbsp;|&nbsp; Productos: <b>${lista.length}</b> &nbsp;|&nbsp; Unidades según sistema: <b>${totalSt}</b></p>
       <p>Contado por: ______________________________</p>
     </div>
@@ -7270,7 +7281,7 @@ function exportProductosCSV(){
 function exportStockCSV(){
   const ocultarCero=document.getElementById('rep-ocultar-cero')?.checked;
   const rows=[['Codigo','Nombre','Editorial','Nivel','Stock Inicial','Entradas','Salidas','Stock Actual','P.Costo','P.Venta','Valor Costo']];
-  DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
+  DB.productos.filter(p=>p.editorial!=='Hist.').filter(_repEditOk).forEach(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
     const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
     const st=p.stockInicial+ent-sal;
@@ -7280,7 +7291,7 @@ function exportStockCSV(){
   const ws=XLSX.utils.aoa_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Reporte de stock');
-  XLSX.writeFile(wb,'reporte_stock_'+today()+'.xlsx');
+  XLSX.writeFile(wb,'reporte_stock_'+({didactica:'didactica_',tech:'techbooks_'}[_repEditSel()]||'')+today()+'.xlsx');
 }
 
 // ===================================================
@@ -8764,6 +8775,7 @@ function renderControl(){
           <tr><td style="padding:3px 0">Ya pagado a la editorial</td><td style="font-family:monospace;font-weight:700;text-align:right;color:var(--g1)" id="ctrl-pagado-edit">$${pagadoEdit.toFixed(2)}</td></tr>
           <tr style="border-top:2px solid #90caf9"><td style="padding:5px 0;font-weight:700">SALDO POR PAGAR A EDITORIAL</td><td style="font-family:monospace;font-weight:700;text-align:right;color:${saldoEdit>0.005?'var(--r1)':'var(--g1)'}" id="ctrl-saldo-edit">$${saldoEdit.toFixed(2)}</td></tr>
         </table>
+        <div id="ctrl-saldo-por-ed">${saldoPorEditorialHTML(d)}</div>
       </div>
       <div style="background:${gananciaNet>=0?'#e8f5e9':'#fef2f2'};border:2px solid ${gananciaNet>=0?'#a5d6a7':'#f5c6cb'};border-radius:6px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
         <div style="font-size:10px;font-weight:700;color:${gananciaNet>=0?'#1b5e20':'var(--r1)'};text-transform:uppercase;margin-bottom:6px">TU GANANCIA NETA</div>
@@ -8777,8 +8789,8 @@ function renderControl(){
       <div style="font-size:12px;font-weight:700;color:#1565c0;text-transform:uppercase;margin-bottom:8px">💵 Pagos a la editorial por este colegio</div>
       <div style="display:grid;grid-template-columns:120px 1fr 130px 110px 1fr auto;gap:6px;align-items:end;margin-bottom:10px">
         <div class="fg" style="margin:0"><label style="font-size:10px">Fecha</label><input type="date" id="pe-fecha" value="${today()}" style="font-size:12px"></div>
-        <div class="fg" style="margin:0"><label style="font-size:10px">Editorial</label><input type="text" id="pe-edit" list="pe-edit-list" placeholder="Ej. Santillana" style="font-size:12px">
-          <datalist id="pe-edit-list">${editoriales.map(e=>`<option value="${escH(e)}">`).join('')}</datalist>
+        <div class="fg" style="margin:0"><label style="font-size:10px">Editorial</label><input type="text" id="pe-edit" list="pe-edit-list" placeholder="DIDACTICA o TECH BOOKS" style="font-size:12px">
+          <datalist id="pe-edit-list"><option value="DIDACTICA"><option value="TECH BOOKS">${editoriales.map(e=>`<option value="${escH(e)}">`).join('')}</datalist>
         </div>
         <div class="fg" style="margin:0"><label style="font-size:10px">N° factura</label><input type="text" id="pe-fact" placeholder="opcional" style="font-size:12px"></div>
         <div class="fg" style="margin:0"><label style="font-size:10px">Monto $</label><input type="text" inputmode="decimal" autocomplete="off" id="pe-monto" placeholder="0.00" style="font-size:12px"></div>
@@ -8829,8 +8841,8 @@ function renderControl(){
     <button class="btn btn-s" style="background:#1d6f42;color:#fff" onclick="exportarComoEditorialXLS('${nombre}',parteEditorialSel())" title="El mismo Formato editorial, pero en Excel"><i class="ti ti-file-spreadsheet"></i> Formato editorial Excel</button>
     <select id="ctrl-parte-ed" title="Qué libros incluir en el Formato editorial (impreso y Excel)" style="padding:6px 8px;border:2px solid #6a1b9a;border-radius:6px;font-size:12px;font-weight:600;color:#6a1b9a" onchange="window._parteEd=this.value">
       <option value="todo">📚 Todo</option>
-      <option value="es" ${window._parteEd==='es'?'selected':''}>🇪🇨 Solo español</option>
-      <option value="en" ${window._parteEd==='en'?'selected':''}>🔤 Solo inglés</option>
+      <option value="es" ${window._parteEd==='es'?'selected':''}>📘 Solo Didáctica</option>
+      <option value="en" ${window._parteEd==='en'?'selected':''}>🔤 Solo Tech Books</option>
     </select>
   </div>`;
 
@@ -8878,6 +8890,7 @@ function recalcControl(nombre){
   const pagadoEdit=(d.pagosEdit||[]).reduce((a,p)=>a+(parseFloat(p.monto)||0),0);
   const saldoEdit=sVtot-pagadoEdit;
   set('ctrl-pagado-edit','$'+pagadoEdit.toFixed(2));
+  const sped=document.getElementById('ctrl-saldo-por-ed');if(sped)sped.innerHTML=saldoPorEditorialHTML(d);
   const saldoEl=document.getElementById('ctrl-saldo-edit');
   if(saldoEl){saldoEl.textContent='$'+saldoEdit.toFixed(2);saldoEl.style.color=saldoEdit>0.005?'var(--r1)':'var(--g1)';}
   const ganEl=document.getElementById('ctrl-ganancia');
@@ -9022,6 +9035,28 @@ function eliminarLineaControl(nombre,i){
 }
 
 // ── PAGOS A LA EDITORIAL POR COLEGIO ────────────────────────────────────────
+// Saldo de este colegio separado por editorial: Didáctica y Tech Books se pagan
+// por separado. Libros: Tech Books = esLineaIngles(l) (Wonder/Limitless), el resto
+// Didáctica. Pagos: si en "Editorial" dice TECH es de Tech Books, si no, Didáctica.
+function saldoPorEditorial(d){
+  const R={didactica:{costo:0,pagado:0},tech:{costo:0,pagado:0}};
+  (d.lineas||[]).forEach(l=>{R[esLineaIngles(l)?'tech':'didactica'].costo+=((l.cant||0)-(l.dev||0))*(l.costo||0);});
+  (d.pagosEdit||[]).forEach(p=>{R[/TECH/i.test(p.editorial||'')?'tech':'didactica'].pagado+=parseFloat(p.monto)||0;});
+  return R;
+}
+function saldoPorEditorialHTML(d){
+  const R=saldoPorEditorial(d);
+  const hayT=(d.lineas||[]).some(esLineaIngles), hayD=(d.lineas||[]).some(l=>!esLineaIngles(l));
+  if(!(hayT&&hayD)&&!R.tech.pagado)return '';
+  const fila=(lbl,x)=>{const sal=x.costo-x.pagado;return '<tr><td style="padding:3px 0">'+lbl+'</td>'
+    +'<td style="font-family:monospace;text-align:right">$'+x.costo.toFixed(2)+'</td>'
+    +'<td style="font-family:monospace;text-align:right;color:var(--g1)">$'+x.pagado.toFixed(2)+'</td>'
+    +'<td style="font-family:monospace;text-align:right;font-weight:700;color:'+(sal>0.005?'var(--r1)':'var(--g1)')+'">$'+sal.toFixed(2)
+    +(x.costo<=0&&x.pagado>0?' <span title="Hay pagos pero los libros no tienen costo cargado" style="color:#c2410c">⚠</span>':'')+'</td></tr>';};
+  return '<table style="width:100%;font-size:11px;margin-top:8px;border-top:1px dashed #90caf9">'
+    +'<tr style="color:#1565c0;font-size:10px;text-transform:uppercase"><td style="padding-top:5px">Por editorial</td><td style="text-align:right">Costo</td><td style="text-align:right">Pagado</td><td style="text-align:right">Saldo</td></tr>'
+    +fila('📘 Didáctica',R.didactica)+fila('🔤 Tech Books',R.tech)+'</table>';
+}
 function agregarPagoEdit(nombre){
   initColData();
   const d=DB.colData[nombre];if(!d)return;
@@ -9168,7 +9203,7 @@ function esLineaIngles(l){
   if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p) t+=' '+(p.nombre||'')+' '+(p.editorial||''); }
   return /WONDER|LIMIT+LES|TECH ?BOOKS/i.test(t);
 }
-const PARTES_EDITORIAL={todo:'',es:'Español',en:'Inglés'};
+const PARTES_EDITORIAL={todo:'',es:'Didáctica',en:'Tech Books'};
 // Agrupa las líneas del colegio por editorial (y filtra por parte: todo/es/en).
 // Los de inglés sin editorial van al grupo "INGLÉS" en vez de "General".
 function gruposComoEditorial(d,parte){
@@ -9199,7 +9234,7 @@ function imprimirComoEditorial(nombre,parte){
   const d=DB.colData[nombre];if(!d)return;
   parte=parte||'todo';
   const grupos=gruposComoEditorial(d,parte);
-  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de inglés':'Este colegio no tiene libros de español','err');
+  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de Tech Books':'Este colegio no tiene libros de Didáctica','err');
   const sufijo=PARTES_EDITORIAL[parte]?' — '+PARTES_EDITORIAL[parte]:'';
   const win=window.open('','_blank');
   let granTotal=0;
@@ -9289,7 +9324,7 @@ function exportarComoEditorialXLS(nombre,parte){
   const d=DB.colData[nombre];if(!d)return toast('No encontré datos de ese colegio','err');
   parte=parte||'todo';
   const grupos=gruposComoEditorial(d,parte);
-  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de inglés':'Este colegio no tiene libros de español','err');
+  if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de Tech Books':'Este colegio no tiene libros de Didáctica','err');
   const sufijo=PARTES_EDITORIAL[parte]?' — '+PARTES_EDITORIAL[parte]:'';
   const c='class="c"';
   let filas='',granTotal=0;
