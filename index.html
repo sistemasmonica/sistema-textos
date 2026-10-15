@@ -1884,16 +1884,46 @@ async function guardarProductosNube(prods){
   }catch(e){console.warn('Error guardando productos en nube:',e);}
 }
 
+// PROTECCIÓN CONTRA PISAR DATOS: cada guardado deja una marca (txe_rev) en la
+// nube. Cada aparato recuerda la última marca que leyó o escribió (_miRev). Si
+// al guardar la marca de la nube es otra, otro aparato guardó después: NO se
+// sube nada (eso borraría lo del otro) y se recarga para traer lo último.
+let _miRev,_saveCorriendo=false,_savePendiente=null,_conflicto=false;
+async function leerRevNube(){const r=await nubeLeer('app_data','txe_rev');return r?.value?.rev??null;}
+function avisoConflictoNube(){
+  if(_conflicto)return;_conflicto=true;
+  alert('⚠️ Se hicieron cambios en el sistema desde OTRO aparato (celular u otra computadora).\n\nPara no borrar esos cambios, el sistema se va a recargar con lo último.\n\nSi tu último cambio no aparece, vuelve a hacerlo.');
+  location.reload();
+}
+// Al volver a la pestaña (ej. el celular que estuvo en el bolsillo), si otro
+// aparato guardó mientras tanto, se recarga sola para no trabajar sobre datos viejos.
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState!=='visible'||!NUBE_OK||!syncCompleted||_miRev===undefined||_saveCorriendo||_conflicto)return;
+  try{
+    const mia=_miRev;
+    const r=await leerRevNube();
+    if(r!==mia&&_miRev===mia&&!_saveCorriendo){_conflicto=true;toast('Trayendo los cambios hechos en otro aparato…','ok');setTimeout(()=>location.reload(),900);}
+  }catch(e){}
+});
 async function saveToCloud(data){
-  if(!NUBE_OK||MODO_LECTURA)return;
-  if(!syncCompleted){
-    const hasData=(data.regs?.length||0)+(data.banco?.length||0)+
-                  (data.movInv?.length||0)+(data.guias?.length||0)+
-                  (data.productos?.length||0)>0;
-    if(!hasData)return;
+  if(!NUBE_OK||MODO_LECTURA||_conflicto)return;
+  // Antes de traer lo de la nube no se sube nada: podría ser una copia vieja.
+  if(!syncCompleted)return;
+  if(_miRev===undefined){setSyncStatus('err','No se pudo verificar la versión de la nube: recarga la página para guardar en la nube');return;}
+  // Un guardado a la vez; si llegan varios seguidos, se sube solo el último.
+  if(_saveCorriendo){_savePendiente=data;return;}
+  _saveCorriendo=true;
+  try{await _subirANube(data);}
+  finally{
+    _saveCorriendo=false;
+    if(_savePendiente&&!_conflicto){const d=_savePendiente;_savePendiente=null;saveToCloud(d);}
   }
+}
+async function _subirANube(data){
   try{
     setSyncStatus('sync');
+    const revNube=await leerRevNube();
+    if(revNube!==_miRev){avisoConflictoNube();return;}
     const ts=new Date().toISOString();
     const payload={
       regs:data.regs||[],banco:data.banco||[],
@@ -1905,6 +1935,9 @@ async function saveToCloud(data){
       respaldosVendedor:data.respaldosVendedor||[],pagos:data.pagos||[],historial:data.historial||[],reglasBanco:data.reglasBanco||{},conteo:data.conteo||{}
     };
     await nubeGuardar('app_data','txe_main',payload);
+    const nuevaRev=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+    await nubeGuardar('app_data','txe_rev',{rev:nuevaRev,at:ts});
+    _miRev=nuevaRev;
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err',e.message);console.warn('Cloud save error:',e);}
 }
@@ -1913,8 +1946,12 @@ async function syncFromCloud(){
   try{
     setSyncStatus('load');
     if(!NUBE_OK)return;
+    // La marca se lee ANTES que los datos: si alguien guarda justo en medio,
+    // lo peor que pasa es un aviso y recarga, nunca pisar datos.
+    let revLeida;try{revLeida=await leerRevNube();}catch(e){}
     let main=null,mainErr=null;
     try{main=await nubeLeer('app_data','txe_main');}catch(e){mainErr=e;}
+    if(!mainErr&&revLeida!==undefined)_miRev=revLeida;
     if(!mainErr&&main?.value){
       const v=main.value;
       if(v.regs?.length>0)DB.regs=v.regs;
