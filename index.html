@@ -4845,23 +4845,22 @@ function whatsappReciboPago(id){
 // calcular un saldo pendiente porque no hay ninguna venta registrada para ellos.
 function saldosPorCobrarColegios(){
   initColData();
-  const cobradoPorNombre={};
-  (DB.pagos||[]).filter(p=>p.tipo==='cobro').forEach(p=>{
-    const k=p.nombre||'(sin nombre)';
-    cobradoPorNombre[k]=(cobradoPorNombre[k]||0)+(parseFloat(p.valor)||0);
-  });
+  const cobros=(DB.pagos||[]).filter(p=>p.tipo==='cobro');
   const usados=new Set();
   const filas=colegiosList().map(c=>{
     const d=DB.colData[c.nombre]; if(!d)return null;
     const T=totalesColegio(d);
     let cobrado=0;
-    Object.keys(cobradoPorNombre).forEach(nom=>{
-      if(nom===c.nombre||_coincideColegio(nom,c.nombre)){ cobrado+=cobradoPorNombre[nom]; usados.add(nom); }
-    });
+    cobros.forEach(p=>{ if(_cobroEsDeColegio(p,c.nombre)){ cobrado+=parseFloat(p.valor)||0; usados.add(p); } });
     return {colegio:c.nombre,vendido:T.tv,comision:T.totalColegio,ingreso:T.ingreso,cobrado,saldo:T.ingreso-cobrado};
   }).filter(Boolean);
-  const sinColegio=Object.keys(cobradoPorNombre).filter(n=>!usados.has(n))
-    .map(n=>({nombre:n,valor:cobradoPorNombre[n]})).filter(x=>x.valor>0);
+  const sinColPorNombre={};
+  cobros.filter(p=>!usados.has(p)).forEach(p=>{
+    const k=p.nombre||'(sin nombre)';
+    sinColPorNombre[k]=(sinColPorNombre[k]||0)+(parseFloat(p.valor)||0);
+  });
+  const sinColegio=Object.keys(sinColPorNombre)
+    .map(n=>({nombre:n,valor:sinColPorNombre[n]})).filter(x=>x.valor>0);
   return {filas,sinColegio};
 }
 
@@ -9242,8 +9241,18 @@ function parteEditorialSel(){ return document.getElementById('ctrl-parte-ed')?.v
 // Abonos del colegio = cobros registrados en Pagos cuyo nombre coincide con el
 // colegio (mismo criterio que "Por Cobrar": nombre exacto o _coincideColegio).
 function abonosColegio(nombre){
-  return (DB.pagos||[]).filter(p=>p.tipo==='cobro'&&(p.nombre===nombre||_coincideColegio(p.nombre||'',nombre)))
+  return (DB.pagos||[]).filter(p=>p.tipo==='cobro'&&_cobroEsDeColegio(p,nombre))
     .sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+// ¿Este cobro es de este colegio? Primero por el nombre de quien pagó. Si ese
+// nombre no es de NINGÚN colegio (ej. "Dra. Patricia Osorio", la rectora), se
+// mira la nota ("abono ... Colegio Hernán Malo Gonzales").
+function _cobroEsDeColegio(p,nombre){
+  const nom=p.nombre||'';
+  if(nom===nombre||_coincideColegio(nom,nombre))return true;
+  if(!p.nota)return false;
+  if(colegiosList().some(c=>c.nombre===nom||_coincideColegio(nom,c.nombre)))return false;
+  return _coincideColegio(p.nota,nombre);
 }
 function imprimirComoEditorial(nombre,parte){
   const d=DB.colData[nombre];if(!d)return;
