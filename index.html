@@ -8430,29 +8430,41 @@ function recuperarDevDeRespaldo(nombre){
       const v=j.data||j;
       const bk=v.colData&&(v.colData[nombre]||v.colData[Object.keys(v.colData).find(k=>_coincideColegio(k,nombre))]);
       if(!bk||!Array.isArray(bk.lineas))return alert('Ese respaldo no tiene datos del colegio '+nombre+'.');
+      // Deja cada libro EXACTAMENTE como en el respaldo: cantidad, devueltos y PVP.
+      const num=x=>parseFloat(x)||0;
+      const totalDe=ls=>ls.reduce((s,l)=>s+(num(l.cant)-num(l.dev))*num(l.pvp),0);
+      const totAntes=totalDe(d.lineas);
       const usadas=new Set();
       const cambios=[];
       d.lineas.forEach(l=>{
         const bl=bk.lineas.find(x=>!usadas.has(x)&&((l.prodId&&x.prodId===l.prodId)||_normNombre(x.libro)===_normNombre(l.libro)));
         if(!bl)return;usadas.add(bl);
-        // Si también se perdió la cantidad entregada, se trae la del respaldo.
-        const nc=Math.max(l.cant||0,parseInt(bl.cant)||0);
-        const nv=Math.min(parseInt(bl.dev)||0,nc);
-        if(nv>0&&nv!==(l.dev||0))cambios.push({l,antes:l.dev||0,nv,nc});
+        const dif=[];
+        if(num(l.cant)!==num(bl.cant))dif.push('entregados '+num(l.cant)+' → '+num(bl.cant));
+        if(num(l.dev)!==num(bl.dev))dif.push('devueltos '+num(l.dev)+' → '+num(bl.dev));
+        if(num(l.pvp)!==num(bl.pvp))dif.push('PVP $'+num(l.pvp)+' → $'+num(bl.pvp));
+        if(dif.length)cambios.push({l,bl,txt:'• '+l.libro+': '+dif.join(', ')});
       });
-      // Libros con devolución que ya no están en el colegio: se agregan del respaldo.
-      const nuevas=bk.lineas.filter(x=>!usadas.has(x)&&(parseInt(x.dev)||0)>0);
-      if(!cambios.length&&!nuevas.length)return alert('No hay nada que recuperar: las devoluciones de '+nombre+' ya son iguales a las del respaldo.');
+      // Libros del respaldo que ya no están en el colegio: se agregan.
+      const nuevas=bk.lineas.filter(x=>!usadas.has(x)&&num(x.cant)>0);
+      // Libros que el archivo indica quitar (ya no estaban en el documento).
+      const qset=new Set((j.quitar||[]).map(_normNombre));
+      const quitarL=d.lineas.filter(l=>qset.has(_normNombre(l.libro)));
+      const filas=cambios.map(c=>c.txt)
+        .concat(nuevas.map(x=>'• '+x.libro+': (se agrega) entregados '+num(x.cant)+', devueltos '+num(x.dev)))
+        .concat(quitarL.map(l=>'• '+l.libro+': (se quita)'));
+      if(!filas.length)return alert('No hay nada que recuperar: '+nombre+' ya está igual que el respaldo.');
+      const despues=d.lineas.filter(l=>!quitarL.includes(l)).map(l=>{const c=cambios.find(c=>c.l===l);return c?{...l,cant:c.bl.cant,dev:c.bl.dev,pvp:c.bl.pvp}:l;}).concat(nuevas);
+      const totDesp=totalDe(despues);
       const fechaBk=j.fecha_backup?new Date(j.fecha_backup).toLocaleString('es-EC'):f.name;
-      const tot=cambios.length+nuevas.length;
-      const filas=cambios.map(c=>'• '+c.l.libro+': '+c.antes+' → '+c.nv).concat(nuevas.map(x=>'• '+x.libro+': (se agrega) devolución '+(parseInt(x.dev)||0)));
       const lista=filas.slice(0,30).join('\n')+(filas.length>30?'\n… y '+(filas.length-30)+' más':'');
-      if(!confirm('Respaldo del '+fechaBk+'\nSe van a poner estas devoluciones en '+nombre+' ('+tot+' libros):\n\n'+lista+'\n\n¿Recuperarlas?'))return;
-      cambios.forEach(c=>{c.l.dev=c.nv;if((c.l.cant||0)<c.nc)c.l.cant=c.nc;});
+      if(!confirm('Respaldo del '+fechaBk+'\nCambios en '+nombre+' ('+filas.length+' libros):\n\n'+lista+'\n\nTotal ahora: $'+totAntes.toFixed(2)+'\nTotal después: $'+totDesp.toFixed(2)+'\n\n¿Dejarlo así?'))return;
+      cambios.forEach(c=>{c.l.cant=num(c.bl.cant);c.l.dev=num(c.bl.dev);c.l.pvp=num(c.bl.pvp);});
+      if(quitarL.length)d.lineas=d.lineas.filter(l=>!quitarL.includes(l));
       nuevas.forEach(x=>{d.lineas.push(JSON.parse(JSON.stringify(x)));});
-      logHistorial('Devoluciones recuperadas de respaldo',nombre+' — '+tot+' línea(s), respaldo '+fechaBk);
+      logHistorial('Colegio recuperado de respaldo',nombre+' — '+filas.length+' línea(s), respaldo '+fechaBk+', total $'+totAntes.toFixed(2)+' → $'+totDesp.toFixed(2));
       save();renderControl();
-      alert('✅ Listo: se recuperaron las devoluciones de '+tot+' libros en '+nombre+'.');
+      alert('✅ Listo: '+nombre+' quedó igual que el respaldo.\nTotal: $'+totDesp.toFixed(2));
     };
     rd.readAsText(f);
   };
