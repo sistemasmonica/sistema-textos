@@ -10979,10 +10979,19 @@ function grupoEditorial(txt){
 function resumenNegocio(){
   let vendido=0,ganancia=0;
   const costoVend={'Didáctica':0,'Tech Books':0};
+  // Venta (ya sin comisión del colegio) por editorial, línea por línea con la
+  // misma fórmula de totalesColegio.
+  const ventaEd={'Didáctica':0,'Tech Books':0};
   Object.keys(DB.colData||{}).forEach(nom=>{
     const d=DB.colData[nom];if(!d||!Array.isArray(d.lineas))return;
     const T=totalesColegio(d);vendido+=T.ingreso;ganancia+=T.ganancia;
-    d.lineas.forEach(l=>{costoVend[esLineaIngles(l)?'Tech Books':'Didáctica']+=((parseFloat(l.cant)||0)-(parseFloat(l.dev)||0))*(parseFloat(l.costo)||0);});
+    const pvUnit=d.comisionPVUnit??0.5;
+    d.lineas.forEach(l=>{
+      const k=esLineaIngles(l)?'Tech Books':'Didáctica';
+      const c=parseFloat(l.cant)||0,v=c-(parseFloat(l.dev)||0),pvp=parseFloat(l.pvp)||0;
+      costoVend[k]+=v*(parseFloat(l.costo)||0);
+      ventaEd[k]+=v*pvp-(lineaComisiona(l)?v*pvp*(pctLinea(d,l)/100)+c*pvUnit:0);
+    });
   });
   // Solo los cobros que son de un colegio (mismo criterio que Por Cobrar). Los
   // de clientes que no son colegio (ej. una librería) no tienen su venta en
@@ -11009,32 +11018,46 @@ function resumenNegocio(){
     if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
   });
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
-  return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,otrosCobros,cobradoOtros,
+  return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
     caja:cobrado+cobradoOtros-tot('pagado')};
 }
 function resumenNegocioHTML(R){
   const m=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fila=(t,v,o={})=>`<tr style="${o.bg?'background:'+o.bg+';':''}${o.b?'font-weight:800;':''}"><td style="padding:7px 12px;border-bottom:1px solid #eee;${o.sub?'padding-left:28px;color:#555;font-size:12px':''}">${t}</td><td style="padding:7px 12px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;white-space:nowrap;font-size:${o.big?'18px':(o.sub?'12px':'14px')};${o.color?'color:'+o.color:''}">${m(v)}</td></tr>`;
-  const tit=t=>`<tr><td colspan="2" style="padding:10px 12px 4px;font-size:11px;font-weight:800;color:#1565c0;letter-spacing:.5px">${t}</td></tr>`;
-  const eds=Object.keys(R.ed);
-  const detEd=eds.length>1?eds.map(n=>{const x=R.ed[n];return fila('de esto, '+escH(n)+(x.sinFacturas?' <span style="font-size:10px;color:#999">(sin facturas cargadas: costo de libros vendidos)</span>':''),x.debe,{sub:1});}).join(''):'';
-  return `<table style="width:100%;border-collapse:collapse;background:#fff">
-    ${tit('🏫 LOS COLEGIOS')}
-    ${fila('Vendí (ya descontada la comisión del colegio)',R.vendido)}
-    ${fila('Me pagaron',R.cobrado)}
-    ${fila('Me falta cobrar',R.porCobrar,{b:1,color:R.porCobrar>1?'#c0392b':'#1b5e20',bg:'#fafafa'})}
-    ${R.otrosCobros.length?tit('🏪 OTROS CLIENTES (no son colegios)')+R.otrosCobros.map(x=>fila('Me pagó '+escH(x.nombre),x.valor,{sub:1})).join(''):''}
-    ${tit('📚 LA EDITORIAL')}
-    ${fila('Me facturaron',R.facturado)}
-    ${fila('(−) Notas de crédito (libros devueltos)',R.notas)}
-    ${fila('(−) Ya pagué',R.pagadoEd)}
-    ${fila('Me falta pagar',R.debeEd,{b:1,color:R.debeEd>1?'#c0392b':'#1b5e20',bg:'#fafafa'})}
-    ${detEd}
-    ${tit('💰 RESULTADO')}
-    ${fila('GANO (lo vendido − costo de esos libros)',R.ganancia,{b:1,big:1,color:R.ganancia>=0?'#1b5e20':'#c0392b',bg:'#e8f5e9'})}
-    ${fila('Plata que me queda hoy de este negocio (cobré − pagué)',R.caja,{sub:1})}
-  </table>`;
+  const td='padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;white-space:nowrap';
+  const tdL='padding:7px 10px;border-bottom:1px solid #eee';
+  const tit=(t,sub)=>`<div style="padding:12px 12px 4px;font-size:12px;font-weight:800;color:#1565c0;letter-spacing:.4px">${t}${sub?' <span style="font-weight:400;color:#777;font-size:11px;letter-spacing:0">'+sub+'</span>':''}</div>`;
+  const D=R.ed['Didáctica']||{facturado:0,notas:0,pagado:0,debe:0},T=R.ed['Tech Books']||{facturado:0,notas:0,pagado:0,debe:0,sinFacturas:false};
+  const cab=`<tr style="background:#f1f5f9;font-size:11px;font-weight:700;color:#334155"><td style="${tdL}"></td><td style="${td};font-family:inherit">📘 DIDÁCTICA</td><td style="${td};font-family:inherit">🔤 TECH BOOKS</td><td style="${td};font-family:inherit">TOTAL</td></tr>`;
+  const f3=(t,a,b,o={})=>`<tr style="${o.b?'font-weight:800;':''}${o.bg?'background:'+o.bg:''}"><td style="${tdL}">${t}</td><td style="${td};${o.color?'color:'+o.color(a):''}">${m(a)}</td><td style="${td};${o.color?'color:'+o.color(b):''}">${m(b)}</td><td style="${td};font-weight:700;${o.color?'color:'+o.color(a+b):''}">${m(a+b)}</td></tr>`;
+  const f1=(t,v,o={})=>`<tr style="${o.b?'font-weight:800;':''}${o.bg?'background:'+o.bg:''}"><td style="${tdL}">${t}</td><td style="${td};font-size:${o.big?'17px':'14px'};${o.color?'color:'+o.color:''}">${m(v)}</td></tr>`;
+  const rojo=v=>v>1?'#c0392b':'#1b5e20', verde=v=>v>=0?'#1b5e20':'#c0392b';
+  const gD=(R.ventaEd['Didáctica']||0)-(R.costoVend['Didáctica']||0), gT=(R.ventaEd['Tech Books']||0)-(R.costoVend['Tech Books']||0);
+  return `<div style="background:#fff">
+    ${tit('① LOS COLEGIOS ME DEBEN','(pagan todo junto, sin separar editorial)')}
+    <table style="width:100%;border-collapse:collapse">
+      ${f1('Vendí a los colegios (ya descontada su comisión)',R.vendido)}
+      ${f1('(−) Me pagaron',R.cobrado)}
+      ${f1('= Me falta cobrar',R.porCobrar,{b:1,big:1,color:rojo(R.porCobrar),bg:'#fafafa'})}
+      ${R.otrosCobros.map(x=>f1('<span style="color:#666;font-size:12px">Aparte: me pagó '+escH(x.nombre)+' (no es colegio)</span>',x.valor)).join('')}
+    </table>
+    ${tit('② YO LE DEBO A CADA EDITORIAL')}
+    <table style="width:100%;border-collapse:collapse">
+      ${cab}
+      ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: estimado, sin facturas con valor)</span>':''),D.facturado,T.facturado)}
+      ${f3('(−) Notas de crédito',D.notas,T.notas)}
+      ${f3('(−) Ya le pagué',D.pagado,T.pagado)}
+      ${f3('= Le debo',D.debe,T.debe,{b:1,color:rojo,bg:'#fafafa'})}
+    </table>
+    ${tit('③ CUÁNTO GANO')}
+    <table style="width:100%;border-collapse:collapse">
+      ${cab}
+      ${f3('Vendí (sin comisión del colegio)',R.ventaEd['Didáctica']||0,R.ventaEd['Tech Books']||0)}
+      ${f3('(−) Costo de esos libros',R.costoVend['Didáctica']||0,R.costoVend['Tech Books']||0)}
+      ${f3('= GANO',gD,gT,{b:1,color:verde,bg:'#e8f5e9'})}
+    </table>
+    <div style="padding:8px 12px;font-size:12px;color:#555;border-top:1px solid #eee">💵 Plata que me queda hoy de este negocio (todo lo cobrado − todo lo pagado a editoriales): <b style="font-family:monospace">${m(R.caja)}</b></div>
+  </div>`;
 }
 function renderResumenNegocio(){
   const el=document.getElementById('d-resumen-negocio');if(!el)return;
