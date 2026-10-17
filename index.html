@@ -1314,7 +1314,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh">
       <div class="card-t"><i class="ti ti-list"></i> Historial de pagos y cobros</div>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-s btn-sm" onclick="exportarPagosCSV()"><i class="ti ti-download"></i> Exportar CSV</button>
+        <button class="btn btn-s btn-sm" onclick="exportarPagosCSV()"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>
         <button class="btn btn-p btn-sm" onclick="imprimirPagos()"><i class="ti ti-printer"></i> Imprimir</button>
       </div>
     </div>
@@ -4757,11 +4757,21 @@ function renderPagos(){
 
 function exportarPagosCSV(){
   if(!(DB.pagos||[]).length)return toast('No hay pagos registrados','err');
-  const rows=[['Fecha','Tipo','Nombre','Forma de pago','Valor','Nota']];
-  [...DB.pagos].sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(p=>{
-    rows.push([p.fecha,p.tipo==='cobro'?'Cobro':'Pago',p.nombre,p.forma,p.valor,p.nota||'']);
-  });
-  dlCSV(rows,'pagos_cobros_'+today()+'.csv');
+  const lista=[...DB.pagos].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const v=p=>parseFloat(p.valor)||0;
+  const tC=lista.filter(p=>p.tipo==='cobro').reduce((a,p)=>a+v(p),0);
+  const tP=lista.filter(p=>p.tipo!=='cobro').reduce((a,p)=>a+v(p),0);
+  const html=`<table>
+    <tr><td colspan="6" class="tit">Pagos y cobros</td></tr>
+    <tr><td colspan="6" class="sub">Descargado el ${escH(today().split('-').reverse().join('/'))}</td></tr>
+    <tr><td></td></tr>
+    <tr><th class="th">Fecha</th><th class="th">Tipo</th><th class="th">Nombre</th><th class="th">Forma de pago</th><th class="th">Valor</th><th class="th">Nota</th></tr>
+    ${lista.map(p=>`<tr><td class="c" style="${XLS_TXT}">${escH(String(p.fecha||'').split('-').reverse().join('/'))}</td><td class="c">${p.tipo==='cobro'?'Cobro':'Pago'}</td><td class="c">${escH(p.nombre||'')}</td><td class="c">${escH(p.forma||'')}</td><td class="c" style="${XLS_NUM}">${v(p).toFixed(2)}</td><td class="c" style="${XLS_TXT}">${escH(p.nota||'')}</td></tr>`).join('')}
+    <tr><td colspan="4" class="sub-t" style="text-align:right">TOTAL COBROS (me pagaron)</td><td class="sub-t" style="${XLS_NUM}">${tC.toFixed(2)}</td><td class="sub-t"></td></tr>
+    <tr><td colspan="4" class="sub-t" style="text-align:right">TOTAL PAGOS (yo pagué)</td><td class="sub-t" style="${XLS_NUM}">${tP.toFixed(2)}</td><td class="sub-t"></td></tr>
+    <tr><td colspan="4" class="tot" style="text-align:right">DIFERENCIA (cobros − pagos)</td><td class="tot" style="${XLS_NUM}">${(tC-tP).toFixed(2)}</td><td class="tot"></td></tr>
+  </table>`;
+  bajarXLS(html,'pagos_cobros_'+today()+'.xls');
 }
 
 // Imprime el historial de pagos/cobros con el filtro que esté puesto en pantalla
@@ -10937,7 +10947,13 @@ function resumenNegocio(){
     const T=totalesColegio(d);vendido+=T.ingreso;ganancia+=T.ganancia;
     d.lineas.forEach(l=>{costoVend[esLineaIngles(l)?'Tech Books':'Didáctica']+=((parseFloat(l.cant)||0)-(parseFloat(l.dev)||0))*(parseFloat(l.costo)||0);});
   });
-  const cobrado=(DB.pagos||[]).filter(p=>p.tipo==='cobro').reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  // Solo los cobros que son de un colegio (mismo criterio que Por Cobrar). Los
+  // de clientes que no son colegio (ej. una librería) no tienen su venta en
+  // Colegios: se muestran aparte y solo cuentan en la plata del negocio.
+  const pc=saldosPorCobrarColegios();
+  const cobrado=pc.filas.reduce((a,f)=>a+f.cobrado,0);
+  const otrosCobros=pc.sinColegio;
+  const cobradoOtros=otrosCobros.reduce((a,x)=>a+x.valor,0);
   const ed={};
   const E=n=>ed[n]||(ed[n]={facturado:0,nFact:0,notas:0,pagado:0,pagos:[],sinFacturas:false});
   ['Didáctica','Tech Books'].forEach(E);
@@ -10954,9 +10970,9 @@ function resumenNegocio(){
     if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
   });
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
-  return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,
+  return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,otrosCobros,cobradoOtros,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
-    caja:cobrado-tot('pagado')};
+    caja:cobrado+cobradoOtros-tot('pagado')};
 }
 function resumenNegocioHTML(R){
   const m=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -10969,6 +10985,7 @@ function resumenNegocioHTML(R){
     ${fila('Vendí (ya descontada la comisión del colegio)',R.vendido)}
     ${fila('Me pagaron',R.cobrado)}
     ${fila('Me falta cobrar',R.porCobrar,{b:1,color:R.porCobrar>1?'#c0392b':'#1b5e20',bg:'#fafafa'})}
+    ${R.otrosCobros.length?tit('🏪 OTROS CLIENTES (no son colegios)')+R.otrosCobros.map(x=>fila('Me pagó '+escH(x.nombre),x.valor,{sub:1})).join(''):''}
     ${tit('📚 LA EDITORIAL')}
     ${fila('Me facturaron',R.facturado)}
     ${fila('(−) Notas de crédito (libros devueltos)',R.notas)}
@@ -10993,7 +11010,7 @@ function renderResumenNegocio(){
     <details style="padding:8px 12px;font-size:11px;color:#555;border-top:1px solid #eee"><summary style="cursor:pointer">De dónde salen los números</summary>
       <div style="margin-top:6px;line-height:1.5">
         <b>Vendí</b>: Control de ventas de todos los colegios (entregados − devueltos) × precio, menos la comisión de cada colegio.<br>
-        <b>Me pagaron</b>: Pagos → todos los <b>Cobros</b>.<br>
+        <b>Me pagaron</b>: Pagos → <b>Cobros</b> de cada colegio (igual que Por Cobrar). Los cobros de clientes que no son colegio salen aparte en "Otros clientes" y solo suman en la plata del negocio.<br>
         <b>Me facturaron</b>: facturas de la editorial (XML o Manual, categoría Textos escolares). <b>Notas de crédito</b>: Editorial → Notas de crédito.<br>
         <b>Ya pagué</b>: Pagos → <b>Pagos</b> a nombre de la editorial:
         ${pagosEd.length?'<ul style="margin:4px 0 0 16px;padding:0">'+pagosEd.map(({n,p})=>`<li>${escH(String(p.fecha||'').split('-').reverse().join('/'))} — ${escH(n)} — $${(parseFloat(p.valor)||0).toFixed(2)} ${p.nota?'<span style="color:#888">('+escH(p.nota)+')</span>':''}</li>`).join('')+'</ul>':' (ninguno todavía)<br>'}
