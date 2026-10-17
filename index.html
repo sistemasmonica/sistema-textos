@@ -5334,6 +5334,93 @@ function eliminarGuia(id){
   toast('Guía eliminada y stock restaurado','ok');
 }
 
+// Retirar libros de una guía ya entregada. Dos casos (Mónica, 2026-10-17):
+//  • vuelven a BODEGA — casi siempre para devolverlos a la editorial con nota de crédito;
+//  • pasan a OTRO COLEGIO que los necesita (ej. GR-007 Alejandro Dumas → Domingo Savio).
+// Se baja la cantidad de la guía original y su salida de inventario (el stock sube).
+// Si van a otro colegio se crea una guía nueva para ese colegio (el stock vuelve a bajar).
+// No se crean "entradas": esas se cruzan con las facturas de la editorial.
+// Lo entregado originalmente queda anotado en g.retiros.
+function abrirRetiroGuia(id){
+  const g=DB.guias.find(x=>x.id===id);if(!g)return;
+  const lineas=(g.lineas||[]).filter(l=>l.cantidad>0);
+  if(!lineas.length)return toast('Esta guía ya no tiene libros para retirar','err');
+  const nombres=[...new Set([...colegioNombres(),...DB.guias.map(x=>x.cliente).filter(Boolean)])].sort();
+  const html=`
+    <div style="font-size:12px;margin-bottom:8px">Guía <b>${escH(g.numero)}</b> — <b>${escH(g.cliente)}</b>. Escribe cuántos libros retiras de cada título (0 = se queda en el colegio).</div>
+    <div class="fg"><label>¿A dónde van los libros?</label>
+      <label class="chk"><input type="radio" name="rt-dest" value="bodega" checked onchange="document.getElementById('rt-col-wrap').style.display='none'"> 🏠 Vuelven a bodega (para devolver a la editorial)</label>
+      <label class="chk"><input type="radio" name="rt-dest" value="colegio" onchange="document.getElementById('rt-col-wrap').style.display='block'"> 🏫 Pasan a otro colegio</label>
+    </div>
+    <div class="fg" id="rt-col-wrap" style="display:none"><label>Colegio que recibe los libros</label>
+      <input id="rt-col" list="rt-col-list" placeholder="Escribe o elige el colegio">
+      <datalist id="rt-col-list">${nombres.map(n=>`<option value="${escH(n)}">`).join('')}</datalist></div>
+    <div class="fg"><label>Fecha del retiro</label><input type="date" id="rt-fecha" value="${today()}"></div>
+    <div style="display:flex;gap:6px;margin:6px 0">
+      <button class="btn btn-s btn-sm" type="button" onclick="document.querySelectorAll('[data-rt]').forEach(i=>i.value=i.max)">Retirar todo</button>
+      <button class="btn btn-s btn-sm" type="button" onclick="document.querySelectorAll('[data-rt]').forEach(i=>i.value=0)">Todo en 0</button>
+    </div>
+    <div style="max-height:300px;overflow:auto"><table><thead><tr><th>Libro</th><th>Entregado</th><th>Retirar</th></tr></thead><tbody>
+      ${lineas.map((l,i)=>`<tr><td style="font-size:11px">${escH(l.nombre)}</td><td style="text-align:center">${l.cantidad}</td><td><input type="number" min="0" max="${l.cantidad}" value="${l.cantidad}" data-rt="${i}" style="width:70px"></td></tr>`).join('')}
+    </tbody></table></div>`;
+  abrirModalGenerico('↩ Retirar libros de '+g.numero,html,()=>guardarRetiroGuia(id),'Registrar retiro');
+}
+
+function guardarRetiroGuia(id){
+  const g=DB.guias.find(x=>x.id===id);if(!g)return;
+  const lineas=(g.lineas||[]).filter(l=>l.cantidad>0);
+  const dest=document.querySelector('input[name="rt-dest"]:checked')?.value||'bodega';
+  const colDest=(document.getElementById('rt-col')?.value||'').trim().toUpperCase();
+  const fecha=document.getElementById('rt-fecha')?.value||today();
+  if(dest==='colegio'&&!colDest)return alert('Escribe el colegio que recibe los libros y vuelve a intentar.');
+  if(dest==='colegio'&&colDest===String(g.cliente||'').trim().toUpperCase())return alert('El colegio que recibe es el mismo de la guía. Elige otro colegio.');
+  const sacar=[];
+  document.querySelectorAll('[data-rt]').forEach(inp=>{
+    const l=lineas[+inp.dataset.rt]; if(!l)return;
+    const n=Math.min(l.cantidad,Math.max(0,parseInt(inp.value)||0));
+    if(n>0)sacar.push({l,n});
+  });
+  if(!sacar.length)return alert('No pusiste ninguna cantidad para retirar.');
+  const totalU=sacar.reduce((a,x)=>a+x.n,0);
+  const destTxt=dest==='colegio'?'al colegio '+colDest+' (se hará una guía nueva)':'a BODEGA (el stock sube)';
+  if(!confirm(`Retirar ${totalU} libro(s) de ${g.cliente} (guía ${g.numero}) y pasarlos ${destTxt}.\n\n¿Continuar?`))return;
+
+  // 1) Bajar la guía original y lo que descontó del inventario
+  sacar.forEach(({l,n})=>{
+    l.cantidad-=n;
+    let resto=n;
+    DB.movInv.filter(m=>m.tipo==='salida'&&m.ref===g.numero&&m.prodId===l.prodId).forEach(m=>{
+      if(resto<=0)return;
+      const q=Math.min(resto,m.cantidad||0); m.cantidad-=q; resto-=q;
+    });
+  });
+  DB.movInv=DB.movInv.filter(m=>!(m.tipo==='salida'&&m.ref===g.numero&&!(m.cantidad>0)));
+  g.lineas=g.lineas.filter(l=>l.cantidad>0);
+  g.total=g.lineas.reduce((a,l)=>a+l.cantidad*(parseFloat(l.precioVenta)||0),0);
+
+  // 2) Si van a otro colegio: guía nueva para ese colegio
+  let nueva=null;
+  if(dest==='colegio'){
+    const maxN=DB.guias.reduce((mx,x)=>{const m=String(x.numero||'').match(/(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},0);
+    nueva={id:uid(),numero:'GR-'+String(maxN+1).padStart(3,'0'),fecha,cliente:colDest,factura:'',
+      observacion:`Libros retirados de ${g.cliente} (guía ${g.numero})`,
+      esMuestra:esGuiaMuestra(g),numControl:'',origen:g.numero,
+      lineas:sacar.map(({l,n})=>({prodId:l.prodId,nombre:l.nombre,cantidad:n,precioVenta:parseFloat(l.precioVenta)||0}))};
+    nueva.total=nueva.lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0);
+    DB.guias.push(nueva);
+    nueva.lineas.forEach(l=>DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha,ref:nueva.numero,cliente:colDest}));
+  }
+  (g.retiros=g.retiros||[]).push({fecha,destino:nueva?colDest:'BODEGA',guiaNueva:nueva?nueva.numero:'',
+    lineas:sacar.map(({l,n})=>({prodId:l.prodId,nombre:l.nombre,cantidad:n}))});
+  logHistorial('Libros retirados de guía',`${g.numero} ${g.cliente} — ${totalU} u. → ${nueva?colDest+' ('+nueva.numero+')':'BODEGA'}`);
+  save();renderGuias();renderCatalogo();renderStockReport();
+  let msg=`✅ Listo. Se retiraron ${totalU} libro(s) de ${g.cliente}.\n\n`;
+  msg+=nueva?`Se creó la guía ${nueva.numero} para ${colDest}.${nueva.esMuestra?' Es de muestras: ponle el N° de control con el lápiz ✏️.':''}`
+            :'Los libros ya están sumados en el stock de bodega. Cuando la editorial te dé la nota de crédito, regístrala como siempre.';
+  if(!esGuiaMuestra(g))msg+=`\n\nOJO: si ya anotaste esta venta en Colegios → Control de ventas de ${g.cliente}, ajusta ahí las cantidades.`;
+  alert(msg);
+}
+
 // Descarga un .xls de verdad (no CSV) para que Excel abra las columnas
 // separadas siempre, sin depender de la configuración regional de la PC.
 function bajarXLS(html,nombre){
@@ -5925,11 +6012,11 @@ function renderGuias(){
       <td style="font-family:monospace;font-weight:600">${g.numero}${esGuiaMuestra(g)?' <span title="No cuenta como venta" style="background:#ede7f6;color:#5e35b1;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">🔬 MUESTRA</span>':''}</td>
       <td style="font-family:monospace">${g.numControl?escH(g.numControl):(esGuiaMuestra(g)?'<span style="color:#c0392b;font-weight:700">falta</span>':'—')}</td>
       <td style="font-family:monospace">${g.fecha}</td>
-      <td>${g.cliente}</td>
-      <td style="max-width:180px;font-size:11px">${prods}</td>
+      <td>${g.cliente}${(g.retiros||[]).map(r=>`<div style="font-size:10px;color:#e65100;font-weight:600">↩ ${r.lineas.reduce((a,l)=>a+l.cantidad,0)} u. retiradas ${r.fecha} → ${escH(r.destino)}${r.guiaNueva?' ('+escH(r.guiaNueva)+')':''}</div>`).join('')}${g.origen?`<div style="font-size:10px;color:#1565c0;font-weight:600">↪ vienen de la guía ${escH(g.origen)}</div>`:''}</td>
+      <td style="max-width:180px;font-size:11px">${prods||'<i style="color:var(--mu)">todo retirado</i>'}</td>
       <td>${totalUnd}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(g.total)}</td>
-      <td style="display:flex;gap:4px;align-items:center"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button>${btnEditar}<button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
+      <td style="display:flex;gap:4px;align-items:center"><button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')"><i class="ti ti-eye"></i></button>${btnEditar}<button class="btn btn-b btn-sm" onclick="imprimirGuia('${g.id}')" title="Imprimir Nota de Entrega"><i class="ti ti-printer"></i></button><button class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80" onclick="abrirRetiroGuia('${g.id}')" title="Retirar libros: vuelven a bodega o pasan a otro colegio"><i class="ti ti-arrow-back-up"></i></button><button class="btn btn-d btn-sm" onclick="eliminarGuia('${g.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`;
   }).join('');
   tb.innerHTML=rows+`<tr class="total-row" style="background:var(--g3)"><td colspan="4" style="text-align:right;font-weight:700">TOTAL ${guias.length} GUÍAS:</td><td style="font-weight:700;color:var(--r1)">${totalUnidadesAll} und</td><td style="font-family:monospace;font-weight:700;color:var(--g1)">${fmt(totalValorAll)}</td><td></td></tr>`;
@@ -5954,7 +6041,9 @@ function verGuia(id){
     </div>
     ${g.observacion?`<div style="font-size:12px;color:var(--mu);margin-bottom:10px">${g.observacion}</div>`:''}
     ${ventaL.length?`<div style="font-weight:700;margin-bottom:6px">📗 Para venta</div>${tabla(ventaL,true)}`:''}
-    ${otrasL.length?`<div style="font-weight:700;margin:${ventaL.length?'16px':'0'} 0 6px">📘 Solucionarios / muestras (no se venden, solo revisión)</div>${tabla(otrasL,!ventaL.length)}`:''}`;
+    ${otrasL.length?`<div style="font-weight:700;margin:${ventaL.length?'16px':'0'} 0 6px">📘 Solucionarios / muestras (no se venden, solo revisión)</div>${tabla(otrasL,!ventaL.length)}`:''}
+    ${(g.retiros||[]).map(r=>`<div style="font-weight:700;margin:16px 0 6px;color:#e65100">↩ Retirado el ${escH(r.fecha)} → ${escH(r.destino)}${r.guiaNueva?' (guía '+escH(r.guiaNueva)+')':''}</div>
+      <table><thead><tr><th>Producto</th><th>Cantidad retirada</th></tr></thead><tbody>${r.lineas.map(l=>`<tr><td>${escH(l.nombre)}</td><td>${l.cantidad}</td></tr>`).join('')}</tbody></table>`).join('')}`;
   abrirModal('modal-guia-det');
 }
 
