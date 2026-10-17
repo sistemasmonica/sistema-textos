@@ -339,6 +339,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt" id="col-tab-precios" onclick="colTab('precios',this)">💲 Lista de precios</button>
     <button class="nt" id="col-tab-lpdidactica" onclick="colTab('lpdidactica',this)">📘 Precios Didáctica</button>
     <button class="nt" id="col-tab-lpingles" onclick="colTab('lpingles',this)">🔤 Precios Inglés</button>
+    <button class="nt" id="col-tab-muestras" onclick="colTab('muestras',this)">🔬 Control de muestras</button>
     <button class="nt" id="col-tab-fin" onclick="colTab('fin',this)">📊 Financiero</button>
     <button class="nt" id="col-tab-res" onclick="colTab('res',this)">📈 Resumen general</button>
   </div>
@@ -364,6 +365,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
   <div id="col-pn-lpingles" class="col-pn" style="display:none">
     <div id="col-lpingles-body"></div>
+  </div>
+
+  <!-- CONTROL DE MUESTRAS (todas las guías de muestras, por colegio) -->
+  <div id="col-pn-muestras" class="col-pn" style="display:none">
+    <div id="col-muestras-body"></div>
   </div>
 
   <!-- FINANCIERO -->
@@ -5413,7 +5419,7 @@ function guardarRetiroGuia(id){
   (g.retiros=g.retiros||[]).push({fecha,destino:nueva?colDest:'BODEGA',guiaNueva:nueva?nueva.numero:'',
     lineas:sacar.map(({l,n})=>({prodId:l.prodId,nombre:l.nombre,cantidad:n}))});
   logHistorial('Libros retirados de guía',`${g.numero} ${g.cliente} — ${totalU} u. → ${nueva?colDest+' ('+nueva.numero+')':'BODEGA'}`);
-  save();renderGuias();renderCatalogo();renderStockReport();
+  save();renderGuias();renderCatalogo();renderStockReport();renderMuestrasCol();
   let msg=`✅ Listo. Se retiraron ${totalU} libro(s) de ${g.cliente}.\n\n`;
   msg+=nueva?`Se creó la guía ${nueva.numero} para ${colDest}.${nueva.esMuestra?' Es de muestras: ponle el N° de control con el lápiz ✏️.':''}`
             :'Los libros ya están sumados en el stock de bodega. Cuando la editorial te dé la nota de crédito, regístrala como siempre.';
@@ -8738,8 +8744,95 @@ function renderColViews(){
   else if(id==='precios') renderPreciosCol();
   else if(id==='lpdidactica') renderListaRef('didactica');
   else if(id==='lpingles') renderListaRef('ingles');
+  else if(id==='muestras') renderMuestrasCol();
   else if(id==='fin') renderFin();
   else if(id==='res') renderColResumen();
+}
+
+// ── CONTROL DE MUESTRAS ─────────────────────────────────────────────────────
+// Una fila por colegio que recibió muestras (sale de las guías marcadas MUESTRA,
+// esté o no en Control de ventas). Muestra cuántos libros siguen en el colegio,
+// cuántos se retiraron a bodega o a otro colegio (g.retiros) y el estado:
+// ¿trabaja con nosotros? El estado se guarda en cada guía (g.estadoMuestra)
+// para no crear otra lista aparte. Si el colegio tiene Control de ventas y nadie
+// eligió estado, se asume "Trabaja con nosotros".
+const ESTADOS_MUESTRA={
+  espera:'⏳ Esperando respuesta',
+  si:'✅ Trabaja con nosotros',
+  no:'❌ No trabaja con nosotros'
+};
+function gruposMuestras(){
+  const grupos={};
+  DB.guias.filter(esGuiaMuestra).forEach(g=>{
+    const k=String(g.cliente||'(sin nombre)').trim().toUpperCase();
+    (grupos[k]=grupos[k]||{nombre:k,guias:[]}).guias.push(g);
+  });
+  const conVentas=colegioNombres();
+  return Object.values(grupos).map(c=>{
+    const u=gs=>gs.reduce((a,l)=>a+(l.cantidad||0),0);
+    c.quedan=c.guias.reduce((a,g)=>a+u(g.lineas||[]),0);
+    c.aBodega=0;c.aOtros=0;c.destinos=[];
+    c.guias.forEach(g=>(g.retiros||[]).forEach(r=>{
+      const n=u(r.lineas||[]);
+      if(r.destino==='BODEGA')c.aBodega+=n;
+      else{c.aOtros+=n;c.destinos.push(r.destino+(r.guiaNueva?' ('+r.guiaNueva+')':''));}
+    }));
+    c.recibidas=c.guias.filter(g=>g.origen).map(g=>g.origen);
+    c.tieneVentas=conVentas.some(n=>_coincideColegio(c.nombre,n));
+    const manual=c.guias.map(g=>g.estadoMuestra).find(Boolean);
+    c.estado=manual||(c.tieneVentas?'si':'espera');
+    return c;
+  }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+}
+function cambiarEstadoMuestra(nombre,estado){
+  DB.guias.filter(esGuiaMuestra).forEach(g=>{
+    if(String(g.cliente||'(sin nombre)').trim().toUpperCase()===nombre)g.estadoMuestra=estado;
+  });
+  logHistorial('Estado de muestras',nombre+' → '+(ESTADOS_MUESTRA[estado]||estado));
+  save();renderMuestrasCol();
+}
+function renderMuestrasCol(){
+  const box=document.getElementById('col-muestras-body');if(!box)return;
+  const q=(document.getElementById('mu-q')?.value||'').toUpperCase();
+  const fe=document.getElementById('mu-est')?.value||'';
+  const todos=gruposMuestras();
+  const lista=todos.filter(c=>(!q||c.nombre.includes(q))&&(!fe||c.estado===fe));
+  const cuenta=e=>todos.filter(c=>c.estado===e).length;
+  const librosNo=todos.filter(c=>c.estado==='no').reduce((a,c)=>a+c.quedan,0);
+  const card=(lbl,val,col)=>`<div class="sc"><div class="sc-lbl">${lbl}</div><div class="sc-val" style="color:${col}">${val}</div></div>`;
+  box.innerHTML=`
+    <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      ${card('Colegios con muestras',todos.length,'#5e35b1')}
+      ${card('⏳ Esperando respuesta',cuenta('espera'),'#b45309')}
+      ${card('✅ Trabajan con nosotros',cuenta('si'),'#166534')}
+      ${card('❌ No trabajan',cuenta('no'),'#991b1b')}
+      ${card('Libros por retirar (de los que no trabajan)',librosNo,'#e65100')}
+    </div>
+    <div style="font-size:12px;color:var(--mu);margin:8px 0">Aquí están <b>todos</b> los colegios a los que les dejaste muestras, aunque no estén en Control de ventas. Si un colegio no va a trabajar con ustedes, márcalo <b>❌</b> y usa el botón naranja <b>↩</b> para retirar los libros: vuelven a bodega (para la nota de crédito) o pasan a otro colegio.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input type="search" id="mu-q" placeholder="Buscar colegio..." value="${escH(q)}" oninput="renderMuestrasCol()" style="min-width:180px">
+      <select id="mu-est" onchange="renderMuestrasCol()">
+        <option value="">Todos los estados</option>
+        ${Object.entries(ESTADOS_MUESTRA).map(([k,v])=>`<option value="${k}" ${fe===k?'selected':''}>${v}</option>`).join('')}
+      </select>
+    </div>
+    <div style="overflow:auto"><table>
+      <thead><tr><th>Colegio</th><th>Guías / N° control</th><th>Siguen en el colegio</th><th>Retirados</th><th>Estado</th></tr></thead>
+      <tbody>${lista.length?lista.map(c=>`<tr>
+        <td style="font-weight:600">${escH(c.nombre)}${c.tieneVentas?'<div style="font-size:10px;color:#166534">tiene Control de ventas</div>':''}${c.recibidas.length?`<div style="font-size:10px;color:#1565c0">↪ recibió libros de ${c.recibidas.map(escH).join(', ')}</div>`:''}</td>
+        <td style="font-size:11px">${c.guias.map(g=>`<div style="display:flex;gap:4px;align-items:center;margin:2px 0">
+          <span style="font-family:monospace">${escH(g.numero)}</span> · ${escH(g.fecha||'')} · control ${g.numControl?escH(g.numControl):'<span style="color:#c0392b">falta</span>'} · ${(g.lineas||[]).reduce((a,l)=>a+l.cantidad,0)} u.
+          <button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')" title="Ver libros"><i class="ti ti-eye"></i></button>
+          ${(g.lineas||[]).length?`<button class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80" onclick="abrirRetiroGuia('${g.id}')" title="Retirar libros"><i class="ti ti-arrow-back-up"></i></button>`:''}
+        </div>`).join('')}</td>
+        <td style="text-align:center;font-weight:700">${c.quedan}</td>
+        <td style="font-size:11px">${c.aBodega?`🏠 ${c.aBodega} a bodega<br>`:''}${c.aOtros?`🏫 ${c.aOtros} → ${c.destinos.map(escH).join(', ')}`:''}${!c.aBodega&&!c.aOtros?'—':''}</td>
+        <td><select onchange="cambiarEstadoMuestra('${escH(c.nombre).replace(/'/g,"\\'")}',this.value)" style="font-size:12px;background:${c.estado==='no'?'#fef2f2':c.estado==='si'?'#f0fdf4':'#fffbeb'}">
+          ${Object.entries(ESTADOS_MUESTRA).map(([k,v])=>`<option value="${k}" ${c.estado===k?'selected':''}>${v}</option>`).join('')}
+        </select></td>
+      </tr>`).join(''):'<tr><td colspan="5"><div class="empty">Sin colegios en este filtro</div></td></tr>'}</tbody>
+    </table></div>`;
+  const qi=document.getElementById('mu-q');if(q&&qi){qi.focus();qi.setSelectionRange(q.length,q.length);}
 }
 
 // ── COMISIÓN POR MATERIA ────────────────────────────────────────────────────
