@@ -8759,7 +8759,8 @@ function renderColViews(){
 const ESTADOS_MUESTRA={
   espera:'⏳ Esperando respuesta',
   si:'✅ Trabaja con nosotros',
-  no:'❌ No trabaja con nosotros'
+  no:'📦 No trabaja — falta por retirar',
+  retirado:'↩ No trabaja — ya retirado'
 };
 function gruposMuestras(){
   const grupos={};
@@ -8771,6 +8772,9 @@ function gruposMuestras(){
   return Object.values(grupos).map(c=>{
     const u=gs=>gs.reduce((a,l)=>a+(l.cantidad||0),0);
     c.quedan=c.guias.reduce((a,g)=>a+u(g.lineas||[]),0);
+    // Costo de editorial de lo que sigue en el colegio: plata que se le debe a la
+    // editorial y que baja con nota de crédito si esos libros se le devuelven.
+    c.valor=c.guias.reduce((a,g)=>a+(g.lineas||[]).reduce((s,l)=>s+(l.cantidad||0)*(parseFloat(DB.productos.find(p=>p.id===l.prodId)?.precioCosto)||0),0),0);
     c.aBodega=0;c.aOtros=0;c.destinos=[];
     c.guias.forEach(g=>(g.retiros||[]).forEach(r=>{
       const n=u(r.lineas||[]);
@@ -8781,6 +8785,8 @@ function gruposMuestras(){
     c.tieneVentas=conVentas.some(n=>_coincideColegio(c.nombre,n));
     const manual=c.guias.map(g=>g.estadoMuestra).find(Boolean);
     c.estado=manual||(c.tieneVentas?'si':'espera');
+    // "Falta por retirar" pasa solo a "Ya retirado" cuando ya no queda ningún libro allá
+    if(c.estado==='no'&&c.quedan===0&&(c.aBodega||c.aOtros))c.estado='retirado';
     return c;
   }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
 }
@@ -8799,16 +8805,23 @@ function renderMuestrasCol(){
   const lista=todos.filter(c=>(!q||c.nombre.includes(q))&&(!fe||c.estado===fe));
   const cuenta=e=>todos.filter(c=>c.estado===e).length;
   const librosNo=todos.filter(c=>c.estado==='no').reduce((a,c)=>a+c.quedan,0);
+  const valorDe=e=>todos.filter(c=>!e||c.estado===e).reduce((a,c)=>a+c.valor,0);
   const card=(lbl,val,col)=>`<div class="sc"><div class="sc-lbl">${lbl}</div><div class="sc-val" style="color:${col}">${val}</div></div>`;
   box.innerHTML=`
     <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
       ${card('Colegios con muestras',todos.length,'#5e35b1')}
       ${card('⏳ Esperando respuesta',cuenta('espera'),'#b45309')}
       ${card('✅ Trabajan con nosotros',cuenta('si'),'#166534')}
-      ${card('❌ No trabajan',cuenta('no'),'#991b1b')}
-      ${card('Libros por retirar (de los que no trabajan)',librosNo,'#e65100')}
+      ${card('📦 Falta por retirar',cuenta('no'),'#991b1b')}
+      ${card('↩ Ya retirados',cuenta('retirado'),'#475569')}
+      ${card('Libros que faltan por retirar',librosNo,'#e65100')}
     </div>
-    <div style="font-size:12px;color:var(--mu);margin:8px 0">Aquí están <b>todos</b> los colegios a los que les dejaste muestras, aunque no estén en Control de ventas. Si un colegio no va a trabajar con ustedes, márcalo <b>❌</b> y usa el botón naranja <b>↩</b> para retirar los libros: vuelven a bodega (para la nota de crédito) o pasan a otro colegio.</div>
+    <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:8px">
+      ${card('💰 Muestras en todos los colegios (costo editorial)',fmt(valorDe('')),'#5e35b1')}
+      ${card('⏳ En colegios que aún no responden',fmt(valorDe('espera')),'#b45309')}
+      ${card('↩ Por retirar y devolver a la editorial (nota de crédito)',fmt(valorDe('no')),'#991b1b')}
+    </div>
+    <div style="font-size:12px;color:var(--mu);margin:8px 0">Cada muestra es un libro que la editorial te facturó: <b>mientras siga en un colegio que no compra, es deuda sin venta</b>. Si un colegio no va a trabajar con ustedes, márcalo <b>📦 Falta por retirar</b>. Cuando vayas por los libros, usa el botón naranja <b>↩</b>: vuelven a bodega y, con la nota de crédito de la editorial, baja tu deuda (o pásalos a otro colegio que los necesite). Al retirar todo, el estado cambia solo a <b>↩ Ya retirado</b>.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <input type="search" id="mu-q" placeholder="Buscar colegio..." value="${escH(q)}" oninput="renderMuestrasCol()" style="min-width:180px">
       <select id="mu-est" onchange="renderMuestrasCol()">
@@ -8817,7 +8830,7 @@ function renderMuestrasCol(){
       </select>
     </div>
     <div style="overflow:auto"><table>
-      <thead><tr><th>Colegio</th><th>Guías / N° control</th><th>Siguen en el colegio</th><th>Retirados</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Colegio</th><th>Guías / N° control</th><th>Siguen en el colegio</th><th>Valor (costo)</th><th>Retirados</th><th>Estado</th></tr></thead>
       <tbody>${lista.length?lista.map(c=>`<tr>
         <td style="font-weight:600">${escH(c.nombre)}${c.tieneVentas?'<div style="font-size:10px;color:#166534">tiene Control de ventas</div>':''}${c.recibidas.length?`<div style="font-size:10px;color:#1565c0">↪ recibió libros de ${c.recibidas.map(escH).join(', ')}</div>`:''}</td>
         <td style="font-size:11px">${c.guias.map(g=>`<div style="display:flex;gap:4px;align-items:center;margin:2px 0">
@@ -8826,11 +8839,12 @@ function renderMuestrasCol(){
           ${(g.lineas||[]).length?`<button class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80" onclick="abrirRetiroGuia('${g.id}')" title="Retirar libros"><i class="ti ti-arrow-back-up"></i></button>`:''}
         </div>`).join('')}</td>
         <td style="text-align:center;font-weight:700">${c.quedan}</td>
+        <td style="text-align:right;font-family:monospace">${fmt(c.valor)}</td>
         <td style="font-size:11px">${c.aBodega?`🏠 ${c.aBodega} a bodega<br>`:''}${c.aOtros?`🏫 ${c.aOtros} → ${c.destinos.map(escH).join(', ')}`:''}${!c.aBodega&&!c.aOtros?'—':''}</td>
-        <td><select onchange="cambiarEstadoMuestra('${escH(c.nombre).replace(/'/g,"\\'")}',this.value)" style="font-size:12px;background:${c.estado==='no'?'#fef2f2':c.estado==='si'?'#f0fdf4':'#fffbeb'}">
+        <td><select onchange="cambiarEstadoMuestra('${escH(c.nombre).replace(/'/g,"\\'")}',this.value)" style="font-size:12px;background:${c.estado==='no'?'#fef2f2':c.estado==='si'?'#f0fdf4':c.estado==='retirado'?'#f1f5f9':'#fffbeb'}">
           ${Object.entries(ESTADOS_MUESTRA).map(([k,v])=>`<option value="${k}" ${c.estado===k?'selected':''}>${v}</option>`).join('')}
-        </select></td>
-      </tr>`).join(''):'<tr><td colspan="5"><div class="empty">Sin colegios en este filtro</div></td></tr>'}</tbody>
+        </select>${c.estado==='retirado'&&c.quedan>0?`<div style="font-size:10px;color:#c0392b;margin-top:3px">Aún quedan ${c.quedan} libro(s) en el sistema: regístralos con el botón ↩</div>`:''}</td>
+      </tr>`).join(''):'<tr><td colspan="6"><div class="empty">Sin colegios en este filtro</div></td></tr>'}</tbody>
     </table></div>`;
   const qi=document.getElementById('mu-q');if(q&&qi){qi.focus();qi.setSelectionRange(q.length,q.length);}
 }
