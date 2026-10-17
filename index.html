@@ -586,6 +586,16 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirEntradas()"><i class="ti ti-printer"></i> Imprimir reporte</button>
       </div>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <label style="font-size:12px;font-weight:600">Ver editorial:</label>
+      <select id="ent-ed-fil" onchange="renderEntradas()" style="padding:5px 8px;border:2px solid #1565c0;border-radius:6px;font-size:12px;font-weight:600;color:#1565c0">
+        <option value="">📚 Todas</option>
+        <option value="Didáctica">📘 Didáctica</option>
+        <option value="Tech Books">🔤 Tech Books</option>
+        <option value="Otras">📦 Otras (devoluciones, muestras…)</option>
+      </select>
+      <div id="ent-ed-resumen" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Fecha</th><th>Factura</th><th>Editorial</th><th>Productos</th><th>Total unidades</th><th>Valor total</th><th>Factura de la editorial</th><th></th></tr></thead>
@@ -3688,15 +3698,33 @@ function limpiarEntrada(){
   editLineasEntrada=0;
 }
 
+// Editorial de una entrada de inventario, según el proveedor con que se ingresó.
+function editorialEntrada(m){return grupoEditorial(m.proveedor)||'Otras';}
+function entradaPasaFiltro(m){
+  const f=document.getElementById('ent-ed-fil')?.value||'';
+  return !f||editorialEntrada(m)===f;
+}
+// Totales por editorial (siempre de TODAS las entradas, no del filtro).
+function renderResumenEntradasEd(){
+  const el=document.getElementById('ent-ed-resumen');if(!el)return;
+  const t={};
+  DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{
+    const k=editorialEntrada(m);t[k]=t[k]||{u:0,v:0};
+    t[k].u+=parseFloat(m.cantidad)||0;t[k].v+=(parseFloat(m.cantidad)||0)*(parseFloat(m.precioCosto)||0);
+  });
+  const col={'Didáctica':'#1565c0','Tech Books':'#6a1b9a','Otras':'#6b7280'};
+  el.innerHTML=['Didáctica','Tech Books','Otras'].filter(k=>t[k]).map(k=>`<span style="border:1px solid ${col[k]};color:${col[k]};border-radius:14px;padding:3px 10px;font-size:11px;font-weight:600">${k}: ${t[k].u} u · ${fmt(t[k].v)}</span>`).join('');
+}
 function renderEntradas(){
   // Agrupar movInv tipo entrada por ref+proveedor+fecha
   const grupos={};
-  DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&entradaPasaFiltro(m)).forEach(m=>{
     const key=m.ref+'|'+m.proveedor+'|'+m.fecha;
     if(!grupos[key])grupos[key]={fecha:m.fecha,ref:m.ref,prov:m.proveedor,lineas:[]};
     const prod=DB.productos.find(p=>p.id===m.prodId);
     grupos[key].lineas.push({nom:prod?.nombre||'N/A',cant:m.cantidad,costo:m.precioCosto});
   });
+  renderResumenEntradasEd();
   poblarTraerFactura();
   const tb=document.getElementById('tb-entradas');
   const arr=Object.values(grupos).sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -5344,7 +5372,7 @@ function xlsFecha(f){
 }
 
 function exportarEntradasCSV(){
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada');
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&entradaPasaFiltro(m));
   if(!entradas.length)return toast('No hay entradas registradas','err');
 
   // Agrupar por guía de entrada (factura + editorial + fecha)
@@ -5437,7 +5465,7 @@ function exportarEntradasCSV(){
 }
 
 function imprimirEntradas(){
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada');
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&entradaPasaFiltro(m));
   if(!entradas.length)return toast('No hay entradas registradas','err');
   const grupos={};
   entradas.forEach(m=>{
@@ -10970,6 +10998,8 @@ function resumenNegocio(){
   (DB.notasCredito||[]).forEach(n=>{E(grupoEditorial(n.editorial)||n.editorial||'Didáctica').notas+=parseFloat(n.total)||0;});
   (DB.pagos||[]).filter(p=>p.tipo==='pago').forEach(p=>{
     const g=grupoEditorial(p.nombre)||grupoEditorial(p.nota);if(!g)return;
+    // Préstamos (ej. el personal de $2,000 del 06/10) no son pago de libros.
+    if(/PR[EÉ]STAMO/i.test((p.nombre||"")+" "+(p.nota||"")))return;
     E(g).pagado+=parseFloat(p.valor)||0;E(g).pagos.push(p);
   });
   Object.keys(ed).forEach(n=>{
@@ -11021,7 +11051,7 @@ function renderResumenNegocio(){
         <b>Vendí</b>: Control de ventas de todos los colegios (entregados − devueltos) × precio, menos la comisión de cada colegio.<br>
         <b>Me pagaron</b>: Pagos → <b>Cobros</b> de cada colegio (igual que Por Cobrar). Los cobros de clientes que no son colegio salen aparte en "Otros clientes" y solo suman en la plata del negocio.<br>
         <b>Me facturaron</b>: facturas de la editorial (XML o Manual, categoría Textos escolares). <b>Notas de crédito</b>: Editorial → Notas de crédito.<br>
-        <b>Ya pagué</b>: Pagos → <b>Pagos</b> a nombre de la editorial:
+        <b>Ya pagué</b>: Pagos → <b>Pagos</b> a nombre de la editorial (no cuentan los que dicen "préstamo"):
         ${pagosEd.length?'<ul style="margin:4px 0 0 16px;padding:0">'+pagosEd.map(({n,p})=>`<li>${escH(String(p.fecha||'').split('-').reverse().join('/'))} — ${escH(n)} — $${(parseFloat(p.valor)||0).toFixed(2)} ${p.nota?'<span style="color:#888">('+escH(p.nota)+')</span>':''}</li>`).join('')+'</ul>':' (ninguno todavía)<br>'}
         <b>Gano</b>: lo mismo que "TE QUEDA" de cada colegio, sumado.
       </div>
