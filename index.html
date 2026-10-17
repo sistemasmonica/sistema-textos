@@ -2488,6 +2488,15 @@ function parseXML(txt){
     });
 
     const result={fecha,rs:rs.trim()||'Desconocido',ruc,sub:parseFloat((sub||0).toFixed(2)),iva:parseFloat((iva||0).toFixed(2)),total:parseFloat((total||0).toFixed(2)),num,detalles};
+    // NOTA DE CRÉDITO (codDoc 04): no es una compra, RESTA de lo que se le debe a
+    // la editorial. Su valor viene en valorModificacion.
+    if(doc.querySelector('notaCredito')||gIn(infoTrib,'codDoc')==='04'){
+      result.esNC=true;
+      const vm=parseFloat(g('valorModificacion'))||0;
+      if(vm)result.total=parseFloat(vm.toFixed(2));
+      result.docModificado=g('numDocModificado');
+      result.motivo=g('motivo');
+    }
     if(result.total===0&&result.sub===0&&result.rs==='Desconocido')return null;
     return result;
   }catch(e){console.error('parseXML:',e);return null}
@@ -2655,7 +2664,7 @@ function removeQ(idx){xmlQueue[idx].saved=true;renderQueue()}
 document.getElementById('fi').addEventListener('change',function(e){
   Array.from(e.target.files).forEach(f=>{
     const r=new FileReader();
-    r.onload=ev=>{const d=parseXML(ev.target.result);if(d)addToQueue(d);else toast('No se pudo leer: '+f.name,'err')};
+    r.onload=ev=>{const d=parseXML(ev.target.result);if(d)(d.esNC?registrarNCdesdeXML(d):addToQueue(d));else toast('No se pudo leer: '+f.name,'err')};
     r.readAsText(f,'UTF-8');
   });
   this.value='';
@@ -2667,7 +2676,7 @@ dz.addEventListener('drop',e=>{
   e.preventDefault();dz.classList.remove('drag');
   Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.xml')).forEach(f=>{
     const r=new FileReader();
-    r.onload=ev=>{const d=parseXML(ev.target.result);if(d)addToQueue(d);else toast('No se pudo leer: '+f.name,'err')};
+    r.onload=ev=>{const d=parseXML(ev.target.result);if(d)(d.esNC?registrarNCdesdeXML(d):addToQueue(d));else toast('No se pudo leer: '+f.name,'err')};
     r.readAsText(f,'UTF-8');
   });
 });
@@ -2708,7 +2717,7 @@ async function procesarCorreoQueue(){
     for(const row of data){
       const d=parseXML(row.xml_content);
       if(d){
-        addToQueue(d);
+        if(d.esNC)registrarNCdesdeXML(d);else addToQueue(d);
         await nubeRpc('txe_xml_marcar',{p_id:String(row.id)});
         ok++;
       }
@@ -11128,7 +11137,7 @@ function renderDeudaEditorial(){
           ?`<button class="btn btn-s btn-sm" onclick="togglePagadaEditorial('${r.id}',false)" title="Deshacer pago"><i class="ti ti-rotate-left"></i></button>`
           :`<button class="btn btn-p btn-sm" onclick="togglePagadaEditorial('${r.id}',true)"><i class="ti ti-check"></i> Pagar</button>`)
         :`<button class="btn btn-s btn-sm" onclick="reclasificarATextos('${r.id}')" title="Clasificar esta factura como Textos escolares para que cuente en la deuda editorial">→ Textos</button>`;
-      const acciones=`<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">${accPrincipal}<button class="btn btn-d btn-sm" title="Eliminar esta factura (por ejemplo si quedó duplicada)" onclick="eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></div>`;
+      const acciones=`<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">${accPrincipal}${esEd?`<button class="btn btn-s btn-sm" style="font-size:10px" title="Si este documento en realidad es una NOTA DE CRÉDITO que se cargó como factura: pasarla a Notas de crédito (resta en vez de sumar)" onclick="convertirFacturaEnNC('${r.id}')">Es nota de crédito</button>`:''}<button class="btn btn-d btn-sm" title="Eliminar esta factura (por ejemplo si quedó duplicada)" onclick="eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></div>`;
       return`<tr${esEd?'':' style="background:#fffdf5"'}>
         <td>${escH(r.fecha||'-')}</td><td>${escH(r.proveedor||'-')}</td><td><span class="chip">${escH(r.numFact||'-')}</span></td>
         <td>${origen}</td>
@@ -11355,6 +11364,59 @@ function saveNC(){
   document.getElementById('nc-resumen').style.display='none';
   ncTotalAuto=0;
   toast('Nota de crédito guardada'+(lineas.length?' y stock actualizado':''));
+}
+
+// Nota de crédito que llega en XML: se guarda en Editorial → Notas de crédito
+// (resta la deuda con la editorial). Opcional: restar del inventario los libros
+// que trae, si ya salieron de la bodega hacia la editorial.
+function registrarNCdesdeXML(d,sinPreguntar){
+  const dg=x=>String(x||'').replace(/\D/g,'');
+  DB.notasCredito=DB.notasCredito||[];
+  if(d.num&&DB.notasCredito.some(n=>dg(n.num)===dg(d.num)&&grupoEditorial(n.editorial)===grupoEditorial(d.rs))){
+    toast('La nota de crédito '+d.num+' ya estaba registrada','info');return false;
+  }
+  const unidades=(d.detalles||[]).reduce((a,x)=>a+(parseInt(x.cant)||0),0);
+  if(!sinPreguntar&&!confirm('Este archivo es una NOTA DE CRÉDITO (no una factura):\n\n'+d.rs+'\nN° '+(d.num||'s/n')+' — $'+d.total.toFixed(2)+
+     (d.docModificado?'\nCorrige la factura '+d.docModificado:'')+(unidades?'\nTrae '+unidades+' libro(s) devuelto(s)':'')+
+     '\n\nSe registra en Editorial → Notas de crédito y RESTA de lo que le debe a la editorial.\n\n¿Registrarla?'))return false;
+  const id=uid();
+  const nc={id,fecha:d.fecha||today(),editorial:d.rs||'',num:d.num||'',total:d.total||0,
+    nota:'Desde XML'+(d.docModificado?' · corrige factura '+d.docModificado:'')+(d.motivo&&d.motivo!=='NOTA DE CREDITO'?' · '+d.motivo:''),
+    lineas:[],origen:'xml',detalles:d.detalles||[]};
+  let sinProducto=0;
+  if(unidades&&confirm('¿Los '+unidades+' libro(s) de la nota de crédito '+(d.num||'')+' ya SALIERON de su bodega hacia la editorial?\n\nAceptar = restarlos del inventario.\nCancelar = no tocar el inventario (solo se resta el dinero).')){
+    (d.detalles||[]).forEach(det=>{
+      const desc=String(det.desc||'').replace(/\s*\*+\s*$/,'').trim();
+      const cant=parseInt(det.cant)||0;if(!desc||!cant)return;
+      const prod=matchProductoPorNombre(desc,d.rs);
+      if(!prod){sinProducto+=cant;return;}
+      nc.lineas.push({prodId:prod.id,nombre:prod.nombre,editorial:prod.editorial||'',cantidad:cant});
+      DB.movInv.push({id:uid(),tipo:'salida',prodId:prod.id,cantidad:cant,fecha:nc.fecha,ref:'NC-'+id,cliente:'Devolución a '+nc.editorial});
+    });
+  }
+  DB.notasCredito.push(nc);
+  logHistorial('Nota de crédito desde XML',nc.editorial+' — N° '+nc.num+' — $'+nc.total.toFixed(2)+(nc.lineas.length?' — '+nc.lineas.reduce((a,l)=>a+l.cantidad,0)+' u. restadas del inventario':''));
+  save();
+  [renderNotasCredito,renderDeudaEditorial,renderDash,renderCatalogo,renderStockReport].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});
+  toast('Nota de crédito '+nc.num+' registrada ($'+nc.total.toFixed(2)+')'+(sinProducto?' · '+sinProducto+' u. no se encontraron en el catálogo':''),'ok');
+  if(sinProducto)alert(sinProducto+' libro(s) de la nota de crédito no se encontraron en el catálogo y NO se restaron del inventario. Revíselos en Inventario.');
+  return true;
+}
+// Una nota de crédito que se cargó por error como FACTURA: se quita de facturas
+// (y su entrada de inventario, si se hizo) y se registra como nota de crédito.
+function convertirFacturaEnNC(regId){
+  const r=DB.regs.find(x=>x.id===regId);if(!r)return;
+  const dg=x=>String(x||'').replace(/\D/g,'');
+  const ent=DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref&&dg(m.ref)===dg(r.numFact));
+  const uEnt=ent.reduce((a,m)=>a+(parseInt(m.cantidad)||0),0);
+  if(!confirm('¿Este documento es una NOTA DE CRÉDITO que se cargó como factura?\n\n'+(r.proveedor||'')+'\nN° '+(r.numFact||'s/n')+' — $'+(parseFloat(r.total)||0).toFixed(2)+
+     '\n\nSe quita de las facturas y se registra en Notas de crédito (resta en vez de sumar).'+
+     (uEnt?'\n\nOJO: al cargarla como factura se SUMARON '+uEnt+' libro(s) al inventario. Esa entrada se quita.':'')))return;
+  DB.movInv=DB.movInv.filter(m=>!ent.includes(m));
+  DB.regs=DB.regs.filter(x=>x!==r);
+  logHistorial('Factura convertida en nota de crédito',(r.proveedor||'')+' — N° '+(r.numFact||'')+' — $'+(parseFloat(r.total)||0).toFixed(2)+(uEnt?' — se quitó entrada de '+uEnt+' u.':''));
+  const ok=registrarNCdesdeXML({rs:r.proveedor,num:r.numFact,fecha:r.fecha,total:parseFloat(r.total)||0,detalles:r.detalles||[],docModificado:'',motivo:''},true);
+  if(!ok){save();[renderDeudaEditorial,renderDash,renderStockReport].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});}
 }
 
 function delNC(id){
