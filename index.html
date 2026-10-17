@@ -11045,12 +11045,14 @@ function resumenNegocio(){
     const x=ed[n];
     if(!x.facturado&&costoVend[n]){x.sinFacturas=true;x.facturado=costoVend[n];}  // sin facturas con valor: lo que se le debe por lo vendido
     x.debe=x.facturado-x.notas-x.pagado;
+    x.porDevolver=Math.max(0,x.facturado-x.notas-(costoVend[n]||0));
+    x.debeFinal=x.debe-x.porDevolver;
     if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
   });
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
   return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
-    caja:cobrado+cobradoOtros-tot('pagado')};
+    caja:cobrado+cobradoOtros-tot('pagado'),porDevolver:tot('porDevolver')};
 }
 function resumenNegocioHTML(R){
   const m=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -11077,7 +11079,9 @@ function resumenNegocioHTML(R){
       ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: libros vendidos × su precio — Wonder $15, Limitless $17, Robótica $13)</span>':''),D.facturado,T.facturado)}
       ${f3('(−) Notas de crédito',D.notas,T.notas)}
       ${f3('(−) Ya le pagué',D.pagado,T.pagado)}
-      ${f3('= Le debo',D.debe,T.debe,{b:1,color:rojo,bg:'#fafafa'})}
+      ${f3('= Le debo hoy',D.debe,T.debe,{b:1,color:rojo,bg:'#fafafa'})}
+      ${(D.porDevolver||T.porDevolver)?f3('<span style="color:#555">(−) Libros que recibí y no vendí: <b>por devolver</b> <span style="font-size:10px;color:#999">(en bodega o que me devuelven los clientes; al devolverlos me hacen nota de crédito)</span></span>',D.porDevolver||0,T.porDevolver||0)
+        +f3('= Le deberé después de devolver',D.debeFinal,T.debeFinal,{b:1,color:rojo,bg:'#fff8e1'}):''}
     </table>
     ${tit('③ CUÁNTO GANO')}
     <table style="width:100%;border-collapse:collapse">
@@ -11086,7 +11090,14 @@ function resumenNegocioHTML(R){
       ${f3('(−) Costo de esos libros',R.costoVend['Didáctica']||0,R.costoVend['Tech Books']||0)}
       ${f3('= GANO',gD,gT,{b:1,color:verde,bg:'#e8f5e9'})}
     </table>
-    <div style="padding:8px 12px;font-size:12px;color:#555;border-top:1px solid #eee">💵 Plata que me queda hoy de este negocio (todo lo cobrado − todo lo pagado a editoriales): <b style="font-family:monospace">${m(R.caja)}</b></div>
+    ${tit('④ AL FINAL')}
+    <table style="width:100%;border-collapse:collapse">
+      ${f1('💵 Plata que ya tengo (cobré − pagué)',R.caja)}
+      ${f1('(+) Me falta cobrar',R.porCobrar)}
+      ${f1('(−) Le debo hoy a las editoriales',R.debeEd)}
+      ${R.porDevolver?f1('(+) Lo que baja la deuda al devolver los libros que sobran',R.porDevolver):''}
+      ${f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',R.caja+R.porCobrar-R.debeEd+R.porDevolver,{b:1,big:1,color:verde(R.caja+R.porCobrar-R.debeEd+R.porDevolver),bg:'#e8f5e9'})}
+    </table>
   </div>`;
 }
 function renderResumenNegocio(){
