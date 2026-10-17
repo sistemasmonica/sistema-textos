@@ -198,6 +198,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- ===================== INICIO ===================== -->
 <div id="pn-dash" class="pn on">
   <div style="text-align:right;font-size:11px;color:var(--mu);margin-bottom:6px" id="d-actualizado">Datos actualizados: —</div>
+  <div id="d-resumen-negocio" style="margin-bottom:12px"></div>
   <div id="d-resumen-ganancia" style="margin-bottom:12px"></div>
   <div class="sc-grid">
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
@@ -7539,6 +7540,7 @@ function renderSaludDetalle(key){
 }
 
 function renderDash(){
+  try{renderResumenNegocio();}catch(e){console.warn('Resumen del negocio:',e);}
   const rv=DB.regs.filter(r=>r.tipo==='venta');
   const rn=DB.regs.filter(r=>r.tipo==='negocio');
   const rp=DB.regs.filter(r=>r.tipo==='personal');
@@ -10915,6 +10917,103 @@ function resumenEditorial(){
 }
 
 // Resumen corto de "¿cuánto estoy ganando?" — sin filtros ni fechas, todo lo cargado.
+// ── RESUMEN DEL NEGOCIO EN UN SOLO CUADRO ────────────────────────────────────
+// Colegios: lo vendido (menos comisión) − lo cobrado en Pagos = falta cobrar.
+// Editorial: facturas − notas de crédito − lo pagado en Pagos = falta pagar.
+//   (Si una editorial no tiene facturas cargadas, ej. Tech Books, se usa el
+//   costo de los libros vendidos de Colegios.)
+// Ganancia: igual que "TE QUEDA" de Control de ventas, sumado de todos los colegios.
+function grupoEditorial(txt){
+  txt=String(txt||'');
+  if(/DID[AÁ]CTICA/i.test(txt))return 'Didáctica';
+  if(/TECH\s*BOOKS/i.test(txt))return 'Tech Books';
+  return null;
+}
+function resumenNegocio(){
+  let vendido=0,ganancia=0;
+  const costoVend={'Didáctica':0,'Tech Books':0};
+  Object.keys(DB.colData||{}).forEach(nom=>{
+    const d=DB.colData[nom];if(!d||!Array.isArray(d.lineas))return;
+    const T=totalesColegio(d);vendido+=T.ingreso;ganancia+=T.ganancia;
+    d.lineas.forEach(l=>{costoVend[esLineaIngles(l)?'Tech Books':'Didáctica']+=((parseFloat(l.cant)||0)-(parseFloat(l.dev)||0))*(parseFloat(l.costo)||0);});
+  });
+  const cobrado=(DB.pagos||[]).filter(p=>p.tipo==='cobro').reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  const ed={};
+  const E=n=>ed[n]||(ed[n]={facturado:0,nFact:0,notas:0,pagado:0,pagos:[],sinFacturas:false});
+  ['Didáctica','Tech Books'].forEach(E);
+  DB.regs.filter(esCompraEditorial).forEach(r=>{const x=E(grupoEditorial(r.proveedor)||(r.proveedor||'Otra editorial'));x.facturado+=parseFloat(r.total)||0;x.nFact++;});
+  (DB.notasCredito||[]).forEach(n=>{E(grupoEditorial(n.editorial)||n.editorial||'Didáctica').notas+=parseFloat(n.total)||0;});
+  (DB.pagos||[]).filter(p=>p.tipo==='pago').forEach(p=>{
+    const g=grupoEditorial(p.nombre)||grupoEditorial(p.nota);if(!g)return;
+    E(g).pagado+=parseFloat(p.valor)||0;E(g).pagos.push(p);
+  });
+  Object.keys(ed).forEach(n=>{
+    const x=ed[n];
+    if(!x.facturado&&costoVend[n]){x.sinFacturas=true;x.facturado=costoVend[n];}
+    x.debe=x.facturado-x.notas-x.pagado;
+    if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
+  });
+  const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
+  return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,
+    facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
+    caja:cobrado-tot('pagado')};
+}
+function resumenNegocioHTML(R){
+  const m=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fila=(t,v,o={})=>`<tr style="${o.bg?'background:'+o.bg+';':''}${o.b?'font-weight:800;':''}"><td style="padding:7px 12px;border-bottom:1px solid #eee;${o.sub?'padding-left:28px;color:#555;font-size:12px':''}">${t}</td><td style="padding:7px 12px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;white-space:nowrap;font-size:${o.big?'18px':(o.sub?'12px':'14px')};${o.color?'color:'+o.color:''}">${m(v)}</td></tr>`;
+  const tit=t=>`<tr><td colspan="2" style="padding:10px 12px 4px;font-size:11px;font-weight:800;color:#1565c0;letter-spacing:.5px">${t}</td></tr>`;
+  const eds=Object.keys(R.ed);
+  const detEd=eds.length>1?eds.map(n=>{const x=R.ed[n];return fila('de esto, '+escH(n)+(x.sinFacturas?' <span style="font-size:10px;color:#999">(sin facturas cargadas: costo de libros vendidos)</span>':''),x.debe,{sub:1});}).join(''):'';
+  return `<table style="width:100%;border-collapse:collapse;background:#fff">
+    ${tit('🏫 LOS COLEGIOS')}
+    ${fila('Vendí (ya descontada la comisión del colegio)',R.vendido)}
+    ${fila('Me pagaron',R.cobrado)}
+    ${fila('Me falta cobrar',R.porCobrar,{b:1,color:R.porCobrar>1?'#c0392b':'#1b5e20',bg:'#fafafa'})}
+    ${tit('📚 LA EDITORIAL')}
+    ${fila('Me facturaron',R.facturado)}
+    ${fila('(−) Notas de crédito (libros devueltos)',R.notas)}
+    ${fila('(−) Ya pagué',R.pagadoEd)}
+    ${fila('Me falta pagar',R.debeEd,{b:1,color:R.debeEd>1?'#c0392b':'#1b5e20',bg:'#fafafa'})}
+    ${detEd}
+    ${tit('💰 RESULTADO')}
+    ${fila('GANO (lo vendido − costo de esos libros)',R.ganancia,{b:1,big:1,color:R.ganancia>=0?'#1b5e20':'#c0392b',bg:'#e8f5e9'})}
+    ${fila('Plata que me queda hoy de este negocio (cobré − pagué)',R.caja,{sub:1})}
+  </table>`;
+}
+function renderResumenNegocio(){
+  const el=document.getElementById('d-resumen-negocio');if(!el)return;
+  const R=resumenNegocio();
+  const pagosEd=Object.entries(R.ed).flatMap(([n,x])=>x.pagos.map(p=>({n,p}))).sort((a,b)=>String(a.p.fecha).localeCompare(String(b.p.fecha)));
+  el.innerHTML=`<div style="border:2px solid #1565c0;border-radius:10px;overflow:hidden;max-width:720px">
+    <div style="background:#1565c0;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:800">📊 RESUMEN DEL NEGOCIO 2026</div>
+      <button class="btn btn-s btn-sm" onclick="imprimirResumenNegocio()" style="background:#fff;color:#1565c0"><i class="ti ti-printer"></i> Imprimir</button>
+    </div>
+    ${resumenNegocioHTML(R)}
+    <details style="padding:8px 12px;font-size:11px;color:#555;border-top:1px solid #eee"><summary style="cursor:pointer">De dónde salen los números</summary>
+      <div style="margin-top:6px;line-height:1.5">
+        <b>Vendí</b>: Control de ventas de todos los colegios (entregados − devueltos) × precio, menos la comisión de cada colegio.<br>
+        <b>Me pagaron</b>: Pagos → todos los <b>Cobros</b>.<br>
+        <b>Me facturaron</b>: facturas de la editorial (XML o Manual, categoría Textos escolares). <b>Notas de crédito</b>: Editorial → Notas de crédito.<br>
+        <b>Ya pagué</b>: Pagos → <b>Pagos</b> a nombre de la editorial:
+        ${pagosEd.length?'<ul style="margin:4px 0 0 16px;padding:0">'+pagosEd.map(({n,p})=>`<li>${escH(String(p.fecha||'').split('-').reverse().join('/'))} — ${escH(n)} — $${(parseFloat(p.valor)||0).toFixed(2)} ${p.nota?'<span style="color:#888">('+escH(p.nota)+')</span>':''}</li>`).join('')+'</ul>':' (ninguno todavía)<br>'}
+        <b>Gano</b>: lo mismo que "TE QUEDA" de cada colegio, sumado.
+      </div>
+    </details>
+  </div>`;
+}
+function imprimirResumenNegocio(){
+  const R=resumenNegocio();
+  const win=window.open('','_blank');if(!win)return alert('El navegador bloqueó la ventana. Permita ventanas emergentes.');
+  win.document.write(`<html><head><title>Resumen del negocio</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#222;max-width:720px;margin:auto}${dmPrintCSS()}.np{background:#1565c0;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;margin-bottom:12px}@media print{.np{display:none}}</style></head><body>
+    <button class="np" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+    ${dmPrintHeader('Resumen del negocio',new Date().toLocaleDateString('es-EC'))}
+    ${resumenNegocioHTML(R)}
+    ${dmPrintFooter()}
+  <\/body><\/html>`);
+  win.document.close();
+}
+
 function resumenGanancia(){
   // Las ventas reales de Mónica se registran POR COLEGIO (en colData), no como
   // DB.regs tipo 'venta'. Este resumen suma todos los colegios — mismo criterio
