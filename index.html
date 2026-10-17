@@ -2093,6 +2093,7 @@ async function syncFromCloud(){
         renderCatalogo();updateCount();
       }
     }
+    try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
@@ -10970,6 +10971,35 @@ function resumenEditorial(){
 //   (Si una editorial no tiene facturas cargadas, ej. Tech Books, se usa el
 //   costo de los libros vendidos de Colegios.)
 // Ganancia: igual que "TE QUEDA" de Control de ventas, sumado de todos los colegios.
+// Costo que cobra Tech Books por libro (dato de Mónica, 2026-10-16). Se aplica
+// UNA vez (queda marcado en Historial) a: catálogo, entradas de Tech Books y
+// Control de ventas de todos los colegios. Después se puede cambiar a mano.
+const COSTOS_TECHBOOKS=[[/WONDER/i,15],[/LIMIT+LES/i,17]];
+function costoTechBooks(nombre){const x=COSTOS_TECHBOOKS.find(([re])=>re.test(String(nombre||'')));return x?x[1]:0;}
+function migrarCostosTechBooks(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Costos Tech Books fijados';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  let nProd=0,nEnt=0,nLin=0;
+  DB.productos.forEach(pr=>{const c=costoTechBooks(pr.nombre);if(c&&pr.precioCosto!==c){pr.precioCosto=c;nProd++;}});
+  const P={};DB.productos.forEach(pr=>P[pr.id]=pr);
+  DB.movInv.forEach(m=>{if(m.tipo!=='entrada'||!grupoEditorial(m.proveedor)||grupoEditorial(m.proveedor)!=='Tech Books')return;
+    const c=costoTechBooks(P[m.prodId]?.nombre);if(c&&parseFloat(m.precioCosto)!==c){m.precioCosto=c;nEnt++;}});
+  Object.values(DB.colData||{}).forEach(d=>(d.lineas||[]).forEach(l=>{const c=costoTechBooks(l.libro);if(c&&parseFloat(l.costo)!==c){l.costo=c;nLin++;}}));
+  logHistorial(MARCA,'Wonder Family $15, Limitless $17 — '+nProd+' producto(s), '+nEnt+' línea(s) de entradas, '+nLin+' línea(s) de colegios');
+  localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
+  save();
+  if(typeof guardarProductosNube==='function')guardarProductosNube(DB.productos);
+  try{renderDash();}catch(e){}
+}
+// Libros que se le pagan a Tech Books: los de inglés y los de Robótica
+// (Robótica la provee Marcos de Tech Books aunque el catálogo diga "DM BOOKS").
+function esLineaTechBooks(l){
+  if(esLineaIngles(l))return true;
+  let t=String(l.libro||'');
+  if(l.prodId){const pr=DB.productos.find(x=>x.id===l.prodId);if(pr)t+=' '+(pr.nombre||'');}
+  return /ROB[OÓ]TICA/i.test(t);
+}
 function grupoEditorial(txt){
   txt=String(txt||'');
   if(/DID[AÁ]CTICA/i.test(txt))return 'Didáctica';
@@ -10987,7 +11017,7 @@ function resumenNegocio(){
     const T=totalesColegio(d);vendido+=T.ingreso;ganancia+=T.ganancia;
     const pvUnit=d.comisionPVUnit??0.5;
     d.lineas.forEach(l=>{
-      const k=esLineaIngles(l)?'Tech Books':'Didáctica';
+      const k=esLineaTechBooks(l)?'Tech Books':'Didáctica';
       const c=parseFloat(l.cant)||0,v=c-(parseFloat(l.dev)||0),pvp=parseFloat(l.pvp)||0;
       costoVend[k]+=v*(parseFloat(l.costo)||0);
       ventaEd[k]+=v*pvp-(lineaComisiona(l)?v*pvp*(pctLinea(d,l)/100)+c*pvUnit:0);
@@ -11013,7 +11043,7 @@ function resumenNegocio(){
   });
   Object.keys(ed).forEach(n=>{
     const x=ed[n];
-    if(!x.facturado&&costoVend[n]){x.sinFacturas=true;x.facturado=costoVend[n];}
+    if(!x.facturado&&costoVend[n]){x.sinFacturas=true;x.facturado=costoVend[n];}  // sin facturas con valor: lo que se le debe por lo vendido
     x.debe=x.facturado-x.notas-x.pagado;
     if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
   });
@@ -11044,7 +11074,7 @@ function resumenNegocioHTML(R){
     ${tit('② YO LE DEBO A CADA EDITORIAL')}
     <table style="width:100%;border-collapse:collapse">
       ${cab}
-      ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: estimado, sin facturas con valor)</span>':''),D.facturado,T.facturado)}
+      ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: libros vendidos × su precio — Wonder $15, Limitless $17, Robótica $13)</span>':''),D.facturado,T.facturado)}
       ${f3('(−) Notas de crédito',D.notas,T.notas)}
       ${f3('(−) Ya le pagué',D.pagado,T.pagado)}
       ${f3('= Le debo',D.debe,T.debe,{b:1,color:rojo,bg:'#fafafa'})}
