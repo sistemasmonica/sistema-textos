@@ -165,6 +165,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="pill" style="background:rgba(255,255,0,.3);color:#fff;font-size:10px">v9-jun</div>
     <button onclick="backupData()" id="btn-backup" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Guardar todos los datos en un archivo JSON">💾 Backup</button>
     <label id="lbl-restaurar" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
+    <button onclick="verCopiasNube()" id="btn-copias" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Copias diarias guardadas en la nube (últimos 14 días): volver a como estaba el sistema un día anterior">☁️ Copias</button>
     <button onclick="entrarModoContadora()" id="btn-contadora" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Acceso de solo lectura para la contadora">🔒 Contadora</button>
     <button onclick="cerrarSesionNube()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Salir: la próxima vez se pide la clave">🚪 Cerrar sesión</button>
   </div>
@@ -1863,6 +1864,7 @@ function aplicarModoLectura(){
   if(btnContadora){btnContadora.textContent='🔓 Salir modo contadora';btnContadora.setAttribute('onclick','salirModoContadora()');}
   const btnBackup=document.getElementById('btn-backup');if(btnBackup)btnBackup.style.display='none';
   const lblRestaurar=document.getElementById('lbl-restaurar');if(lblRestaurar)lblRestaurar.style.display='none';
+  const btnCopias=document.getElementById('btn-copias');if(btnCopias)btnCopias.style.display='none';
 }
 
 function setSyncStatus(s,detalle){
@@ -1909,7 +1911,7 @@ async function saveToCloud(data){
   if(!NUBE_OK||MODO_LECTURA||_conflicto)return;
   // Antes de traer lo de la nube no se sube nada: podría ser una copia vieja.
   if(!syncCompleted)return;
-  if(_miRev===undefined){setSyncStatus('err','No se pudo verificar la versión de la nube: recarga la página para guardar en la nube');return;}
+  if(_miRev===undefined){avisoNubeNoGuardo('No se pudo verificar la versión de la nube. Recargue la página.');return;}
   // Un guardado a la vez; si llegan varios seguidos, se sube solo el último.
   if(_saveCorriendo){_savePendiente=data;return;}
   _saveCorriendo=true;
@@ -1939,7 +1941,71 @@ async function _subirANube(data){
     await nubeGuardar('app_data','txe_rev',{rev:nuevaRev,at:ts});
     _miRev=nuevaRev;
     setSyncStatus('ok');
-  }catch(e){setSyncStatus('err',e.message);console.warn('Cloud save error:',e);}
+  }catch(e){avisoNubeNoGuardo(e.message||String(e));console.warn('Cloud save error:',e);}
+}
+// Si un cambio no llega a la nube, al recargar se pierde (se trae lo de la
+// nube). Por eso se avisa en grande, no solo con el letrerito de arriba.
+let _avisoNubeFallo=0;
+function avisoNubeNoGuardo(det){
+  setSyncStatus('err',det);
+  if(Date.now()-_avisoNubeFallo<120000)return;
+  _avisoNubeFallo=Date.now();
+  alert('⚠️ ATENCIÓN: su último cambio NO se guardó en la nube.\n\nRevise el internet, recargue la página y vuelva a hacer el cambio.\n\nDetalle: '+det);
+}
+
+// COPIA DIARIA EN LA NUBE: la primera vez que se abre el sistema cada día se
+// guarda en la nube cómo estaba todo al empezar el día (app_data txe_snap_s0..s13,
+// se van reemplazando: quedan los últimos 14 días). Índice chico en txe_snap_idx
+// para listarlas sin bajar cada copia. Se restauran con el botón "☁️ Copias".
+const SNAP_DIAS=14;
+async function copiaDiariaNube(v){
+  try{
+    if(!v||MODO_LECTURA||!NUBE_OK)return;
+    const hoy=today();
+    if(localStorage.getItem('txe_snap_dia')===hoy)return;
+    const copia=JSON.parse(JSON.stringify(v));
+    const idx=(await nubeLeer('app_data','txe_snap_idx'))?.value||{};
+    if(!Object.values(idx).some(x=>x&&x.dia===hoy)){
+      const slot='s'+(Math.floor(Date.parse(hoy+'T12:00:00Z')/864e5)%SNAP_DIAS);
+      const at=new Date().toISOString();
+      await nubeGuardar('app_data','txe_snap_'+slot,{dia:hoy,at,data:copia});
+      idx[slot]={dia:hoy,at,regs:(copia.regs||[]).length,pagos:(copia.pagos||[]).length,colegios:Object.keys(copia.colData||{}).length};
+      await nubeGuardar('app_data','txe_snap_idx',idx);
+    }
+    localStorage.setItem('txe_snap_dia',hoy);
+  }catch(e){console.warn('Copia diaria en la nube:',e);}
+}
+async function verCopiasNube(){
+  if(!NUBE_OK)return alert('No hay conexión con la nube.');
+  let idx;
+  try{idx=(await nubeLeer('app_data','txe_snap_idx'))?.value||{};}catch(e){return alert('No se pudo leer las copias de la nube: '+(e.message||e));}
+  const lista=Object.entries(idx).filter(([,x])=>x&&x.dia).sort((a,b)=>b[1].dia.localeCompare(a[1].dia));
+  document.getElementById('copias-ov')?.remove();
+  const ov=document.createElement('div');ov.id='copias-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;max-width:520px;width:100%;max-height:85vh;overflow:auto;font-family:inherit">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">☁️ Copias diarias en la nube</div>
+    <div style="font-size:12px;color:#555;margin-bottom:12px">Cada día se guarda cómo estaba el sistema al empezar el día. Quedan los últimos ${SNAP_DIAS} días. Restaurar una copia reemplaza TODO por como estaba ese día (antes se descarga un backup de lo de ahora).</div>
+    ${lista.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#eee"><th style="padding:6px;text-align:left">Día</th><th style="padding:6px">Registros</th><th style="padding:6px">Pagos</th><th></th></tr>
+      ${lista.map(([slot,x])=>`<tr style="border-bottom:1px solid #eee">
+        <td style="padding:6px">${escH(x.dia.split('-').reverse().join('/'))} <span style="color:#888;font-size:11px">${escH(new Date(x.at).toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'}))}</span></td>
+        <td style="padding:6px;text-align:center">${x.regs??''}</td><td style="padding:6px;text-align:center">${x.pagos??''}</td>
+        <td style="padding:6px;text-align:right"><button class="btn btn-s" onclick="restaurarCopiaNube('${slot}')">Restaurar</button></td></tr>`).join('')}
+    </table>`:'<div style="padding:10px;color:#777">Todavía no hay copias. La primera se guarda hoy al abrir el sistema.</div>'}
+    <div style="text-align:right;margin-top:14px"><button class="btn" onclick="document.getElementById('copias-ov').remove()">Cerrar</button></div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+async function restaurarCopiaNube(slot){
+  let snap;
+  try{snap=(await nubeLeer('app_data','txe_snap_'+slot))?.value;}catch(e){return alert('No se pudo leer la copia: '+(e.message||e));}
+  if(!snap?.data?.regs)return alert('Esa copia está vacía o dañada.');
+  const dia=snap.dia.split('-').reverse().join('/');
+  if(!confirm('¿Dejar TODO el sistema como estaba el '+dia+' al empezar el día?\n\nSe pierde lo que se hizo después de esa fecha.\nAntes se descarga un backup de cómo está ahora, por si acaso.'))return;
+  backupSilencioso();
+  document.getElementById('copias-ov')?.remove();
+  aplicarRespaldo(snap.data,'la copia de la nube del '+dia,true);
 }
 
 async function syncFromCloud(){
@@ -1989,6 +2055,7 @@ async function syncFromCloud(){
     const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,preciosCol:DB.preciosCol,notasCredito:DB.notasCredito,comisiones:DB.comisiones,deudas:DB.deudas,respaldosVendedor:DB.respaldosVendedor,pagos:DB.pagos,historial:DB.historial,reglasBanco:DB.reglasBanco,conteo:DB.conteo};
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     syncCompleted=true;
+    if(!mainErr&&main?.value)copiaDiariaNube(main.value);
     updateCount();renderDash();
     // Re-renderizar paneles si están activos en este momento
     const activePanel=document.querySelector('.pn.on');
@@ -2055,7 +2122,7 @@ let DB={regs:[],banco:[],conciliaciones:[],productos:[],movInv:[],guias:[],coleg
 function logHistorial(accion,detalle){
   DB.historial=DB.historial||[];
   DB.historial.push({id:uid(),fecha:new Date().toISOString(),accion,detalle:detalle||''});
-  if(DB.historial.length>500)DB.historial=DB.historial.slice(-500);
+  if(DB.historial.length>2000)DB.historial=DB.historial.slice(-2000);
 }
 let tipoMan='negocio';
 let xmlQueue=[];
@@ -8726,7 +8793,7 @@ function renderControl(){
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" value="${l.cant}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].cant=parseInt(this.value)||0;recalcControl('${nombre}');save()">
+          onchange="cambiarLineaCtrl('${nombre}',${i},'cant',parseInt(this.value)||0)">
         ${(()=>{
           if(!l.prodId) return '';
           const gs=guiasCol.map(g=>{ const gl=(g.lineas||[]).find(x=>x.prodId===l.prodId); return gl?{numero:g.numero,cant:gl.cantidad||0}:null; }).filter(Boolean);
@@ -8738,12 +8805,12 @@ function renderControl(){
       </td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" step="0.01" value="${l.pvp}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].pvp=parseFloat(this.value)||0;recalcControl('${nombre}');save()">
+          onchange="cambiarLineaCtrl('${nombre}',${i},'pvp',parseFloat(this.value)||0)">
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace" id="ctrl-tot-${i}">$${totalF.toFixed(2)}</td>
       <td style="border:1px solid #f0e060;padding:3px">
         <input type="number" min="0" value="${l.dev}" style="width:70px;padding:3px;border:1px solid #ccc;border-radius:3px;text-align:center;font-size:12px"
-          onchange="DB.colData['${nombre}'].lineas[${i}].dev=parseInt(this.value)||0;recalcControl('${nombre}');save()">
+          onchange="cambiarLineaCtrl('${nombre}',${i},'dev',parseInt(this.value)||0)">
       </td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:center;font-weight:600" id="ctrl-vend-${i}">${vendidos}</td>
       <td style="border:1px solid #f0e060;padding:5px 8px;text-align:right;font-family:monospace;color:var(--b1)" id="ctrl-tv-${i}">$${tvLine.toFixed(2)}</td>
@@ -8950,6 +9017,14 @@ function renderControl(){
   document.getElementById('col-control-body').innerHTML=html;
 }
 
+// Cambio de cantidad / PVP / devueltos en Control de ventas: queda anotado en
+// Historial (antes → después) para poder ver qué cambió y cuándo.
+function cambiarLineaCtrl(nombre,i,campo,valor){
+  const l=DB.colData[nombre]?.lineas[i];if(!l)return;
+  const antes=l[campo];l[campo]=valor;
+  if(antes!==valor)logHistorial('Control de ventas',nombre+' — '+l.libro+': '+({cant:'cantidad',dev:'devueltos',pvp:'PVP'}[campo])+' '+antes+' → '+valor);
+  recalcControl(nombre);save();
+}
 function recalcControl(nombre){
   const d=DB.colData[nombre]; if(!d) return;
   const pvUnit=d.comisionPVUnit??0.5;
@@ -10421,6 +10496,17 @@ function restoreData(input){
     try{
       const restored=JSON.parse(ev.target.result);
       if(!restored.regs)throw new Error('Archivo inválido — falta campo regs');
+      aplicarRespaldo(restored,'el archivo '+f.name);
+    }catch(e){toast('Error leyendo backup: '+e.message,'err')}
+  };
+  r.readAsText(f,'UTF-8');
+  input.value='';
+}
+// Reemplaza todos los datos con un respaldo (archivo o copia diaria de la nube).
+// conservarHistorial: deja el Historial de ahora (para no perder el registro
+// de lo que pasó después de la copia).
+function aplicarRespaldo(restored,origen,conservarHistorial){
+      const histAhora=DB.historial||[];
       if(restored.productos?.length>0) DB.productos=restored.productos;
       DB.regs=restored.regs||[];
       DB.banco=restored.banco||[];
@@ -10435,19 +10521,16 @@ function restoreData(input){
       DB.deudas=restored.deudas||[];
       DB.respaldosVendedor=restored.respaldosVendedor||[];
       DB.pagos=restored.pagos||[];
-      DB.historial=restored.historial||DB.historial||[];
+      DB.historial=conservarHistorial?histAhora:(restored.historial||DB.historial||[]);
       DB.reglasBanco=restored.reglasBanco||DB.reglasBanco||{};
       DB.conteo=restored.conteo||DB.conteo||{};
-      logHistorial('Backup restaurado','Se reemplazaron todos los datos con el archivo '+f.name);
+      logHistorial('Backup restaurado','Se reemplazaron todos los datos con '+origen);
       save();updateCount();renderDash();
       if(typeof renderCatalogo==='function')renderCatalogo();
       if(typeof renderStockReport==='function')renderStockReport();
       if(typeof renderGuias==='function')renderGuias();
+      if(document.getElementById('col-sel')&&typeof renderColegios==='function')renderColegios();
       toast('✅ Datos restaurados: '+DB.regs.length+' registros, '+DB.guias.length+' guías, '+DB.productos.length+' productos','ok');
-    }catch(e){toast('Error leyendo backup: '+e.message,'err')}
-  };
-  r.readAsText(f,'UTF-8');
-  input.value='';
 }
 
 // ===================================================
