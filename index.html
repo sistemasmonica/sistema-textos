@@ -8725,8 +8725,8 @@ function renderControl(){
         <div style="font-family:monospace;font-size:19px;font-weight:700;color:${gananciaNet>=0?'var(--g1)':'var(--r1)'};margin-top:3px" id="ctrl-top-gan">$${gananciaNet.toFixed(2)}</div>
       </div>
       <div style="background:#fff;border:1px solid #bbb;border-radius:6px;padding:8px 10px;text-align:center">
-        <div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px">Falta pagar a editorial</div>
-        <div style="font-family:monospace;font-size:17px;font-weight:700;color:${saldoEdit>0.005?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">$${saldoEdit.toFixed(2)}</div>
+        <div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px">Falta que te pague el colegio</div>
+        ${(()=>{const sc=saldoCobroColegio(nombre,d);return `<div style="font-family:monospace;font-size:17px;font-weight:700;color:${sc>TOL_COBRO?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">$${sc.toFixed(2)}</div><div style="font-size:9px;color:#777;margin-top:2px">según los cobros de Pagos</div>`;})()}
       </div>
     </div>
 
@@ -8951,9 +8951,13 @@ function renderControl(){
       </div>
     </div>
 
-    <!-- PAGOS A LA EDITORIAL -->
-    <div style="margin-top:12px;background:#fff;border:2px solid #90caf9;border-radius:8px;padding:12px">
-      <div style="font-size:12px;font-weight:700;color:#1565c0;text-transform:uppercase;margin-bottom:8px">💵 Pagos a la editorial por este colegio</div>
+    <!-- PAGOS RECIBIDOS DEL COLEGIO (se leen solos de Pagos) -->
+    ${pagosColegioHTML(nombre,d)}
+
+    <!-- PAGOS A LA EDITORIAL (opcional) -->
+    <details ${d.pagosEdit.length?'open':''} style="margin-top:12px;background:#fff;border:2px solid #cfd8dc;border-radius:8px;padding:12px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#546e7a;text-transform:uppercase">💵 Pagos a la editorial por este colegio <span style="text-transform:none;font-weight:400;color:#777">— opcional, no hace falta llenarlo (lo que debe a la editorial se controla en Editorial)</span></summary>
+      <div style="height:10px"></div>
       <div style="display:grid;grid-template-columns:120px 1fr 130px 110px 1fr auto;gap:6px;align-items:end;margin-bottom:10px">
         <div class="fg" style="margin:0"><label style="font-size:10px">Fecha</label><input type="date" id="pe-fecha" value="${today()}" style="font-size:12px"></div>
         <div class="fg" style="margin:0"><label style="font-size:10px">Editorial</label><input type="text" id="pe-edit" list="pe-edit-list" placeholder="DIDACTICA o TECH BOOKS" style="font-size:12px">
@@ -8998,7 +9002,7 @@ function renderControl(){
         <b>Cómo se calcula:</b> costo de los libros vendidos (V.TOTAL de la tabla) ${'$'+tvCosto.toFixed(2)} − pagos registrados aquí ${'$'+pagadoEdit.toFixed(2)} = <b>saldo por pagar ${'$'+saldoEdit.toFixed(2)}</b>.
         Estos pagos son solo de este colegio: no se duplican con las facturas del módulo Editorial ni con Movimientos.
       </div>
-    </div>
+    </details>
   </div>
   <div class="btn-row">
     <button class="btn btn-p" onclick="guardarControl('${nombre}')"><i class="ti ti-check"></i> Guardar</button>
@@ -9083,7 +9087,7 @@ function recalcControl(nombre){
   if(topBox){topBox.style.background=ganancia>=0?'#e8f5e9':'#fdecea';topBox.style.borderColor=ganancia>=0?'#66bb6a':'#e57373';
     const lbl=topBox.querySelector('div');if(lbl)lbl.style.color=ganancia>=0?'#1b5e20':'#b71c1c';}
   const topSaldo=document.getElementById('ctrl-top-saldo');
-  if(topSaldo){topSaldo.textContent='$'+saldoEdit.toFixed(2);topSaldo.style.color=saldoEdit>0.005?'var(--r1)':'var(--g1)';}
+  if(topSaldo){const sc=saldoCobroColegio(nombre,d);topSaldo.textContent='$'+sc.toFixed(2);topSaldo.style.color=sc>TOL_COBRO?'var(--r1)':'var(--g1)';}
   // TE QUEDA/LIBRO, TE QUEDA TOTAL, subtotales por editorial y el desglose de
   // arriba no tienen id — se redibuja toda la tabla para que usen el % y PVP
   // de cada fila, conservando el campo donde estaba escribiendo y el scroll.
@@ -9417,6 +9421,35 @@ function parteEditorialSel(){ return document.getElementById('ctrl-parte-ed')?.v
 
 // Abonos del colegio = cobros registrados en Pagos cuyo nombre coincide con el
 // colegio (mismo criterio que "Por Cobrar": nombre exacto o _coincideColegio).
+// Lo que falta que pague el colegio = tu ingreso − cobros de Pagos (igual que Por Cobrar).
+function saldoCobroColegio(nombre,d){
+  const ab=abonosColegio(nombre).reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  return totalesColegio(d).ingreso-ab;
+}
+// Cuadro en Control de ventas con los cobros de ESTE colegio que ya están en
+// Pagos (no se escribe nada aquí: se ingresan una sola vez en Pagos).
+function pagosColegioHTML(nombre,d){
+  const ab=abonosColegio(nombre);
+  const tAb=ab.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  const ing=totalesColegio(d).ingreso;
+  const sal=ing-tAb;
+  const est=sal>TOL_COBRO?['SALDO POR COBRAR AL COLEGIO: $'+sal.toFixed(2),'#fdecea','#c0392b']
+    :(sal<-TOL_COBRO?['SALDO A FAVOR DEL COLEGIO: $'+(-sal).toFixed(2),'#e3f2fd','#1565c0']:['COLEGIO AL DÍA — SALDO $0.00','#e8f5e9','#1b5e20']);
+  return `<div style="margin-top:12px;background:#fff;border:2px solid #66bb6a;border-radius:8px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:#1b5e20;text-transform:uppercase">💰 Pagos recibidos de este colegio</div>
+        <button class="btn btn-s btn-sm" onclick="irATab('pagos')" title="Los cobros se ingresan una sola vez en Pagos, como Cobro a nombre del colegio">Ir a Pagos para registrar uno</button>
+      </div>
+      ${ab.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#e8f5e9"><th style="padding:6px 8px;border:1px solid #c8e6c9;text-align:left;width:110px">FECHA</th><th style="padding:6px 8px;border:1px solid #c8e6c9;text-align:left">FORMA</th><th style="padding:6px 8px;border:1px solid #c8e6c9;text-align:right;width:120px">VALOR $</th><th style="padding:6px 8px;border:1px solid #c8e6c9;text-align:left">NOTA</th></tr></thead>
+        <tbody>${ab.map(p=>`<tr><td style="padding:5px 8px;border:1px solid #eee">${escH(String(p.fecha||'').split('-').reverse().join('/'))}</td><td style="padding:5px 8px;border:1px solid #eee">${escH(p.forma||'')}</td><td style="padding:5px 8px;border:1px solid #eee;text-align:right;font-family:monospace;font-weight:700">$${(parseFloat(p.valor)||0).toFixed(2)}</td><td style="padding:5px 8px;border:1px solid #eee;font-size:11px;color:#555">${escH(p.nota||'')}</td></tr>`).join('')}</tbody>
+        <tfoot><tr style="background:#e8f5e9;font-weight:700"><td colspan="2" style="padding:6px 8px;border:1px solid #c8e6c9;text-align:right">TOTAL PAGADO POR EL COLEGIO</td><td style="padding:6px 8px;border:1px solid #c8e6c9;text-align:right;font-family:monospace">$${tAb.toFixed(2)}</td><td style="border:1px solid #c8e6c9"></td></tr></tfoot>
+      </table></div>`:'<div style="font-size:12px;color:var(--mu);padding:6px 2px">Todavía no hay cobros de este colegio en Pagos.</div>'}
+      <div style="font-size:12px;text-align:right;padding:8px 2px 4px">Tu ingreso (ventas − comisión): $${ing.toFixed(2)} &nbsp; (−) Pagado: $${tAb.toFixed(2)}</div>
+      <div style="background:${est[1]};color:${est[2]};border-radius:6px;padding:8px 12px;text-align:right;font-weight:800;font-size:14px">${est[0]}</div>
+      <div style="font-size:11px;color:#555;margin-top:6px">Estos pagos salen solos de <b>Pagos</b> (Cobro a nombre de este colegio). No hay que escribirlos aquí.</div>
+    </div>`;
+}
 function abonosColegio(nombre){
   return (DB.pagos||[]).filter(p=>p.tipo==='cobro'&&_cobroEsDeColegio(p,nombre))
     .sort((a,b)=>a.fecha.localeCompare(b.fecha));
