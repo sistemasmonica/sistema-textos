@@ -11402,13 +11402,26 @@ function saveNC(){
 function registrarNCdesdeXML(d,sinPreguntar){
   const dg=x=>String(x||'').replace(/\D/g,'');
   DB.notasCredito=DB.notasCredito||[];
+  // Si esta misma nota se había cargado por error como FACTURA, se quita de
+  // facturas (y la entrada de inventario que se hubiera hecho con ella).
+  const malReg=d.num?DB.regs.find(r=>r.tipo!=="venta"&&dg(r.numFact)===dg(d.num)&&grupoEditorial(r.proveedor)===grupoEditorial(d.rs)):null;
+  const quitarMalReg=()=>{if(!malReg)return;
+    const ent=DB.movInv.filter(m=>m.tipo==="entrada"&&m.ref&&dg(m.ref)===dg(malReg.numFact));
+    DB.movInv=DB.movInv.filter(m=>!ent.includes(m));
+    DB.regs=DB.regs.filter(r=>r!==malReg);
+    logHistorial("Factura convertida en nota de crédito",(malReg.proveedor||"")+" — N° "+(malReg.numFact||"")+" — $"+(parseFloat(malReg.total)||0).toFixed(2)+(ent.length?" — se quitó entrada de "+ent.reduce((a,m)=>a+(parseInt(m.cantidad)||0),0)+" u.":""));
+    toast("La nota "+d.num+" estaba cargada como factura: ya se quitó de facturas","ok");
+  };
   if(d.num&&DB.notasCredito.some(n=>dg(n.num)===dg(d.num)&&grupoEditorial(n.editorial)===grupoEditorial(d.rs))){
+    if(malReg){quitarMalReg();save();[renderDeudaEditorial,renderDash,renderStockReport].forEach(fn=>{try{typeof fn==="function"&&fn();}catch(e){}});}
     toast('La nota de crédito '+d.num+' ya estaba registrada','info');return false;
   }
   const unidades=(d.detalles||[]).reduce((a,x)=>a+(parseInt(x.cant)||0),0);
   if(!sinPreguntar&&!confirm('Este archivo es una NOTA DE CRÉDITO (no una factura):\n\n'+d.rs+'\nN° '+(d.num||'s/n')+' — $'+d.total.toFixed(2)+
      (d.docModificado?'\nCorrige la factura '+d.docModificado:'')+(unidades?'\nTrae '+unidades+' libro(s) devuelto(s)':'')+
+     (malReg?'\n\nOJO: esta nota se había cargado por error como FACTURA. Se quita de facturas.':'')+
      '\n\nSe registra en Editorial → Notas de crédito y RESTA de lo que le debe a la editorial.\n\n¿Registrarla?'))return false;
+  quitarMalReg();
   const id=uid();
   const nc={id,fecha:d.fecha||today(),editorial:d.rs||'',num:d.num||'',total:d.total||0,
     nota:'Desde XML'+(d.docModificado?' · corrige factura '+d.docModificado:'')+(d.motivo&&d.motivo!=='NOTA DE CREDITO'?' · '+d.motivo:''),
