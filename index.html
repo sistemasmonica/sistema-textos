@@ -8788,6 +8788,8 @@ function gruposMuestras(){
     (grupos[k]=grupos[k]||{nombre:k,guias:[]}).guias.push(g);
   });
   const conVentas=colegioNombres();
+  // Lo que el colegio debe de la VENTA sale de Por cobrar (no se anota aquí otra vez)
+  const cobros=saldosPorCobrarColegios().filas.filter(f=>f.vendido>0.005||f.cobrado>0.005);
   return Object.values(grupos).map(c=>{
     const u=gs=>gs.reduce((a,l)=>a+(l.cantidad||0),0);
     c.quedan=c.guias.reduce((a,g)=>a+u(g.lineas||[]),0);
@@ -8802,6 +8804,8 @@ function gruposMuestras(){
     }));
     c.recibidas=c.guias.filter(g=>g.origen).map(g=>g.origen);
     c.tieneVentas=conVentas.some(n=>_coincideColegio(c.nombre,n));
+    c.cobro=cobros.find(f=>_coincideColegio(c.nombre,f.colegio))||null;
+    c.debe=c.cobro&&c.cobro.saldo>TOL_COBRO?c.cobro.saldo:0;
     let est=c.guias.map(g=>g.estadoMuestra).find(Boolean);
     let lib=c.guias.map(g=>g.muestrasEstado).find(Boolean);
     if(est==='retirado'){est='no';lib=lib||'retirado';}
@@ -8838,7 +8842,8 @@ function renderMuestrasCol(){
   const q=(document.getElementById('mu-q')?.value||'').toUpperCase();
   const fe=document.getElementById('mu-est')?.value||'';
   const todos=gruposMuestras();
-  const pasa=c=>!fe||(fe.startsWith('c:')?c.estado===fe.slice(2):c.libros===fe.slice(2));
+  const pasa=c=>!fe||(fe==='p:debe'?c.debe>0:fe.startsWith('c:')?c.estado===fe.slice(2):c.libros===fe.slice(2));
+  const deben=todos.filter(c=>c.debe>0);
   const lista=todos.filter(c=>(!q||c.nombre.includes(q))&&pasa(c));
   const cuenta=e=>todos.filter(c=>c.estado===e).length;
   const cuentaL=e=>todos.filter(c=>c.libros===e).length;
@@ -8869,6 +8874,7 @@ function renderMuestrasCol(){
     <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:8px">
       ${card('💰 Muestras en todos los colegios (costo editorial)',fmt(valorDe('')),'#5e35b1')}
       ${card('⏳ En colegios que aún no responden',fmt(valorDe('espera')),'#b45309')}
+      ${card('💵 Te deben dinero ('+deben.length+' colegio/s) — ver Por cobrar',fmt(deben.reduce((a,c)=>a+c.debe,0)),'#b45309')}
       ${card('📦 Falta retirar: '+librosPorRetirar+' libro(s) — se recupera con nota de crédito',fmt(valorPorRetirar),'#991b1b')}
       ${card('⚠️ Muestras perdidas ('+perdidas.length+' colegio/s) — se pagan a la editorial sin venta',fmt(valorPerdido),'#7f1d1d')}
     </div>
@@ -8878,13 +8884,14 @@ function renderMuestrasCol(){
       <select id="mu-est" onchange="renderMuestrasCol()">
         <option value="">Todos</option>
         <optgroup label="¿Trabaja con nosotros?">${Object.entries(ESTADOS_MUESTRA).map(([k,v])=>`<option value="c:${k}" ${fe==='c:'+k?'selected':''}>${v}</option>`).join('')}</optgroup>
+        <optgroup label="Pagos"><option value="p:debe" ${fe==='p:debe'?'selected':''}>💵 Te deben dinero</option></optgroup>
         <optgroup label="Muestras">${Object.entries(ESTADOS_MUESTRAS_LIBROS).map(([k,v])=>`<option value="m:${k}" ${fe==='m:'+k?'selected':''}>${v}</option>`).join('')}</optgroup>
       </select>
     </div>
     <div style="overflow:auto"><table>
       <thead><tr><th>Colegio</th><th>Guías / N° control</th><th>Siguen en el colegio</th><th>Valor (costo)</th><th>Retirados</th><th>Estado</th></tr></thead>
       <tbody>${lista.length?lista.map(c=>`<tr>
-        <td style="font-weight:600">${escH(c.nombre)}${c.tieneVentas?'<div style="font-size:10px;color:#166534">tiene Control de ventas</div>':''}${c.recibidas.length?`<div style="font-size:10px;color:#1565c0">↪ recibió libros de ${c.recibidas.map(escH).join(', ')}</div>`:''}</td>
+        <td style="font-weight:600">${escH(c.nombre)}${c.tieneVentas?'<div style="font-size:10px;color:#166534">tiene Control de ventas</div>':''}${c.cobro?(()=>{const s=estadoCobroColegio(c.cobro);return `<div style="font-size:11px;font-weight:700;color:${s.color};margin-top:2px">${s.txt}${c.debe?' $'+c.debe.toFixed(2):''}</div>`;})():''}${c.recibidas.length?`<div style="font-size:10px;color:#1565c0">↪ recibió libros de ${c.recibidas.map(escH).join(', ')}</div>`:''}</td>
         <td style="font-size:11px">${c.guias.map(g=>`<div style="display:flex;gap:4px;align-items:center;margin:2px 0">
           <span style="font-family:monospace">${escH(g.numero)}</span> · ${escH(g.fecha||'')} · control ${g.numControl?escH(g.numControl):'<span style="color:#c0392b">falta</span>'} · ${(g.lineas||[]).reduce((a,l)=>a+l.cantidad,0)} u.
           <button class="btn btn-s btn-sm" onclick="verGuia('${g.id}')" title="Ver libros"><i class="ti ti-eye"></i></button>
