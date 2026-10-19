@@ -8758,19 +8758,23 @@ function renderColViews(){
 // eligió estado, se asume "Trabaja con nosotros".
 // Dos preguntas separadas por colegio (Mónica, 2026-10-18: un colegio puede
 // trabajar con nosotros y aun así faltar retirar sus muestras):
-//   g.estadoMuestra  → ¿trabaja con nosotros?  espera | si | no
-//   g.muestrasEstado → ¿qué pasa con las muestras? quedan | retirar | retirado
+//   g.estadoMuestra  → ¿trabaja con nosotros?  espera | si | no | cerro
+//   g.muestrasEstado → ¿qué pasa con las muestras? quedan | retirar | retirado | perdidas
+// "perdidas" (ej. Liceo Los Álamos cerró y se quedó con las muestras): no se pueden
+// devolver a la editorial → no hay nota de crédito, se pagan sin venta.
 // Se guardan en cada guía de muestras del colegio (no hay lista aparte).
 // Valor viejo estadoMuestra='retirado' (versión del 17-10) = no trabaja + ya retiradas.
 const ESTADOS_MUESTRA={
   espera:'⏳ Esperando respuesta',
   si:'✅ Trabaja con nosotros',
-  no:'❌ No trabaja con nosotros'
+  no:'❌ No trabaja con nosotros',
+  cerro:'🚫 Colegio cerró'
 };
 const ESTADOS_MUESTRAS_LIBROS={
   quedan:'📚 Muestras se quedan en el colegio',
   retirar:'📦 Falta retirar muestras',
-  retirado:'↩ Muestras ya retiradas'
+  retirado:'↩ Muestras ya retiradas',
+  perdidas:'⚠️ Perdidas (el colegio se quedó con ellas)'
 };
 function gruposMuestras(){
   const grupos={};
@@ -8797,7 +8801,7 @@ function gruposMuestras(){
     let lib=c.guias.map(g=>g.muestrasEstado).find(Boolean);
     if(est==='retirado'){est='no';lib=lib||'retirado';}
     c.estado=est||(c.tieneVentas?'si':'espera');
-    c.libros=lib||(c.estado==='no'?'retirar':'quedan');
+    c.libros=lib||(c.estado==='no'||c.estado==='cerro'?'retirar':'quedan');
     // "Falta retirar" pasa solo a "Ya retiradas" cuando ya no queda ningún libro allá
     if(c.libros==='retirar'&&c.quedan===0&&(c.aBodega||c.aOtros))c.libros='retirado';
     return c;
@@ -8837,18 +8841,21 @@ function renderMuestrasCol(){
   const librosPorRetirar=porRetirar.reduce((a,c)=>a+c.quedan,0);
   const valorPorRetirar=porRetirar.reduce((a,c)=>a+c.valor,0);
   const valorDe=e=>todos.filter(c=>!e||c.estado===e).reduce((a,c)=>a+c.valor,0);
+  const perdidas=todos.filter(c=>c.libros==='perdidas');
+  const valorPerdido=perdidas.reduce((a,c)=>a+c.valor,0);
   const card=(lbl,val,col)=>`<div class="sc"><div class="sc-lbl">${lbl}</div><div class="sc-val" style="color:${col}">${val}</div></div>`;
   const sel=(fn,nombre,dic,val,bg)=>`<select onchange="${fn}('${escH(nombre).replace(/'/g,"\\'")}',this.value)" style="font-size:12px;width:100%;margin:2px 0;background:${bg}">
       ${Object.entries(dic).map(([k,v])=>`<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}
     </select>`;
-  const bgEst={espera:'#fffbeb',si:'#f0fdf4',no:'#fef2f2'};
-  const bgLib={quedan:'#f8fafc',retirar:'#fff3e0',retirado:'#f1f5f9'};
+  const bgEst={espera:'#fffbeb',si:'#f0fdf4',no:'#fef2f2',cerro:'#e5e7eb'};
+  const bgLib={quedan:'#f8fafc',retirar:'#fff3e0',retirado:'#f1f5f9',perdidas:'#fde2e2'};
   box.innerHTML=`
     <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
       ${card('Colegios con muestras',todos.length,'#5e35b1')}
       ${card('⏳ Esperando respuesta',cuenta('espera'),'#b45309')}
       ${card('✅ Trabajan con nosotros',cuenta('si'),'#166534')}
       ${card('❌ No trabajan',cuenta('no'),'#991b1b')}
+      ${card('🚫 Cerraron',cuenta('cerro'),'#475569')}
       ${card('📦 Falta retirar muestras',cuentaL('retirar'),'#e65100')}
       ${card('↩ Muestras ya retiradas',cuentaL('retirado'),'#475569')}
     </div>
@@ -8856,8 +8863,9 @@ function renderMuestrasCol(){
       ${card('💰 Muestras en todos los colegios (costo editorial)',fmt(valorDe('')),'#5e35b1')}
       ${card('⏳ En colegios que aún no responden',fmt(valorDe('espera')),'#b45309')}
       ${card('📦 Falta retirar: '+librosPorRetirar+' libro(s) — se recupera con nota de crédito',fmt(valorPorRetirar),'#991b1b')}
+      ${card('⚠️ Muestras perdidas ('+perdidas.length+' colegio/s) — se pagan a la editorial sin venta',fmt(valorPerdido),'#7f1d1d')}
     </div>
-    <div style="font-size:12px;color:var(--mu);margin:8px 0">Cada muestra es un libro que la editorial te facturó: <b>mientras siga en un colegio sin usarse, es deuda sin venta</b>. Cada colegio tiene <b>dos listas</b>: la de arriba dice si trabaja con ustedes; la de abajo, qué pasa con sus muestras. Cuando vayas por las muestras, usa el botón naranja <b>↩</b>: vuelven a bodega (y con la nota de crédito baja tu deuda) o pasan a otro colegio. Al retirar todo, cambia solo a <b>↩ Muestras ya retiradas</b>. <b>Todo se guarda solo</b> apenas eliges.</div>
+    <div style="font-size:12px;color:var(--mu);margin:8px 0">Cada muestra es un libro que la editorial te facturó: <b>mientras siga en un colegio sin usarse, es deuda sin venta</b>. Cada colegio tiene <b>dos listas</b>: la de arriba dice si trabaja con ustedes; la de abajo, qué pasa con sus muestras. Cuando vayas por las muestras, usa el botón naranja <b>↩</b>: vuelven a bodega (y con la nota de crédito baja tu deuda) o pasan a otro colegio. Al retirar todo, cambia solo a <b>↩ Muestras ya retiradas</b>. Si el colegio se quedó con las muestras y no se pueden recuperar (por ejemplo, cerró), márcalas <b>⚠️ Perdidas</b>: no se devuelven a la editorial, así que no hay nota de crédito por ellas. <b>Todo se guarda solo</b> apenas eliges.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <input type="search" id="mu-q" placeholder="Buscar colegio..." value="${escH(q)}" oninput="renderMuestrasCol()" style="min-width:180px">
       <select id="mu-est" onchange="renderMuestrasCol()">
