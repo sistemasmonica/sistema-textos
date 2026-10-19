@@ -8759,7 +8759,9 @@ function renderColViews(){
 // Dos preguntas separadas por colegio (Mónica, 2026-10-18: un colegio puede
 // trabajar con nosotros y aun así faltar retirar sus muestras):
 //   g.estadoMuestra  → ¿trabaja con nosotros?  espera | si | no | cerro
-//   g.muestrasEstado → ¿qué pasa con las muestras? quedan | retirar | retirado | perdidas
+//   g.muestrasEstado → ¿qué pasa con las muestras? quedan | retirar | buscando | retirado | perdidas
+// "buscando" (ej. Saulo, Florentinos): ya se retiró una parte y el colegio quedó en
+// buscar y entregar las que faltan. Lo que sigue en el colegio = lo que deben.
 // "perdidas" (ej. Liceo Los Álamos cerró y se quedó con las muestras): no se pueden
 // devolver a la editorial → no hay nota de crédito, se pagan sin venta.
 // Se guardan en cada guía de muestras del colegio (no hay lista aparte).
@@ -8773,6 +8775,7 @@ const ESTADOS_MUESTRA={
 const ESTADOS_MUESTRAS_LIBROS={
   quedan:'📚 Muestras se quedan en el colegio',
   retirar:'📦 Falta retirar muestras',
+  buscando:'🔎 Faltan: el colegio las está buscando',
   retirado:'↩ Muestras ya retiradas',
   perdidas:'⚠️ Perdidas (el colegio se quedó con ellas)'
 };
@@ -8803,7 +8806,7 @@ function gruposMuestras(){
     c.estado=est||(c.tieneVentas?'si':'espera');
     c.libros=lib||(c.estado==='no'||c.estado==='cerro'?'retirar':'quedan');
     // "Falta retirar" pasa solo a "Ya retiradas" cuando ya no queda ningún libro allá
-    if(c.libros==='retirar'&&c.quedan===0&&(c.aBodega||c.aOtros))c.libros='retirado';
+    if((c.libros==='retirar'||c.libros==='buscando')&&c.quedan===0&&(c.aBodega||c.aOtros))c.libros='retirado';
     return c;
   }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
 }
@@ -8837,7 +8840,7 @@ function renderMuestrasCol(){
   const lista=todos.filter(c=>(!q||c.nombre.includes(q))&&pasa(c));
   const cuenta=e=>todos.filter(c=>c.estado===e).length;
   const cuentaL=e=>todos.filter(c=>c.libros===e).length;
-  const porRetirar=todos.filter(c=>c.libros==='retirar');
+  const porRetirar=todos.filter(c=>c.libros==='retirar'||c.libros==='buscando');
   const librosPorRetirar=porRetirar.reduce((a,c)=>a+c.quedan,0);
   const valorPorRetirar=porRetirar.reduce((a,c)=>a+c.valor,0);
   const valorDe=e=>todos.filter(c=>!e||c.estado===e).reduce((a,c)=>a+c.valor,0);
@@ -8848,7 +8851,7 @@ function renderMuestrasCol(){
       ${Object.entries(dic).map(([k,v])=>`<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}
     </select>`;
   const bgEst={espera:'#fffbeb',si:'#f0fdf4',no:'#fef2f2',cerro:'#e5e7eb'};
-  const bgLib={quedan:'#f8fafc',retirar:'#fff3e0',retirado:'#f1f5f9',perdidas:'#fde2e2'};
+  const bgLib={quedan:'#f8fafc',retirar:'#fff3e0',buscando:'#e0f2fe',retirado:'#f1f5f9',perdidas:'#fde2e2'};
   box.innerHTML=`
     <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
       ${card('Colegios con muestras',todos.length,'#5e35b1')}
@@ -8857,6 +8860,7 @@ function renderMuestrasCol(){
       ${card('❌ No trabajan',cuenta('no'),'#991b1b')}
       ${card('🚫 Cerraron',cuenta('cerro'),'#475569')}
       ${card('📦 Falta retirar muestras',cuentaL('retirar'),'#e65100')}
+      ${card('🔎 El colegio las está buscando',cuentaL('buscando'),'#0369a1')}
       ${card('↩ Muestras ya retiradas',cuentaL('retirado'),'#475569')}
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:8px">
@@ -8865,7 +8869,7 @@ function renderMuestrasCol(){
       ${card('📦 Falta retirar: '+librosPorRetirar+' libro(s) — se recupera con nota de crédito',fmt(valorPorRetirar),'#991b1b')}
       ${card('⚠️ Muestras perdidas ('+perdidas.length+' colegio/s) — se pagan a la editorial sin venta',fmt(valorPerdido),'#7f1d1d')}
     </div>
-    <div style="font-size:12px;color:var(--mu);margin:8px 0">Cada muestra es un libro que la editorial te facturó: <b>mientras siga en un colegio sin usarse, es deuda sin venta</b>. Cada colegio tiene <b>dos listas</b>: la de arriba dice si trabaja con ustedes; la de abajo, qué pasa con sus muestras. Cuando vayas por las muestras, usa el botón naranja <b>↩</b>: vuelven a bodega (y con la nota de crédito baja tu deuda) o pasan a otro colegio. Al retirar todo, cambia solo a <b>↩ Muestras ya retiradas</b>. Si el colegio se quedó con las muestras y no se pueden recuperar (por ejemplo, cerró), márcalas <b>⚠️ Perdidas</b>: no se devuelven a la editorial, así que no hay nota de crédito por ellas. <b>Todo se guarda solo</b> apenas eliges.</div>
+    <div style="font-size:12px;color:var(--mu);margin:8px 0">Cada muestra es un libro que la editorial te facturó: <b>mientras siga en un colegio sin usarse, es deuda sin venta</b>. Cada colegio tiene <b>dos listas</b>: la de arriba dice si trabaja con ustedes; la de abajo, qué pasa con sus muestras. Cuando vayas por las muestras, usa el botón naranja <b>↩</b>: vuelven a bodega (y con la nota de crédito baja tu deuda) o pasan a otro colegio. Al retirar todo, cambia solo a <b>↩ Muestras ya retiradas</b>. Si retiraste solo una parte y el colegio quedó en buscar las demás, registra con <b>↩</b> lo que te dieron y marca <b>🔎 Faltan: el colegio las está buscando</b>. Si el colegio se quedó con las muestras y no se pueden recuperar (por ejemplo, cerró), márcalas <b>⚠️ Perdidas</b>: no se devuelven a la editorial, así que no hay nota de crédito por ellas. <b>Todo se guarda solo</b> apenas eliges.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <input type="search" id="mu-q" placeholder="Buscar colegio..." value="${escH(q)}" oninput="renderMuestrasCol()" style="min-width:180px">
       <select id="mu-est" onchange="renderMuestrasCol()">
@@ -8889,6 +8893,7 @@ function renderMuestrasCol(){
         <td style="min-width:240px">
           ${sel('cambiarEstadoMuestra',c.nombre,ESTADOS_MUESTRA,c.estado,bgEst[c.estado])}
           ${sel('cambiarLibrosMuestra',c.nombre,ESTADOS_MUESTRAS_LIBROS,c.libros,bgLib[c.libros])}
+          ${c.libros==='buscando'?`<div style="font-size:10px;color:#0369a1;margin-top:3px;font-weight:600">El colegio te debe ${c.quedan} libro(s) (${fmt(c.valor)}). Cuando te los entregue, regístralos con el botón ↩</div>`:''}
           ${c.libros==='retirado'&&c.quedan>0?`<div style="font-size:10px;color:#c0392b;margin-top:3px">Aún quedan ${c.quedan} libro(s) en el sistema: regístralos con el botón ↩</div>`:''}
         </td>
       </tr>`).join(''):'<tr><td colspan="6"><div class="empty">Sin colegios en este filtro</div></td></tr>'}</tbody>
