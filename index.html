@@ -1288,9 +1288,18 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="f3">
       <div class="fg"><label>Fecha</label><input type="date" id="pago-fecha"></div>
       <div class="fg"><label>Tipo</label>
-        <select id="pago-tipo">
+        <select id="pago-tipo" onchange="mostrarEditorialPago()">
           <option value="cobro">💰 Cobro recibido (me pagan)</option>
           <option value="pago">💸 Pago realizado (yo pago)</option>
+        </select>
+      </div>
+      <div class="fg" id="pago-ed-wrap" style="display:none"><label>¿Es pago a una editorial?</label>
+        <select id="pago-editorial" style="border:2px solid #f59e0b">
+          <option value="">— Elige —</option>
+          <option value="Didáctica">📘 Sí, a DIDÁCTICA (baja lo que le debo)</option>
+          <option value="Tech Books">🔤 Sí, a TECH BOOKS (baja lo que le debo)</option>
+          <option value="prestamo">🤝 Préstamo (no es pago de libros)</option>
+          <option value="no">🧾 No, es otro gasto</option>
         </select>
       </div>
       <div class="fg"><label>Nombre (cliente, colegio, librería o proveedor)</label><input type="text" id="pago-nombre" placeholder="Ej: Colegio San José, Editorial Norma..."></div>
@@ -2100,6 +2109,7 @@ async function syncFromCloud(){
       }
     }
     try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
+    try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
@@ -2191,6 +2201,7 @@ function save(){
     return;
   }
   try{
+    try{sincronizarDevColegios();}catch(e){console.warn('Devoluciones colegios:',e);}
     if(DB.productos.length>0)
       localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
     const toSave={
@@ -3340,19 +3351,30 @@ function abrirModalProducto(editId=null){
   abrirModal('modal-producto');
 }
 
-// Junta 'src' (duplicado) dentro de 'tgt' (el que se queda): mueve stock,
-// ventas y referencias, y APRENDE que el nombre de src = tgt (alias).
-function fusionarProducto(srcId,tgtId){
-  if(srcId===tgtId)return;
-  const src=DB.productos.find(p=>p.id===srcId);
-  const tgt=DB.productos.find(p=>p.id===tgtId);
-  if(!src||!tgt)return toast('Producto no encontrado','err');
-  DB.movInv.forEach(m=>{ if(m.prodId===srcId)m.prodId=tgtId; });
+// Parte de datos de la fusión (sin pantalla ni guardado): pasa TODO lo que
+// apunta a src (inventario, guías, colegios, notas de crédito, conteo,
+// respaldo vendedor) a tgt y aprende el nombre de src como alias.
+function _fusionarDatos(src,tgt){
+  const srcId=src.id,tgtId=tgt.id;
+  const re=l=>{ if(l&&l.prodId===srcId)l.prodId=tgtId; };
+  DB.movInv.forEach(re);
   Object.keys(DB.colData||{}).forEach(k=>{
-    (DB.colData[k].lineas||[]).forEach(l=>{ if(l.prodId===srcId)l.prodId=tgtId; });
-    (DB.colData[k].fin||[]).forEach(l=>{ if(l.prodId===srcId)l.prodId=tgtId; });
+    (DB.colData[k].lineas||[]).forEach(re);
+    (DB.colData[k].fin||[]).forEach(re);
   });
-  (DB.guias||[]).forEach(g=>(g.lineas||[]).forEach(l=>{ if(l.prodId===srcId)l.prodId=tgtId; }));
+  (DB.guias||[]).forEach(g=>{(g.lineas||[]).forEach(re);(g.retiros||[]).forEach(r=>(r.lineas||[]).forEach(re));});
+  (DB.notasCredito||[]).forEach(n=>(n.lineas||[]).forEach(re));
+  (DB.respaldosVendedor||[]).forEach(r=>(r.lineas||[]).forEach(re));
+  const it=DB.conteo?.items;
+  if(it&&it[srcId]){
+    if(it[tgtId]){
+      const a=it[tgtId],b=it[srcId];
+      if(b.c!=null&&b.c!=='')a.c=(parseFloat(a.c)||0)+(parseFloat(b.c)||0);
+      if(b.obs)a.obs=[a.obs,b.obs].filter(Boolean).join(' · ');
+      delete a.h;
+    } else it[tgtId]=it[srcId];
+    delete it[srcId];
+  }
   // aprender el/los nombre(s) de src como alias de tgt
   const aliasSet=new Set([...(tgt.alias||[]),src.nombre,...(src.alias||[])].map(s=>String(s||'').trim()).filter(Boolean));
   // no guardar como alias el nombre que ya es igual al de tgt
@@ -3361,6 +3383,16 @@ function fusionarProducto(srcId,tgtId){
   if(!(tgt.precioCosto>0)&&src.precioCosto>0)tgt.precioCosto=src.precioCosto;
   if(!(tgt.precioVenta>0)&&src.precioVenta>0)tgt.precioVenta=src.precioVenta;
   DB.productos=DB.productos.filter(p=>p.id!==srcId);
+}
+
+// Junta 'src' (duplicado) dentro de 'tgt' (el que se queda): mueve stock,
+// ventas y referencias, y APRENDE que el nombre de src = tgt (alias).
+function fusionarProducto(srcId,tgtId){
+  if(srcId===tgtId)return;
+  const src=DB.productos.find(p=>p.id===srcId);
+  const tgt=DB.productos.find(p=>p.id===tgtId);
+  if(!src||!tgt)return toast('Producto no encontrado','err');
+  _fusionarDatos(src,tgt);
   logHistorial('Productos fusionados',`"${src.nombre}" → "${tgt.nombre}" (alias aprendido)`);
   save();
   cerrarModal('modal-producto');
@@ -3708,6 +3740,7 @@ function limpiarEntrada(){
 // Editorial de una entrada de inventario, según el proveedor con que se ingresó.
 function editorialEntrada(m){return grupoEditorial(m.proveedor)||'Otras';}
 function entradaPasaFiltro(m){
+  if(esDevColegio(m))return false;
   const f=document.getElementById('ent-ed-fil')?.value||'';
   return !f||editorialEntrada(m)===f;
 }
@@ -3715,7 +3748,7 @@ function entradaPasaFiltro(m){
 function renderResumenEntradasEd(){
   const el=document.getElementById('ent-ed-resumen');if(!el)return;
   const t={};
-  DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)).forEach(m=>{
     const k=editorialEntrada(m);t[k]=t[k]||{u:0,v:0};
     t[k].u+=parseFloat(m.cantidad)||0;t[k].v+=(parseFloat(m.cantidad)||0)*(parseFloat(m.precioCosto)||0);
   });
@@ -3841,7 +3874,7 @@ function crearEntradaDesdeFactura(fd){
 
 // Facturas de editorial (con detalle de productos) que TODAVÍA no tienen su entrada de inventario
 function facturasSinEntrada(){
-  const refsConEntrada=new Set(DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref).map(m=>numFactDigits(m.ref)));
+  const refsConEntrada=new Set(DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref&&!esDevColegio(m)).map(m=>numFactDigits(m.ref)));
   return DB.regs.filter(r=>esCompraEditorial(r)&&Array.isArray(r.detalles)&&r.detalles.length
     &&!refsConEntrada.has(numFactDigits(r.numFact)));
 }
@@ -4399,7 +4432,7 @@ function resumenVendedora(vendedor){
   // stock) con proveedor tipo "Devolución [vendedora]".
   const vendedorTokens=_normNombre(vendedor).split(' ').filter(t=>t.length>=4);
   const entradasDevol=(DB.movInv||[]).filter(m=>{
-    if(m.tipo!=='entrada')return false;
+    if(m.tipo!=='entrada'||esDevColegio(m))return false;
     const p=_normNombre(m.proveedor||'');
     if(!p.includes('DEVOL'))return false;
     return vendedorTokens.some(t=>p.includes(t));
@@ -4636,12 +4669,29 @@ function guardarPago(){
   const nota=(document.getElementById('pago-nota').value||'').trim();
   if(!nombre)return toast('Ingresa el nombre del cliente/colegio/proveedor','err');
   if(valor<=0)return toast('Ingresa un valor mayor a 0','err');
+  // Pagos: hay que saber si baja la deuda con una editorial (si no, el Resumen
+  // del negocio no lo cuenta). Se adivina por el nombre; si parece editorial y
+  // no se eligió nada, se pregunta.
+  let editorial='';
+  if(tipo==='pago'){
+    editorial=document.getElementById('pago-editorial')?.value||'';
+    if(!editorial){
+      const g=editorialAdivinadaPago({nombre,nota});
+      if(g){editorial=g;}
+      else if(_pareceEditorial(nombre+' '+nota)){
+        mostrarEditorialPago();
+        document.getElementById('pago-editorial')?.focus();
+        return alert('Este pago parece ser a una editorial.\n\nEn "¿Es pago a una editorial?" elige DIDÁCTICA, TECH BOOKS, Préstamo u Otro gasto, y vuelve a guardar.\n\n(Así el Resumen del negocio descuenta bien lo que le debes.)');
+      } else editorial='no';
+    }
+  }
   DB.pagos=DB.pagos||[];
   const editId=document.getElementById('pago-edit-id').value;
   if(editId){
     const p=DB.pagos.find(x=>x.id===editId);
     if(!p)return toast('No se encontró el registro a editar','err');
     Object.assign(p,{fecha,tipo,nombre,valor,forma,nota});
+    if(editorial)p.editorial=editorial;else delete p.editorial;
     if(pagoComprobante)p.comprobante=pagoComprobante;
     logHistorial(tipo==='cobro'?'Cobro editado':'Pago editado',`${nombre} — ${fmt(valor)} (${forma})`);
     save();
@@ -4651,6 +4701,7 @@ function guardarPago(){
     return;
   }
   const reg={id:uid(),fecha,tipo,nombre,valor,forma,nota};
+  if(editorial)reg.editorial=editorial;
   if(pagoComprobante)reg.comprobante=pagoComprobante;
   DB.pagos.push(reg);
   logHistorial(tipo==='cobro'?'Cobro registrado':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma})`+(pagoComprobante?' + comprobante':''));
@@ -4685,6 +4736,9 @@ function editarPago(id){
   document.getElementById('pago-valor').value=String(p.valor).replace('.',',');previewValorPago();
   document.getElementById('pago-forma').value=p.forma;
   document.getElementById('pago-nota').value=p.nota||'';
+  const se=document.getElementById('pago-editorial');
+  if(se)se.value=p.tipo==='pago'?(p.editorial||editorialAdivinadaPago(p)||''):'';
+  mostrarEditorialPago();
   document.getElementById('pago-edit-id').value=id;
   pagoComprobante=null;
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
@@ -4706,9 +4760,35 @@ function cancelarEdicionPago(){
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
   const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
   pagoComprobante=null;
+  const se=document.getElementById('pago-editorial');if(se)se.value='';
   document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar';
   document.getElementById('btn-cancelar-pago').style.display='none';
   _avisoEdicionPago(null);
+}
+// Muestra "¿Es pago a una editorial?" solo cuando el tipo es Pago.
+function mostrarEditorialPago(){
+  const w=document.getElementById('pago-ed-wrap');if(!w)return;
+  w.style.display=document.getElementById('pago-tipo')?.value==='pago'?'':'none';
+}
+function _pareceEditorial(t){return /EDITORIAL|DID[AÁ]CTICA|TECH\s*BOOKS|DANIEL|MARCOS?\b|LIBROS/i.test(String(t||''));}
+// A qué editorial va un pago (Didáctica / Tech Books) o null si no es pago de libros.
+// Primero lo que Mónica eligió al registrarlo; si es un pago viejo, por el texto.
+function editorialAdivinadaPago(p){
+  const t=(p.nombre||'')+' '+(p.nota||'');
+  if(/PR[EÉ]STAMO/i.test(t))return null;
+  return grupoEditorial(p.nombre)||grupoEditorial(p.nota)||null;
+}
+function editorialDePago(p){
+  if(!p||p.tipo!=='pago')return null;
+  if(p.editorial==='Didáctica'||p.editorial==='Tech Books')return p.editorial;
+  if(p.editorial)return null;            // 'no' o 'prestamo'
+  return editorialAdivinadaPago(p);
+}
+// Pagos que parecen de editorial pero no se sabe a cuál: el Resumen los avisa
+// en vez de ignorarlos en silencio.
+function pagosEditorialSinDefinir(){
+  return (DB.pagos||[]).filter(p=>p.tipo==='pago'&&!p.editorial&&!editorialDePago(p)
+    &&!/PR[EÉ]STAMO/i.test((p.nombre||'')+' '+(p.nota||''))&&_pareceEditorial((p.nombre||'')+' '+(p.nota||'')));
 }
 
 // Abre el comprobante (imagen o PDF) en una ventana nueva
@@ -4785,10 +4865,14 @@ function renderPagos(){
   const tb=document.getElementById('tb-pagos');
   if(!tb)return;
   if(!lista.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin pagos ni cobros registrados.</div></td></tr>';return;}
+  const sinDef=pagosEditorialSinDefinir();
   tb.innerHTML=lista.map(p=>`<tr>
     <td style="font-family:monospace;white-space:nowrap">${p.fecha}</td>
     <td>${p.tipo==='cobro'?'<span class="bdg" style="background:var(--g3);color:var(--g1)">💰 Cobro</span>':'<span class="bdg" style="background:#fde2e2;color:var(--r1)">💸 Pago</span>'}</td>
-    <td>${escH(p.nombre)}</td>
+    <td>${escH(p.nombre)}${p.tipo==='pago'?(()=>{const g=editorialDePago(p);
+      if(g)return ` <span class="bdg bdg-ok" title="Se descuenta de lo que le debes a ${g}" style="font-size:10px">${g==='Didáctica'?'📘':'🔤'} ${g}</span>`;
+      if(sinDef.includes(p))return ' <span class="bdg bdg-err" title="Toca Editar y elige la editorial" style="font-size:10px">⚠️ ¿editorial?</span>';
+      return '';})():''}</td>
     <td>${escH(p.forma)}</td>
     <td style="font-family:monospace;font-weight:600">${fmt(p.valor)}</td>
     <td style="color:var(--mu)">${escH(p.nota||'')}</td>
@@ -5423,7 +5507,7 @@ function guardarRetiroGuia(id){
   let msg=`✅ Listo. Se retiraron ${totalU} libro(s) de ${g.cliente}.\n\n`;
   msg+=nueva?`Se creó la guía ${nueva.numero} para ${colDest}.${nueva.esMuestra?' Es de muestras: ponle el N° de control con el lápiz ✏️.':''}`
             :'Los libros ya están sumados en el stock de bodega. Cuando la editorial te dé la nota de crédito, regístrala como siempre.';
-  if(!esGuiaMuestra(g))msg+=`\n\nOJO: si ya anotaste esta venta en Colegios → Control de ventas de ${g.cliente}, ajusta ahí las cantidades.`;
+  if(!esGuiaMuestra(g))msg+=`\n\nOJO: si ya anotaste esta venta en Colegios → Control de ventas de ${g.cliente}, ahí BAJA LA CANTIDAD. No lo anotes como devolución (DEV): estos libros ya volvieron a bodega con este retiro y se contarían dos veces.`;
   alert(msg);
 }
 
@@ -6740,8 +6824,9 @@ function renderAuditoria(){
   const inicial=DB.productos.filter(p=>p.editorial!=='Hist.').reduce((a,p)=>a+(p.stockInicial||0),0);
   const stockEsperado=inicial+ent.unidades-gu.unidades-salNC;
   const okStock=stockEsperado===st.unidades;
+  const devU=DB.movInv.filter(esDevColegio).reduce((a,m)=>a+(m.cantidad||0),0);
   html+=`<div style="background:${okStock?'#f0fdf4':'#fef2f2'};border:1px solid ${okStock?'#86efac':'#fca5a5'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:${okStock?'#166534':'#991b1b'}">
-    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC}) = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
+    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}${devU?`, de ellas ${devU} devueltas por colegios`:''}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC}) = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
   </div>`;
 
   // 2) Guías con número repetido
@@ -7870,7 +7955,7 @@ function renderConsolidado(){
   const anioFil=selA.value;
 
   const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
 
   const totalVentas=guias.reduce((a,g)=>a+g.total,0);
   const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
@@ -7929,7 +8014,7 @@ function renderConsolidado(){
 function imprimirConsolidado(){
   const anioFil=document.getElementById('cons-anio').value;
   const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
   const totalVentas=guias.reduce((a,g)=>a+g.total,0);
   const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
   const totalCompras=entradas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
@@ -8828,12 +8913,39 @@ function cambiarEstadoMuestra(nombre,estado){
   save();renderMuestrasCol();
   toast('✔ Guardado: '+nombre+' → '+(ESTADOS_MUESTRA[estado]||estado),'ok');
 }
+// Pasa a BODEGA todos los libros que todavía figuran en una guía de muestras
+// (mismo registro que el botón ↩ "Retirar libros": baja la guía y su salida
+// de inventario, y deja anotado el retiro). Devuelve cuántos libros movió.
+function _retirarTodoABodega(g,fecha){
+  const sacar=(g.lineas||[]).filter(l=>l.cantidad>0).map(l=>({prodId:l.prodId,nombre:l.nombre,cantidad:l.cantidad}));
+  if(!sacar.length)return 0;
+  sacar.forEach(s=>{
+    let resto=s.cantidad;
+    DB.movInv.filter(m=>m.tipo==='salida'&&m.ref===g.numero&&m.prodId===s.prodId).forEach(m=>{
+      if(resto<=0)return;const q=Math.min(resto,m.cantidad||0);m.cantidad-=q;resto-=q;
+    });
+  });
+  DB.movInv=DB.movInv.filter(m=>!(m.tipo==='salida'&&m.ref===g.numero&&!(m.cantidad>0)));
+  g.lineas=[];g.total=0;
+  (g.retiros=g.retiros||[]).push({fecha:fecha||today(),destino:'BODEGA',guiaNueva:'',lineas:sacar});
+  return sacar.reduce((a,s)=>a+s.cantidad,0);
+}
 function cambiarLibrosMuestra(nombre,valor){
-  _guiasMuestraDe(nombre).forEach(g=>{
+  const gs=_guiasMuestraDe(nombre);
+  let movidos=0;
+  if(valor==='retirado'){
+    const quedan=gs.reduce((a,g)=>a+(g.lineas||[]).reduce((s,l)=>s+(l.cantidad||0),0),0);
+    if(quedan>0){
+      if(!confirm(`${nombre} todavía tiene ${quedan} libro(s) de muestra anotados en el colegio.\n\n¿Ya volvieron TODOS a tu bodega?\n\n• Aceptar = se suman al stock de bodega (para devolverlos a la editorial).\n• Cancelar = no se cambia nada (si fueron a otro colegio o falta alguno, usa el botón ↩ en Guías de retiro).`)){renderMuestrasCol();return;}
+      gs.forEach(g=>{movidos+=_retirarTodoABodega(g,today());});
+    }
+  }
+  gs.forEach(g=>{
     if(g.estadoMuestra==='retirado')g.estadoMuestra='no';
     g.muestrasEstado=valor;
   });
-  logHistorial('Muestras del colegio',nombre+' → '+(ESTADOS_MUESTRAS_LIBROS[valor]||valor));
+  logHistorial('Muestras del colegio',nombre+' → '+(ESTADOS_MUESTRAS_LIBROS[valor]||valor)+(movidos?` (${movidos} libro(s) vuelven a bodega)`:''));
+  if(movidos){try{renderGuias();renderCatalogo();renderStockReport();}catch(e){}}
   save();renderMuestrasCol();
   toast('✔ Guardado: '+nombre+' → '+(ESTADOS_MUESTRAS_LIBROS[valor]||valor),'ok');
 }
@@ -10946,7 +11058,7 @@ function diagFacturaEntrada(ref){
 
 function gruposEntradas(){
   const g={};
-  DB.movInv.filter(m=>m.tipo==='entrada').forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)).forEach(m=>{
     const key=(m.ref||'')+'|'+(m.proveedor||'');
     if(!g[key])g[key]={ref:m.ref||'',prov:m.proveedor||'',fecha:m.fecha||'',unidades:0,valor:0,sinCosto:0,movs:[]};
     const gg=g[key];
@@ -11008,13 +11120,13 @@ function renderCuadreMercaderia(){
       <div style="font-size:13px;font-weight:800;color:#1565c0;margin-bottom:9px">💳 Lo que le debes a la editorial <span style="font-weight:400;color:#64748b;font-size:11px">— según las ${e.facturas} factura(s) cargadas</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
         ${it('Facturado total',fmt(e.facturado),'#334155','Suma de todas las facturas de editorial cargadas')}
-        ${it('Ya pagado',fmt(e.pagado),'#16a34a','Facturas marcadas como Pagada')}
+        ${it('Abonos (en Pagos)',fmt(e.pagosPagos+e.pagado),'#16a34a','Pagos registrados en la pestaña Pagos como pago a Didáctica o Tech Books')}
         ${it('Notas de crédito',fmt(e.notasCred),'#16a34a','Devoluciones a la editorial: bajan lo que le debes')}
         ${it(`Pendiente (${e.nPend})`,fmt(e.pendiente),'#b45309','Facturas todavía sin pagar')}
         <div style="flex:1.3;min-width:170px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:7px 12px">
           <div style="font-size:10px;color:#1e40af;text-transform:uppercase;letter-spacing:.4px;font-weight:700">➜ Le debes hoy</div>
           <div style="font-size:24px;font-weight:900;color:#1d4ed8;font-family:monospace">${fmt(e.deudaReal)}</div>
-          <div style="font-size:10px;color:#64748b">pendiente − notas de crédito</div>
+          <div style="font-size:10px;color:#64748b">facturas − notas de crédito − abonos (igual que el Resumen del negocio)</div>
         </div>
       </div>
       ${e.nVenc?`<div style="margin-top:9px;font-size:11px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px">🔴 <b>${e.nVenc} factura(s) ya vencida(s)</b> por <b>${fmt(e.vencida)}</b> (plazo de 180 días). Por vencer: ${fmt(e.porVencer)}.</div>`
@@ -11102,7 +11214,7 @@ function _pareceMismoLibro(nombreProd,editorialProd,descFactura){
 function rellenarCostosEntradas(){
   let n=0,sinDato=0,deFactura=0;
   const editoriales=DB.regs.filter(esCompraEditorial);
-  DB.movInv.filter(m=>m.tipo==='entrada'&&!(parseFloat(m.precioCosto)>0)).forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&!(parseFloat(m.precioCosto)>0)).forEach(m=>{
     const prod=DB.productos.find(p=>p.id===m.prodId);
     let costo=0;
 
@@ -11218,9 +11330,15 @@ function resumenEditorial(){
   });
   // Las notas de crédito son devoluciones a la editorial: bajan lo que le debes
   const notasCred=(DB.notasCredito||[]).reduce((a,n)=>a+(parseFloat(n.total)||0),0);
-  const deudaReal=Math.max(0,pendiente-notasCred);
+  // "Le debes hoy" sale de la MISMA cuenta que el Resumen del negocio
+  // (facturas − notas de crédito − abonos registrados en Pagos, Didáctica +
+  // Tech Books), para que Editorial, Balance e Inicio digan lo mismo.
+  // Antes no restaba los abonos de Pagos (solo facturas marcadas "Pagada").
+  let pagosPagos=0,deudaReal;
+  try{const RN=resumenNegocio();pagosPagos=RN.pagadoEd;deudaReal=Math.max(0,RN.debeEd);}
+  catch(e){console.warn('resumenEditorial:',e);deudaReal=Math.max(0,pendiente-notasCred);}
   return {facturas:facturas.length,facturado,pagado,pendiente,vencida,porVencer,
-          nPend,nVenc,notasCred,deudaReal};
+          nPend,nVenc,notasCred,deudaReal,pagosPagos};
 }
 
 // Resumen corto de "¿cuánto estoy ganando?" — sin filtros ni fechas, todo lo cargado.
@@ -11250,6 +11368,165 @@ function migrarCostosTechBooks(){
   save();
   if(typeof guardarProductosNube==='function')guardarProductosNube(DB.productos);
   try{renderDash();}catch(e){}
+}
+// Devoluciones de colegios (columna DEV de Control de ventas) = libros que
+// volvieron a bodega (decisión de Mónica 20-oct-2026). Se reflejan como
+// entradas automáticas de inventario (origen 'devColegio'), una por colegio y
+// libro, y se rehacen en cada save() para que siempre coincidan con lo anotado.
+// No son compras: no salen en Entradas, Cuadre de facturas ni Consolidado.
+function esDevColegio(m){return !!m&&m.origen==='devColegio';}
+function sincronizarDevColegios(){
+  if(!Array.isArray(DB.movInv)||!DB.colData)return;
+  const existe=new Set((DB.productos||[]).map(p=>p.id));
+  const prev={};DB.movInv.filter(esDevColegio).forEach(m=>{prev[m.ref+'|'+m.prodId]=m;});
+  const nuevos=[];
+  Object.keys(DB.colData).forEach(col=>{
+    const acc={};
+    (DB.colData[col]?.lineas||[]).forEach(l=>{
+      const v=parseFloat(l.dev)||0;
+      if(!(v>0)||!l.prodId||!existe.has(l.prodId))return;
+      acc[l.prodId]=acc[l.prodId]||{c:0,costo:parseFloat(l.costo)||0};
+      acc[l.prodId].c+=v;
+    });
+    const ref='DEV '+col;
+    Object.keys(acc).forEach(pid=>{
+      const o=prev[ref+'|'+pid];
+      nuevos.push({id:o?.id||uid(),tipo:'entrada',origen:'devColegio',prodId:pid,cantidad:acc[pid].c,
+        precioCosto:acc[pid].costo,fecha:o?.fecha||today(),ref,proveedor:'Devolución de '+col});
+    });
+  });
+  DB.movInv=DB.movInv.filter(m=>!esDevColegio(m)).concat(nuevos);
+}
+// Reparación del 20-oct-2026 (una sola vez, queda marcada en Historial):
+// 1) Junta los productos duplicados que crearon las facturas/notas de crédito
+//    con nombres del SRI (Mónica ya confirmó que son el mismo libro) y le
+//    vuelve a enseñar esos nombres al sistema (alias) para que no se repita.
+// 2) Registra 3 hojas de Control de muestras de Didáctica que no estaban como
+//    guía: 0000480 (3 de Diciembre, ya retirada), 0000481 (Luis Godín) y
+//    0000518 (Elite Christian School, falta retirar).
+const FUSIONES_OCT2026=[
+  ['IMAGINA Y APRENDE INICIAL 1','IMAGINA Y APRENDE 3 AÑOS'],
+  ['IMAGINA Y APRENDE INICIAL 2','IMAGINA Y APRENDE 4 AÑOS'],
+  ['IMAGINA Y APRENDE PREPARATORIA 1 EGB','IMAGINA Y APRENDE 5 AÑOS'],
+  ['PREMATEMATICA 4 ANOS','AVENTURAS INICIALES PRE MATEMATICA'],
+  ['PREESCRITURA 4 ANOS','AVENTURAS INICIALES PRE ESCRITURA'],
+  ...[1,2,3,4,5,6,7,8,9,10].map(n=>['CALIGRAFIA Y ORTOGRAFIA NE '+n+' EGB','CALIGRAFIA EGB '+n]),
+  // Mónica: "Educación Cultural y Artística" = "Artística Creaciones NE" (mismo libro)
+  ...[1,2,3,4,5,6,7,8,9,10].map(n=>['EDUCACION CULTURAL Y ARTISTICA EGB '+n,'ARTISTICA CREACIONES NE EGB '+n])
+];
+// La factura 1545 trae 15 de cada Artística NE, pero se ingresó dos veces al
+// inventario (una con cada nombre). Antes de juntar, se quita la entrada repetida.
+function _quitarEntradaRepetida1545(srcId,tgtId){
+  const es1545=m=>m.tipo==='entrada'&&String(m.ref||'').replace(/\D/g,'').endsWith('1545');
+  if(!DB.movInv.some(m=>m.prodId===tgtId&&es1545(m)))return 0;
+  const antes=DB.movInv.length;
+  DB.movInv=DB.movInv.filter(m=>!(m.prodId===srcId&&es1545(m)));
+  return antes-DB.movInv.length;
+}
+function _hojasMuestrasOct2026(){
+  const r=(a,b)=>{const o=[];for(let i=a;i<=b;i++)o.push(i);return o;};
+  const egb=(base,a,b)=>r(a,b).map(n=>base+' EGB '+n);
+  const sol=(mat,a,b)=>r(a,b).map(n=>'SOLUCIONARIO '+mat+' EVOLUCION 5.0 EGB '+n);
+  return [
+    {numControl:'0000480',cliente:'U.E. 3 DE DICIEMBRE',fecha:'2026-07-07',retirada:true,
+     obs:'CONTROL DE MUESTRAS 0000480 — QUITO CHECA — RETIRADO',
+     libros:[...egb('PASAPORTE A LA LECTURA',1,10),...egb('EDUCACION CULTURAL Y ARTISTICA',1,10),
+       ...egb('CALIGRAFIA',1,10),...egb('ENGLISH EXPLORERS',1,10),...egb('EDUCACION FINANCIERA',2,10),
+       ...egb('CIVICA Y ACOMPAÑAMIENTO',2,10),...r(1,3).map(n=>'CIVICA Y ACOMPAÑAMIENTO BGU '+n),
+       ...r(1,3).map(n=>'EMPRENDIMIENTO Y GESTION CREACIONES BGU '+n),
+       'ARTISTICA CREACIONES BGU 1','ARTISTICA CREACIONES BGU 2',
+       'FORMACION Y ORIENTACION L. CREACIONES BGU 3','INVESTIGACION CIENCIA Y TECNOLOGIA BGU 3']},
+    {numControl:'0000481',cliente:'U.E. LUIS GODIN',fecha:'2026-07-07',
+     obs:'CONTROL DE MUESTRAS 0000481 — QUITO YARUQUI',
+     libros:egb('EDUCACION CULTURAL Y ARTISTICA',1,10)},
+    {numControl:'0000518',cliente:'ELITE CHRISTIAN SCHOOL',fecha:'2026-06-20',libros_estado:'retirar',
+     obs:'CONTROL DE MUESTRAS 0000518 — FALTA RETIRAR',
+     libros:['IMAGINA Y APRENDE 3 AÑOS','IMAGINA Y APRENDE 4 AÑOS','IMAGINA Y APRENDE 5 AÑOS',
+       'AVENTURAS INICIALES PRE MATEMATICA',
+       ...sol('LENGUA',2,8),...sol('MATEMATICA',2,8),...sol('ESTUDIOS SOCIALES',2,8),...sol('CIENCIAS NATURALES',2,8),
+       ...egb('EDUCACION CULTURAL Y ARTISTICA',1,7),...egb('CALIGRAFIA',1,7),
+       ...egb('CIVICA Y ACOMPAÑAMIENTO',2,7),...egb('EDUCACION FINANCIERA',2,8)]}
+  ];
+}
+function reparacionOct2026(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 20-oct: duplicados y hojas de muestras';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const busca=n=>{const k=_normNombre(n);return DB.productos.find(p=>_normNombre(p.nombre)===k)
+    ||DB.productos.find(p=>(p.alias||[]).some(a=>_normNombre(a)===k));};
+  // 1) Duplicados
+  let nFus=0,nRep=0;
+  FUSIONES_OCT2026.forEach(([a,b])=>{
+    const t=busca(b);if(!t)return;
+    const s=DB.productos.find(p=>p.id!==t.id&&_normNombre(p.nombre)===_normNombre(a));
+    if(s){
+      if(/ARTISTICA CREACIONES NE/.test(_normNombre(t.nombre)))nRep+=_quitarEntradaRepetida1545(s.id,t.id);
+      _fusionarDatos(s,t);nFus++;
+    }
+    else if(!(t.alias||[]).some(x=>_normNombre(x)===_normNombre(a)))t.alias=[...(t.alias||[]),a];
+  });
+  // Pasaporte a la lectura 1° no existía en el catálogo
+  if(!busca('PASAPORTE A LA LECTURA EGB 1')){
+    const ref=busca('PASAPORTE A LA LECTURA EGB 2')||{};
+    DB.productos.push({id:uid(),nombre:'PASAPORTE A LA LECTURA EGB 1',editorial:ref.editorial||'',nivel:'',codigo:'',nota:'',alias:[],
+      precioCosto:ref.precioCosto||0,precioVenta:ref.precioVenta||0,stockInicial:0,stockMin:ref.stockMin||0,material:ref.material||'',creadoEn:today()});
+  }
+  // 2) Hojas de muestras
+  const faltan=[];let nGuias=0;
+  _hojasMuestrasOct2026().forEach(h=>{
+    if(DB.guias.some(g=>String(g.numControl||'').replace(/\D/g,'')===h.numControl.replace(/\D/g,'')))return;
+    const lineas=[];
+    h.libros.forEach(n=>{const p=busca(n);if(!p){faltan.push(h.numControl+': '+n);return;}
+      lineas.push({nombre:p.nombre,prodId:p.id,cantidad:1,precioVenta:parseFloat(p.precioVenta)||0});});
+    const maxN=DB.guias.reduce((mx,x)=>{const m=String(x.numero||'').match(/(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},0);
+    const g={id:uid(),numero:'GR-'+String(maxN+1).padStart(3,'0'),fecha:h.fecha,cliente:h.cliente,factura:'',
+      observacion:h.obs,esMuestra:true,numControl:h.numControl,lineas,
+      total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
+    if(h.retirada){
+      // Ya volvieron a bodega: queda el registro del retiro y el stock no cambia
+      g.retiros=[{fecha:today(),destino:'BODEGA',guiaNueva:'',lineas:lineas.map(l=>({prodId:l.prodId,nombre:l.nombre,cantidad:l.cantidad}))}];
+      g.lineas=[];g.total=0;g.muestrasEstado='retirado';
+    } else {
+      lineas.forEach(l=>DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha:g.fecha,ref:g.numero,cliente:g.cliente}));
+      if(h.libros_estado)g.muestrasEstado=h.libros_estado;
+    }
+    DB.guias.push(g);nGuias++;
+  });
+  // 2b) Colegios marcados "↩ Ya retiradas" cuyos libros seguían anotados en la
+  //     guía: Mónica confirmó que todos volvieron a bodega (20-oct).
+  let nRet=0;const colRet=[];
+  const grp={};DB.guias.filter(esGuiaMuestra).forEach(g=>{const k=String(g.cliente||'(sin nombre)').trim().toUpperCase();(grp[k]=grp[k]||[]).push(g);});
+  Object.keys(grp).forEach(k=>{
+    if(grp[k].map(g=>g.muestrasEstado).find(Boolean)!=='retirado')return;
+    let n=0;grp[k].forEach(g=>{n+=_retirarTodoABodega(g,today());});
+    if(n){nRet+=n;colRet.push(k+' '+n);}
+  });
+  // 3) Carrusel: los libros salieron de bodega sin guía (Mónica lo confirmó).
+  //    Se arma la guía con lo anotado en su Control de ventas para que baje el stock.
+  let nCarr=0;
+  const kCarr=Object.keys(DB.colData||{}).find(k=>/CARRUSEL/i.test(k));
+  const yaTiene=kCarr&&DB.guias.some(g=>!esGuiaMuestra(g)&&_coincideColegio(g.cliente||'',kCarr));
+  if(kCarr&&!yaTiene){
+    const d=DB.colData[kCarr];
+    const lineas=(d.lineas||[]).filter(l=>l.prodId&&(parseFloat(l.cant)||0)>0&&DB.productos.some(p=>p.id===l.prodId))
+      .map(l=>{const p=DB.productos.find(x=>x.id===l.prodId);return {nombre:p.nombre,prodId:p.id,cantidad:parseFloat(l.cant)||0,precioVenta:parseFloat(l.pvp)||0};});
+    if(lineas.length){
+      const maxN=DB.guias.reduce((mx,x)=>{const m=String(x.numero||'').match(/(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},0);
+      const g={id:uid(),numero:'GR-'+String(maxN+1).padStart(3,'0'),fecha:today(),cliente:kCarr,factura:'',
+        observacion:'Entrega hecha sin guía — registrada el '+today()+' con lo anotado en Control de ventas',esMuestra:false,numControl:'',lineas,
+        total:lineas.reduce((a,l)=>a+l.cantidad*l.precioVenta,0)};
+      DB.guias.push(g);
+      lineas.forEach(l=>DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha:g.fecha,ref:g.numero,cliente:g.cliente}));
+      (d.guiasTraidas=d.guiasTraidas||[]).push(g.id);   // ya está en su Control: no traerla otra vez
+      nCarr=lineas.reduce((a,l)=>a+l.cantidad,0);
+    }
+  }
+  logHistorial(MARCA,`${nFus} producto(s) duplicado(s) juntados (${nRep} entrada(s) repetidas de la factura 1545 quitadas); ${nGuias} hoja(s) de muestras registradas`+(nCarr?`; guía de Carrusel con ${nCarr} libro(s)`:'')+(nRet?`; ${nRet} libro(s) de muestras ya retiradas vuelven a bodega (${colRet.join(', ')})`:'')+(faltan.length?' — no encontrados: '+faltan.join(', '):''));
+  localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
+  save();
+  if(typeof guardarProductosNube==='function')guardarProductosNube(DB.productos);
+  try{renderCatalogo();renderStockReport();renderGuias();renderMuestrasCol();}catch(e){}
+  if(faltan.length)console.warn('Reparación oct-2026, no encontrados:',faltan);
 }
 // Libros que se le pagan a Tech Books: los de inglés y los de Robótica
 // (Robótica la provee Marcos de Tech Books aunque el catálogo diga "DM BOOKS").
@@ -11295,9 +11572,9 @@ function resumenNegocio(){
   DB.regs.filter(esCompraEditorial).forEach(r=>{const x=E(grupoEditorial(r.proveedor)||(r.proveedor||'Otra editorial'));x.facturado+=parseFloat(r.total)||0;x.nFact++;});
   (DB.notasCredito||[]).forEach(n=>{E(grupoEditorial(n.editorial)||n.editorial||'Didáctica').notas+=parseFloat(n.total)||0;});
   (DB.pagos||[]).filter(p=>p.tipo==='pago').forEach(p=>{
-    const g=grupoEditorial(p.nombre)||grupoEditorial(p.nota);if(!g)return;
+    // Lo elegido en "¿Es pago a una editorial?"; en pagos viejos, por el texto.
     // Préstamos (ej. el personal de $2,000 del 06/10) no son pago de libros.
-    if(/PR[EÉ]STAMO/i.test((p.nombre||"")+" "+(p.nota||"")))return;
+    const g=editorialDePago(p);if(!g)return;
     E(g).pagado+=parseFloat(p.valor)||0;E(g).pagos.push(p);
   });
   Object.keys(ed).forEach(n=>{
@@ -11333,6 +11610,10 @@ function resumenNegocioHTML(R){
       ${R.otrosCobros.map(x=>f1('<span style="color:#666;font-size:12px">Aparte: me pagó '+escH(x.nombre)+' (no es colegio)</span>',x.valor)).join('')}
     </table>
     ${tit('② YO LE DEBO A CADA EDITORIAL')}
+    ${(()=>{const sd=pagosEditorialSinDefinir();if(!sd.length)return '';
+      return `<div style="margin:4px 12px 8px;background:#fef2f2;border:2px solid #ef4444;border-radius:8px;padding:9px 11px;font-size:12px;color:#991b1b">
+        ⚠️ <b>${sd.length} pago(s) que parecen ser a una editorial NO se están descontando</b> (${m(sd.reduce((a,p)=>a+(parseFloat(p.valor)||0),0))}). Ve a <b>Pagos</b>, toca <b>Editar</b> en cada uno y elige en "¿Es pago a una editorial?":<br>
+        ${sd.map(p=>`• ${escH(p.fecha||'')} — ${escH(p.nombre||'')} — <b>${m(parseFloat(p.valor)||0)}</b>${p.nota?' <span style="color:#7f1d1d">('+escH(p.nota)+')</span>':''}`).join('<br>')}</div>`;})()}
     <table style="width:100%;border-collapse:collapse">
       ${cab}
       ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: libros vendidos × su precio — Wonder $15, Limitless $17, Robótica $13)</span>':''),D.facturado,T.facturado)}
