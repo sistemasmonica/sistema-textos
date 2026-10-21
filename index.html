@@ -726,12 +726,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirResultadoConteo()"><i class="ti ti-printer"></i> Imprimir resultado</button>
         <button class="btn btn-s btn-sm" onclick="exportConteoXLS()"><i class="ti ti-download"></i> Excel</button>
         <button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6" onclick="copiarConteoMateria()" title="Pone en otras materias las mismas cantidades que contaste en una, grado por grado"><i class="ti ti-copy"></i> Copiar conteo a otras materias</button>
+        <button class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700" onclick="ajustarStockAlConteo()" title="Deja el inventario del sistema igual a lo que contaste (solo los libros con número)"><i class="ti ti-check"></i> ✅ Ajustar el stock a este conteo</button>
         <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="borrarConteo()"><i class="ti ti-eraser"></i> Empezar conteo nuevo</button>
       </div>
     </div>
     <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e3a8a;margin-bottom:10px">
       <b>Si te van dictando:</b> busca el libro, escribe en la casilla <b style="color:#047857">verde</b> las unidades que te dicen y presiona <b>Enter</b> — <b>se suman</b> a lo que ya llevabas (ej. te dicen 6 y luego 2 más → queda 8, sin sumar tú). La casilla <b style="color:#b45309">amarilla</b> es el total; si escribes ahí, reemplaza. Se guarda solo, puedes cerrar y seguir otro día.
-      <b>Esto no cambia tu inventario</b> — solo te muestra qué cuadra y qué no. <span id="conteo-inicio" style="color:#64748b"></span>
+      <b>Contar no cambia tu inventario</b> — te muestra qué cuadra y qué no. Recién cuando aprietas <b>✅ Ajustar el stock a este conteo</b>, el sistema queda igual a lo que contaste. <span id="conteo-inicio" style="color:#64748b"></span>
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="sc"><div class="sc-lbl">Contados</div><div class="sc-val cp" id="conteo-prog">0</div></div>
@@ -6825,11 +6826,12 @@ function renderAuditoria(){
   const salNC=DB.movInv.filter(m=>m.tipo==='salida'&&String(m.ref||'').startsWith('NC-')).reduce((a,m)=>a+(m.cantidad||0),0);
   const inicial=DB.productos.filter(p=>p.editorial!=='Hist.').reduce((a,p)=>a+(p.stockInicial||0),0);
   const salAj=DB.movInv.filter(m=>m.tipo==='salida'&&esAjusteControl(m)).reduce((a,m)=>a+(m.cantidad||0),0);
-  const stockEsperado=inicial+ent.unidades-gu.unidades-salNC-salAj;
+  const salCt=DB.movInv.filter(m=>m.tipo==='salida'&&m.origen==='ajusteConteo').reduce((a,m)=>a+(m.cantidad||0),0);
+  const stockEsperado=inicial+ent.unidades-gu.unidades-salNC-salAj-salCt;
   const okStock=stockEsperado===st.unidades;
   const devU=DB.movInv.filter(esDevColegio).reduce((a,m)=>a+(m.cantidad||0),0);
   html+=`<div style="background:${okStock?'#f0fdf4':'#fef2f2'};border:1px solid ${okStock?'#86efac':'#fca5a5'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:${okStock?'#166534':'#991b1b'}">
-    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}${devU?`, de ellas ${devU} devueltas por colegios`:''}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC})${salAj?` − Anotados en Control de ventas sin guía (${salAj})`:''} = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
+    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}${devU?`, de ellas ${devU} devueltas por colegios`:''}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC})${salAj?` − Anotados en Control de ventas sin guía (${salAj})`:''}${salCt?` − Faltantes del conteo físico (${salCt})`:''} = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
   </div>`;
 
   // 2) Guías con número repetido
@@ -7237,6 +7239,36 @@ function copiarConteoMateria(){
   nuevos.forEach(({t,c})=>_conteoSet(t.id,{c,h:[c]}));
   renderConteo();
   toast(nuevos.length+' cantidades copiadas','ok');
+}
+// "✅ Ajustar el stock a este conteo" (pedido de Mónica 20-oct-2026): deja el
+// inventario del sistema IGUAL a lo contado en bodega. Solo toca los libros que
+// tienen un número contado (los que están en blanco no se tocan). Cada diferencia
+// queda como movimiento 'AJUSTE CONTEO <fecha>' (entrada si había más en bodega,
+// salida si había menos) y se anota en Historial.
+function ajustarStockAlConteo(){
+  if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
+  const cambios=_conteoLista().map(e=>{const {c}=_conteoItem(e.p.id);return c==null?null:{p:e.p,st:e.st,c,d:c-e.st};}).filter(x=>x&&x.d);
+  const contados=_conteoLista().filter(e=>_conteoItem(e.p.id).c!=null).length;
+  if(!contados)return alert('Todavía no has contado ningún libro.\n\nCuenta tu bodega en esta pestaña y después aprieta este botón.');
+  if(!cambios.length)return toast('✔ Todo lo contado ya cuadra con el sistema — no hay nada que ajustar','ok');
+  const ini=DB.conteo?.inicio?new Date(DB.conteo.inicio):null;
+  const dias=ini?Math.floor((Date.now()-ini.getTime())/86400000):0;
+  if(dias>=3&&!confirm(`⚠️ OJO: este conteo lo empezaste hace ${dias} días (${ini.toLocaleDateString('es-EC')}).\n\nDesde entonces pudieron entrar o salir libros, y el ajuste dejaría el stock como estaba ESE día.\n\nLo correcto es "Empezar conteo nuevo", contar hoy y recién ajustar.\n\n¿Igual quieres ajustar con este conteo viejo?`))return;
+  const mas=cambios.filter(x=>x.d>0),menos=cambios.filter(x=>x.d<0);
+  const um=mas.reduce((a,x)=>a+x.d,0),un=menos.reduce((a,x)=>a-x.d,0);
+  const muestra=cambios.slice(0,15).map(x=>`${x.p.nombre}: sistema ${x.st} → contado ${x.c} (${x.d>0?'+':''}${x.d})`).join('\n');
+  if(!confirm(`Se va a dejar el inventario IGUAL a lo que contaste en ${contados} libro(s):\n\n`+
+    `• ${mas.length} libro(s) suben (+${um} u.) — había más en bodega de lo que decía el sistema\n`+
+    `• ${menos.length} libro(s) bajan (−${un} u.) — había menos\n\n`+muestra+(cambios.length>15?`\n… y ${cambios.length-15} más`:'')+
+    `\n\nLos libros que dejaste en blanco NO se tocan. Queda anotado en el Historial.\n\n¿Ajustar?`))return;
+  const fecha=today(),ref='AJUSTE CONTEO '+fecha;
+  cambios.forEach(x=>DB.movInv.push({id:uid(),tipo:x.d>0?'entrada':'salida',origen:'ajusteConteo',prodId:x.p.id,cantidad:Math.abs(x.d),
+    precioCosto:parseFloat(x.p.precioCosto)||0,fecha,ref,proveedor:'Ajuste por conteo físico',cliente:'Ajuste por conteo físico'}));
+  DB.conteo.ajustado=fecha;
+  logHistorial('Stock ajustado al conteo físico',`${cambios.length} libro(s): +${um} u. / −${un} u. (${ref})`);
+  save();renderConteo();
+  try{renderStockReport();renderCatalogo();}catch(e){}
+  alert(`✅ Listo. El inventario quedó igual a tu conteo.\n\n${cambios.length} libro(s) ajustados: +${um} y −${un} unidades.`);
 }
 function borrarConteo(){
   const n=Object.keys(DB.conteo?.items||{}).length;
@@ -11374,7 +11406,7 @@ function migrarCostosTechBooks(){
 // No son compras: no salen en Entradas, Cuadre de facturas ni Consolidado.
 function esDevColegio(m){return !!m&&m.origen==='devColegio';}
 // Movimientos que el sistema calcula solo (no son compras ni guías hechas a mano)
-function esMovAuto(m){return !!m&&(m.origen==='devColegio'||m.origen==='ajusteControl');}
+function esMovAuto(m){return !!m&&(m.origen==='devColegio'||m.origen==='ajusteControl'||m.origen==='ajusteConteo');}
 function esAjusteControl(m){return !!m&&m.origen==='ajusteControl';}
 // A qué colegio (de Control de ventas) pertenece cada guía de VENTA: nombre igual
 // primero; si no, el primero que coincide aunque esté escrito distinto.
