@@ -2110,6 +2110,7 @@ async function syncFromCloud(){
     }
     try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
     try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
+    try{reparacionOct2026b();}catch(e){console.warn('Reparación oct-2026 (2):',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
@@ -2202,6 +2203,7 @@ function save(){
   }
   try{
     try{sincronizarDevColegios();}catch(e){console.warn('Devoluciones colegios:',e);}
+    try{sincronizarControlColegios();}catch(e){console.warn('Control vs guías:',e);}
     if(DB.productos.length>0)
       localStorage.setItem('txe_productos',JSON.stringify(DB.productos));
     const toSave={
@@ -3740,7 +3742,7 @@ function limpiarEntrada(){
 // Editorial de una entrada de inventario, según el proveedor con que se ingresó.
 function editorialEntrada(m){return grupoEditorial(m.proveedor)||'Otras';}
 function entradaPasaFiltro(m){
-  if(esDevColegio(m))return false;
+  if(esMovAuto(m))return false;
   const f=document.getElementById('ent-ed-fil')?.value||'';
   return !f||editorialEntrada(m)===f;
 }
@@ -3748,7 +3750,7 @@ function entradaPasaFiltro(m){
 function renderResumenEntradasEd(){
   const el=document.getElementById('ent-ed-resumen');if(!el)return;
   const t={};
-  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)).forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esMovAuto(m)).forEach(m=>{
     const k=editorialEntrada(m);t[k]=t[k]||{u:0,v:0};
     t[k].u+=parseFloat(m.cantidad)||0;t[k].v+=(parseFloat(m.cantidad)||0)*(parseFloat(m.precioCosto)||0);
   });
@@ -3874,7 +3876,7 @@ function crearEntradaDesdeFactura(fd){
 
 // Facturas de editorial (con detalle de productos) que TODAVÍA no tienen su entrada de inventario
 function facturasSinEntrada(){
-  const refsConEntrada=new Set(DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref&&!esDevColegio(m)).map(m=>numFactDigits(m.ref)));
+  const refsConEntrada=new Set(DB.movInv.filter(m=>m.tipo==='entrada'&&m.ref&&!esMovAuto(m)).map(m=>numFactDigits(m.ref)));
   return DB.regs.filter(r=>esCompraEditorial(r)&&Array.isArray(r.detalles)&&r.detalles.length
     &&!refsConEntrada.has(numFactDigits(r.numFact)));
 }
@@ -4432,7 +4434,7 @@ function resumenVendedora(vendedor){
   // stock) con proveedor tipo "Devolución [vendedora]".
   const vendedorTokens=_normNombre(vendedor).split(' ').filter(t=>t.length>=4);
   const entradasDevol=(DB.movInv||[]).filter(m=>{
-    if(m.tipo!=='entrada'||esDevColegio(m))return false;
+    if(m.tipo!=='entrada'||esMovAuto(m))return false;
     const p=_normNombre(m.proveedor||'');
     if(!p.includes('DEVOL'))return false;
     return vendedorTokens.some(t=>p.includes(t));
@@ -6688,7 +6690,7 @@ function productosStockNegativo(){
 // Productos cuyo stockInicial>0 probablemente ya está contado también como entrada de factura
 function productosStockInicialDuplicado(){
   return DB.productos.filter(p=>(p.stockInicial||0)>0
-    && DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'&&m.ref&&!esDevColegio(m)));
+    && DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'&&m.ref&&!esMovAuto(m)));
 }
 
 function corregirStockInicialDuplicado(){
@@ -6822,11 +6824,12 @@ function renderAuditoria(){
   // 1) Cuenta general: Stock = Inicial + Entradas − Guías − Notas de crédito
   const salNC=DB.movInv.filter(m=>m.tipo==='salida'&&String(m.ref||'').startsWith('NC-')).reduce((a,m)=>a+(m.cantidad||0),0);
   const inicial=DB.productos.filter(p=>p.editorial!=='Hist.').reduce((a,p)=>a+(p.stockInicial||0),0);
-  const stockEsperado=inicial+ent.unidades-gu.unidades-salNC;
+  const salAj=DB.movInv.filter(m=>m.tipo==='salida'&&esAjusteControl(m)).reduce((a,m)=>a+(m.cantidad||0),0);
+  const stockEsperado=inicial+ent.unidades-gu.unidades-salNC-salAj;
   const okStock=stockEsperado===st.unidades;
   const devU=DB.movInv.filter(esDevColegio).reduce((a,m)=>a+(m.cantidad||0),0);
   html+=`<div style="background:${okStock?'#f0fdf4':'#fef2f2'};border:1px solid ${okStock?'#86efac':'#fca5a5'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:${okStock?'#166534':'#991b1b'}">
-    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}${devU?`, de ellas ${devU} devueltas por colegios`:''}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC}) = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
+    ${okStock?'✔':'⚠️'} Cuenta general: Stock inicial (${inicial}) + Entradas (${ent.unidades}${devU?`, de ellas ${devU} devueltas por colegios`:''}) − Guías de retiro (${gu.unidades}) − Notas de crédito (${salNC})${salAj?` − Anotados en Control de ventas sin guía (${salAj})`:''} = <b>${stockEsperado}</b> unidades. El Reporte de stock dice <b>${st.unidades}</b>.${okStock?' Cuadra perfecto.':' <b>No cuadra</b> — revisa las alertas de abajo.'}
   </div>`;
 
   // 2) Guías con número repetido
@@ -6853,22 +6856,17 @@ function renderAuditoria(){
   // (implica que hay más venta registrada que entregas físicas) y merece revisión
   // — casos típicos: nombre de colegio mal escrito en una guía (no se contó) o
   // una venta anotada sin su guía correspondiente.
-  const cmpTodo=comparaGuiasVsColegios();
-  const pendientes=cmpTodo.filter(c=>c.dif>0).sort((a,b)=>b.dif-a.dif);
-  const deMas=cmpTodo.filter(c=>c.dif<0).sort((a,b)=>a.dif-b.dif);
-  if(deMas.length){
-    html+=`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#9a3412">
-      <b>🔍 ${deMas.length} colegio(s) con MÁS anotado en Control de ventas que lo entregado en Guías</b> — esto es lo raro, revisa cada uno (suele ser un nombre de colegio mal escrito en alguna guía, que por eso no se contó):<br>
-      ${deMas.map(c=>`${escH(c.nombre)}: entregado ${c.entregado} u. · anotado ${c.registrado} u. · <b>anotado ${-c.dif} de más</b>`).join('<br>')}
-    </div>`;
-  }
-  if(pendientes.length){
+  // 4) El Control de ventas manda: lo anotado de más/de menos frente a las guías
+  //    ya se ajustó SOLO en el inventario. Aquí solo se muestra, para que se vea.
+  const aj=diferenciasControlGuias();
+  if(aj.length){
+    const P={};DB.productos.forEach(p=>P[p.id]=p.nombre);
+    const porCol={};aj.forEach(x=>(porCol[x.col]=porCol[x.col]||[]).push(x));
     html+=`<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#1e3a5f">
-      <b>📋 ${pendientes.length} colegio(s) con venta(s) pendientes de anotar en Control de ventas</b> — normal si sueles anotar la venta unos días después de entregar, no es una alerta:<br>
-      ${pendientes.map(c=>`${escH(c.nombre)}: entregado ${c.entregado} u. · anotado ${c.registrado} u. · faltan anotar ${c.dif}`).join('<br>')}
+      <b>🔄 Ajustado automáticamente (el Control de ventas manda)</b> — estos libros están anotados distinto en Control de ventas que en las guías. El inventario ya se corrigió solo; no tienes que hacer nada:<br>
+      ${Object.keys(porCol).sort().map(c=>`<b>${escH(c)}</b>: ${porCol[c].map(x=>`${escH(P[x.prodId]||'?')} ${x.dif>0?`<span style="color:#b45309">salieron ${x.dif} sin guía</span>`:`<span style="color:#15803d">volvieron ${-x.dif} a bodega</span>`}`).join(' · ')}`).join('<br>')}
     </div>`;
   }
-
   // 5) Productos con stock negativo (mismo cálculo que Reporte de stock)
   const neg=productosStockNegativo();
   if(neg.length){
@@ -6877,7 +6875,7 @@ function renderAuditoria(){
     </div>`;
   }
 
-  if(!dupN.length&&!desc.length&&!deMas.length&&!neg.length){
+  if(!dupN.length&&!desc.length&&!neg.length){
     html+=`<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;text-align:center;font-size:13px;color:#166534;font-weight:700">✔ No se encontró ningún problema — todo cuadra.</div>`;
   }
 
@@ -7955,7 +7953,7 @@ function renderConsolidado(){
   const anioFil=selA.value;
 
   const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esMovAuto(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
 
   const totalVentas=guias.reduce((a,g)=>a+g.total,0);
   const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
@@ -8014,7 +8012,7 @@ function renderConsolidado(){
 function imprimirConsolidado(){
   const anioFil=document.getElementById('cons-anio').value;
   const guias=DB.guias.filter(g=>!anioFil||g.fecha?.split('-')[0]===anioFil);
-  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
+  const entradas=DB.movInv.filter(m=>m.tipo==='entrada'&&!esMovAuto(m)&&(!anioFil||m.fecha?.split('-')[0]===anioFil));
   const totalVentas=guias.reduce((a,g)=>a+g.total,0);
   const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
   const totalCompras=entradas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
@@ -11058,7 +11056,7 @@ function diagFacturaEntrada(ref){
 
 function gruposEntradas(){
   const g={};
-  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)).forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esMovAuto(m)).forEach(m=>{
     const key=(m.ref||'')+'|'+(m.proveedor||'');
     if(!g[key])g[key]={ref:m.ref||'',prov:m.proveedor||'',fecha:m.fecha||'',unidades:0,valor:0,sinCosto:0,movs:[]};
     const gg=g[key];
@@ -11214,7 +11212,7 @@ function _pareceMismoLibro(nombreProd,editorialProd,descFactura){
 function rellenarCostosEntradas(){
   let n=0,sinDato=0,deFactura=0;
   const editoriales=DB.regs.filter(esCompraEditorial);
-  DB.movInv.filter(m=>m.tipo==='entrada'&&!esDevColegio(m)&&!(parseFloat(m.precioCosto)>0)).forEach(m=>{
+  DB.movInv.filter(m=>m.tipo==='entrada'&&!esMovAuto(m)&&!(parseFloat(m.precioCosto)>0)).forEach(m=>{
     const prod=DB.productos.find(p=>p.id===m.prodId);
     let costo=0;
 
@@ -11375,6 +11373,56 @@ function migrarCostosTechBooks(){
 // libro, y se rehacen en cada save() para que siempre coincidan con lo anotado.
 // No son compras: no salen en Entradas, Cuadre de facturas ni Consolidado.
 function esDevColegio(m){return !!m&&m.origen==='devColegio';}
+// Movimientos que el sistema calcula solo (no son compras ni guías hechas a mano)
+function esMovAuto(m){return !!m&&(m.origen==='devColegio'||m.origen==='ajusteControl');}
+function esAjusteControl(m){return !!m&&m.origen==='ajusteControl';}
+// A qué colegio (de Control de ventas) pertenece cada guía de VENTA: nombre igual
+// primero; si no, el primero que coincide aunque esté escrito distinto.
+function _colegioDeGuia(g,cols){
+  const c=String(g.cliente||'').trim();
+  return cols.find(k=>k===c)||cols.find(k=>k.toUpperCase()===c.toUpperCase())||cols.find(k=>_coincideColegio(c,k))||null;
+}
+// "El Control de ventas manda" (pedido de Mónica 20-oct-2026: que el sistema
+// cuadre solo). Por cada colegio y libro: lo anotado en Control de ventas (CANT)
+// menos lo entregado en sus guías de venta. Si anotó MÁS, esos libros salieron
+// de bodega sin guía → salida automática. Si anotó MENOS (borró o bajó la
+// cantidad), volvieron a bodega → entrada automática. Ref 'CONTROL <colegio>'.
+// Las devoluciones (DEV) van aparte en sincronizarDevColegios.
+function diferenciasControlGuias(){
+  const cols=Object.keys(DB.colData||{});
+  const ent={};
+  (DB.guias||[]).forEach(g=>{
+    if(esGuiaMuestra(g))return;
+    const col=_colegioDeGuia(g,cols);if(!col)return;
+    (g.lineas||[]).forEach(l=>{if(!l.prodId)return;const k=col+'|'+l.prodId;ent[k]=(ent[k]||0)+(parseFloat(l.cantidad)||0);});
+  });
+  const an={},costo={};
+  cols.forEach(col=>(DB.colData[col]?.lineas||[]).forEach(l=>{
+    if(!l.prodId)return;const k=col+'|'+l.prodId;
+    an[k]=(an[k]||0)+(parseFloat(l.cant)||0);if(parseFloat(l.costo)>0)costo[k]=parseFloat(l.costo);
+  }));
+  const existe=new Set((DB.productos||[]).map(p=>p.id));
+  const out=[];
+  new Set([...Object.keys(ent),...Object.keys(an)]).forEach(k=>{
+    const i=k.lastIndexOf('|'),col=k.slice(0,i),pid=k.slice(i+1);
+    if(!existe.has(pid))return;
+    // Colegio sin ninguna línea en Control: todavía no se anota la venta, no se ajusta
+    if(!(DB.colData[col]?.lineas||[]).some(l=>(parseFloat(l.cant)||0)>0))return;
+    const d=(an[k]||0)-(ent[k]||0);
+    if(d)out.push({col,prodId:pid,dif:d,guias:ent[k]||0,control:an[k]||0,costo:costo[k]||0});
+  });
+  return out;
+}
+function sincronizarControlColegios(){
+  if(!Array.isArray(DB.movInv)||!DB.colData)return;
+  const prev={};DB.movInv.filter(esAjusteControl).forEach(m=>{prev[m.ref+'|'+m.prodId]=m;});
+  const nuevos=diferenciasControlGuias().map(x=>{
+    const ref='CONTROL '+x.col,o=prev[ref+'|'+x.prodId];
+    return {id:o?.id||uid(),tipo:x.dif>0?'salida':'entrada',origen:'ajusteControl',prodId:x.prodId,cantidad:Math.abs(x.dif),
+      precioCosto:x.costo,fecha:o?.fecha||today(),ref,cliente:x.col,proveedor:x.dif>0?'':'Vuelve de '+x.col};
+  });
+  DB.movInv=DB.movInv.filter(m=>!esAjusteControl(m)).concat(nuevos);
+}
 function sincronizarDevColegios(){
   if(!Array.isArray(DB.movInv)||!DB.colData)return;
   const existe=new Set((DB.productos||[]).map(p=>p.id));
@@ -11527,6 +11575,34 @@ function reparacionOct2026(){
   if(typeof guardarProductosNube==='function')guardarProductosNube(DB.productos);
   try{renderCatalogo();renderStockReport();renderGuias();renderMuestrasCol();}catch(e){}
   if(faltan.length)console.warn('Reparación oct-2026, no encontrados:',faltan);
+}
+// Reparación 2 del 20-oct-2026 (una vez): Jardines de Sueño tenía en Control de
+// ventas 2 líneas "Imagina 4 años × 10", pero su guía GR-034 (papel firmado, y
+// el inventario físico cuadra con ella) dice 10 de 3 años + 10 de 5 años. Mismo
+// precio: la plata no cambia, solo qué libro es. Luego save() aplica "el Control
+// de ventas manda" para todos los colegios.
+function reparacionOct2026b(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 20-oct (2): Control de ventas manda';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const busca=n=>DB.productos.find(p=>_normNombre(p.nombre)===_normNombre(n));
+  const p3=busca('IMAGINA Y APRENDE 3 AÑOS'),p4=busca('IMAGINA Y APRENDE 4 AÑOS'),p5=busca('IMAGINA Y APRENDE 5 AÑOS');
+  let nota='';
+  const kJ=Object.keys(DB.colData||{}).find(k=>/JARDINES/i.test(k));
+  const g34=(DB.guias||[]).find(g=>g.numero==='GR-034'&&/JARDINES/i.test(g.cliente||''));
+  if(kJ&&g34&&p3&&p4&&p5){
+    const ls=(DB.colData[kJ].lineas||[]).filter(l=>l.prodId===p4.id&&(parseFloat(l.cant)||0)===10);
+    const enGuia=id=>(g34.lineas||[]).filter(l=>l.prodId===id).reduce((a,l)=>a+(l.cantidad||0),0);
+    if(ls.length===2&&enGuia(p3.id)===10&&enGuia(p5.id)===10&&!enGuia(p4.id)){
+      ls[0].prodId=p3.id;ls[0].libro='IMAGINA Y APRENDE 3 AÑOS (CREACIONES)';
+      ls[1].prodId=p5.id;ls[1].libro='IMAGINA Y APRENDE 5 AÑOS (CREACIONES)';
+      nota='Jardines de Sueño: 2 líneas de Imagina 4 años pasan a 3 años y 5 años (como la guía GR-034). ';
+    }
+  }
+  const aj=diferenciasControlGuias();
+  logHistorial(MARCA,nota+aj.length+' ajuste(s) automático(s) de inventario según Control de ventas');
+  save();
+  try{renderCatalogo();renderStockReport();renderAuditoria();}catch(e){}
 }
 // Libros que se le pagan a Tech Books: los de inglés y los de Robótica
 // (Robótica la provee Marcos de Tech Books aunque el catálogo diga "DM BOOKS").
