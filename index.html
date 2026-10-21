@@ -11567,10 +11567,10 @@ function resumenNegocio(){
   const otrosCobros=pc.sinColegio;
   const cobradoOtros=otrosCobros.reduce((a,x)=>a+x.valor,0);
   const ed={};
-  const E=n=>ed[n]||(ed[n]={facturado:0,nFact:0,notas:0,pagado:0,pagos:[],sinFacturas:false});
+  const E=n=>ed[n]||(ed[n]={facturado:0,nFact:0,notas:0,pagado:0,pagos:[],ncs:[],sinFacturas:false});
   ['Didáctica','Tech Books'].forEach(E);
   DB.regs.filter(esCompraEditorial).forEach(r=>{const x=E(grupoEditorial(r.proveedor)||(r.proveedor||'Otra editorial'));x.facturado+=parseFloat(r.total)||0;x.nFact++;});
-  (DB.notasCredito||[]).forEach(n=>{E(grupoEditorial(n.editorial)||n.editorial||'Didáctica').notas+=parseFloat(n.total)||0;});
+  (DB.notasCredito||[]).forEach(n=>{const x=E(grupoEditorial(n.editorial)||n.editorial||'Didáctica');x.notas+=parseFloat(n.total)||0;x.ncs.push(n);});
   (DB.pagos||[]).filter(p=>p.tipo==='pago').forEach(p=>{
     // Lo elegido en "¿Es pago a una editorial?"; en pagos viejos, por el texto.
     // Préstamos (ej. el personal de $2,000 del 06/10) no son pago de libros.
@@ -11589,6 +11589,13 @@ function resumenNegocio(){
   return {vendido,cobrado,porCobrar:vendido-cobrado,ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
     caja:cobrado+cobradoOtros-tot('pagado'),porDevolver:tot('porDevolver')};
+}
+// Filas chicas con el detalle de cada nota de crédito / pago, debajo del total,
+// para poder comprobar de dónde sale cada número (pedido de Mónica y su esposo).
+function detalleResumen(items,m){
+  const td='padding:2px 10px;text-align:right;font-family:monospace;font-size:11px;color:#64748b;white-space:nowrap';
+  return items.sort((a,b)=>String(a.f||'').localeCompare(String(b.f||''))).map(x=>{const v=parseFloat(x.v)||0;
+    return `<tr><td style="padding:2px 10px 2px 26px;font-size:11px;color:#64748b">· ${escH(String(x.f||'').split('-').reverse().join('/'))} — ${escH(String(x.t||'').slice(0,70))}</td><td style="${td}">${x.ed==='D'?m(v):''}</td><td style="${td}">${x.ed==='T'?m(v):''}</td><td style="${td}"></td></tr>`;}).join('');
 }
 function resumenNegocioHTML(R){
   const m=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -11618,7 +11625,11 @@ function resumenNegocioHTML(R){
       ${cab}
       ${f3('Me facturó'+(T.sinFacturas?' <span style="font-size:10px;color:#999">(Tech Books: libros vendidos × su precio — Wonder $15, Limitless $17, Robótica $13)</span>':''),D.facturado,T.facturado)}
       ${f3('(−) Notas de crédito',D.notas,T.notas)}
+      ${detalleResumen([...(D.ncs||[]).map(n=>({ed:'D',f:n.fecha,t:'NC '+(n.num||''),v:n.total})),...(T.ncs||[]).map(n=>({ed:'T',f:n.fecha,t:'NC '+(n.num||''),v:n.total}))],m)}
       ${f3('(−) Ya le pagué',D.pagado,T.pagado)}
+      ${detalleResumen([...(D.pagos||[]).map(p=>({ed:'D',f:p.fecha,t:p.nombre+(p.nota?' · '+p.nota:''),v:p.valor})),...(T.pagos||[]).map(p=>({ed:'T',f:p.fecha,t:p.nombre+(p.nota?' · '+p.nota:''),v:p.valor}))],m)}
+      ${(()=>{const pr=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&!editorialDePago(p)&&(p.editorial==='prestamo'||(/PR[EÉ]STAMO/i.test((p.nombre||'')+' '+(p.nota||''))&&_pareceEditorial((p.nombre||'')+' '+(p.nota||'')))));
+        return pr.map(p=>`<tr><td colspan="4" style="padding:2px 10px 4px 26px;font-size:11px;color:#94a3b8">No se cuenta (préstamo): ${escH(p.fecha||'')} · ${escH(p.nombre||'')} · ${m(parseFloat(p.valor)||0)}</td></tr>`).join('');})()}
       ${f3('= Le debo hoy',D.debe,T.debe,{b:1,color:rojo,bg:'#fafafa'})}
       ${(D.porDevolver||T.porDevolver)?f3('<span style="color:#555">(−) Libros que recibí y no vendí: <b>por devolver</b> <span style="font-size:10px;color:#999">(en bodega o que me devuelven los clientes; al devolverlos me hacen nota de crédito)</span></span>',D.porDevolver||0,T.porDevolver||0)
         +f3('= Le deberé después de devolver',D.debeFinal,T.debeFinal,{b:1,color:rojo,bg:'#fff8e1'}):''}
