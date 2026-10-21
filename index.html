@@ -6688,7 +6688,7 @@ function productosStockNegativo(){
 // Productos cuyo stockInicial>0 probablemente ya está contado también como entrada de factura
 function productosStockInicialDuplicado(){
   return DB.productos.filter(p=>(p.stockInicial||0)>0
-    && DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'&&m.ref));
+    && DB.movInv.some(m=>m.prodId===p.id&&m.tipo==='entrada'&&m.ref&&!esDevColegio(m)));
 }
 
 function corregirStockInicialDuplicado(){
