@@ -498,6 +498,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
           <input id="kdx-q" list="kdx-lista" placeholder="Escribe el nombre o código del libro…" oninput="kardexBuscar(this.value)" onchange="kardexBuscar(this.value)" onfocus="this.select()" style="flex:1;font-size:15px;padding:8px 12px;border:1px solid #2ec4a0;border-radius:0 8px 8px 0">
           <datalist id="kdx-lista"></datalist>
         </div>
+        <button class="btn btn-sm" style="background:#1f4e5f;color:#fff;font-weight:700" onclick="kardexTodos()">📚 Todos los libros</button>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-weight:700;color:#1f4e5f;font-size:12px">EXPORTAR</span>
           <button class="btn btn-sm" style="background:#2ec4a0;color:#fff;font-weight:700;min-width:80px" onclick="kardexExcel()">Excel</button>
@@ -3629,10 +3630,9 @@ function kardexDatos(prodId){
 function renderKardex(){
   const box=document.getElementById('kdx-body');if(!box)return;
   renderKardexLista();
-  if(!kardexProdId){try{kardexProdId=localStorage.getItem('txe_kardex_prod')||'';}catch(e){}}
   const K=kardexProdId?kardexDatos(kardexProdId):null;
   const inp=document.getElementById('kdx-q');
-  if(!K){box.innerHTML='<div class="empty">Escribe arriba el nombre o el código del libro y escógelo de la lista.</div>';return;}
+  if(!K){ if(inp&&document.activeElement!==inp) inp.value=''; renderKardexResumen(box); return; }
   if(inp&&document.activeElement!==inp) inp.value=kardexEtiqueta(K.p);
   const n=v=>v===undefined?'':(+v).toFixed(2);
   const c=v=>v===undefined?'':v;
@@ -3683,9 +3683,99 @@ function kardexTablaSimple(K){
     <tr><td colspan="2" align="right"><b>Totales</b></td><td align="right"><b>${K.tE}</b></td><td></td><td align="right"><b>${K.tEv.toFixed(2)}</b></td><td align="right"><b>${K.tS}</b></td><td></td><td align="right"><b>${K.tSv.toFixed(2)}</b></td><td align="right"><b>${K.cant}</b></td><td></td><td align="right"><b>${K.tot.toFixed(2)}</b></td></tr>
   </table>`;
 }
+// ── KÁRDEX: TODOS LOS LIBROS ────────────────────────────────────────────────
+// Una fila por libro (los que tienen movimientos o existencia), con el mismo
+// cálculo de kardexDatos(); clic en una fila abre su kárdex completo.
+function kardexTodos(){ kardexProdId=''; renderKardex(); }
+function kardexAbrir(id){ kardexProdId=id; renderKardex(); window.scrollTo({top:0,behavior:'smooth'}); }
+function kardexResumenDatos(){
+  const q=(document.getElementById('kdx-fq')?.value||'').toLowerCase();
+  const ed=document.getElementById('kdx-fed')?.value||'';
+  const conMov=new Set(DB.movInv.map(m=>m.prodId));
+  return DB.productos
+    .filter(p=>p.editorial!=='Hist.'&&(conMov.has(p.id)||(p.stockInicial||0)))
+    .filter(p=>!ed||(p.editorial||'')===ed)
+    .filter(p=>!q||kardexEtiqueta(p).toLowerCase().includes(q))
+    .map(p=>kardexDatos(p.id))
+    .sort((a,b)=>(a.p.editorial||'').localeCompare(b.p.editorial||'','es')||a.p.nombre.localeCompare(b.p.nombre,'es'));
+}
+function renderKardexResumen(box){
+  box=box||document.getElementById('kdx-body');if(!box)return;
+  const prevQ=document.getElementById('kdx-fq')?.value||'';
+  const prevEd=document.getElementById('kdx-fed')?.value||'';
+  const eds=[...new Set(DB.productos.filter(p=>p.editorial&&p.editorial!=='Hist.').map(p=>p.editorial))].sort();
+  if(!document.getElementById('kdx-res-tb')){
+    box.innerHTML=`
+    <div style="font-size:16px;font-weight:700;color:#1f4e5f;margin:4px 0 10px">📚 Kárdex de todos los libros</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <input id="kdx-fq" placeholder="Filtrar por nombre o código…" oninput="renderKardexResumen()" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--bd);border-radius:6px" value="${escH(prevQ)}">
+      <select id="kdx-fed" onchange="renderKardexResumen()" style="padding:7px 10px;border:1px solid var(--bd);border-radius:6px"><option value="">Todas las editoriales</option>${eds.map(e=>`<option${e===prevEd?' selected':''}>${escH(e)}</option>`).join('')}</select>
+      <button class="btn btn-s btn-sm" onclick="kardexImprimirTodosDetalle()" title="Imprime el kárdex completo (con cada factura y guía) de todos los libros de la lista">🖨️ Kárdex completo de todos</button>
+    </div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Toca un libro para ver su kárdex completo, con cada factura y cada guía.</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:820px">
+      <thead><tr style="background:#e5e5e5">
+        <th style="padding:7px;text-align:left">CÓDIGO</th><th style="padding:7px;text-align:left">LIBRO</th><th style="padding:7px;text-align:left">EDITORIAL</th>
+        <th style="padding:7px;text-align:right">ENTRADAS</th><th style="padding:7px;text-align:right">SALIDAS</th><th style="padding:7px;text-align:right">EXISTENCIA</th>
+        <th style="padding:7px;text-align:right">COSTO UNIT</th><th style="padding:7px;text-align:right">COSTO TOTAL</th></tr></thead>
+      <tbody id="kdx-res-tb"></tbody></table></div>`;
+  }
+  const L=kardexResumenDatos();
+  let tE=0,tS=0,tC=0,tV=0;
+  const tb=document.getElementById('kdx-res-tb');
+  tb.innerHTML=L.length?L.map(K=>{
+    tE+=K.tE;tS+=K.tS;tC+=K.cant;tV+=K.tot;
+    return `<tr onclick="kardexAbrir('${K.p.id}')" style="cursor:pointer;border-bottom:1px solid #eee" onmouseover="this.style.background='#eafaf5'" onmouseout="this.style.background=''">
+      <td style="padding:6px 7px">${escH(K.p.codigo||'')}</td><td style="padding:6px 7px;font-weight:600">${escH(K.p.nombre)}</td><td style="padding:6px 7px;font-size:11px;color:#555">${escH(K.p.editorial||'')}</td>
+      <td style="padding:6px 7px;text-align:right;color:#1b5e20">${K.tE}</td><td style="padding:6px 7px;text-align:right;color:#b71c1c">${K.tS}</td>
+      <td style="padding:6px 7px;text-align:right;font-weight:700;${K.cant<0?'color:#b71c1c':''}">${K.cant}</td>
+      <td style="padding:6px 7px;text-align:right;font-family:monospace">${K.cu.toFixed(2)}</td><td style="padding:6px 7px;text-align:right;font-family:monospace;font-weight:700">${K.tot.toFixed(2)}</td></tr>`;
+  }).join('')+`<tr style="font-weight:700;background:#f4f4f4"><td colspan="3" style="padding:8px;text-align:right">TOTALES (${L.length} libros)</td><td style="padding:8px;text-align:right">${tE}</td><td style="padding:8px;text-align:right">${tS}</td><td style="padding:8px;text-align:right">${tC}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace">${tV.toFixed(2)}</td></tr>`
+  :'<tr><td colspan="8"><div class="empty">Sin libros con movimientos para ese filtro</div></td></tr>';
+}
+function kardexResumenTabla(L){
+  let tE=0,tS=0,tC=0,tV=0;
+  return `<table border="1" style="border-collapse:collapse;width:100%;font-size:11px">
+    <tr><th>CÓDIGO</th><th>LIBRO</th><th>EDITORIAL</th><th>ENTRADAS</th><th>SALIDAS</th><th>EXISTENCIA</th><th>COSTO UNIT</th><th>COSTO TOTAL</th></tr>
+    ${L.map(K=>{tE+=K.tE;tS+=K.tS;tC+=K.cant;tV+=K.tot;return `<tr><td>${escH(K.p.codigo||'')}</td><td>${escH(K.p.nombre)}</td><td>${escH(K.p.editorial||'')}</td><td align="right">${K.tE}</td><td align="right">${K.tS}</td><td align="right"><b>${K.cant}</b></td><td align="right">${K.cu.toFixed(2)}</td><td align="right"><b>${K.tot.toFixed(2)}</b></td></tr>`;}).join('')}
+    <tr><td colspan="3" align="right"><b>TOTALES (${L.length} libros)</b></td><td align="right"><b>${tE}</b></td><td align="right"><b>${tS}</b></td><td align="right"><b>${tC}</b></td><td></td><td align="right"><b>${tV.toFixed(2)}</b></td></tr>
+  </table>`;
+}
+function kardexResumenExcel(){
+  const L=kardexResumenDatos();
+  const html=`<html><head><meta charset="utf-8"></head><body><h3>KÁRDEX — TODOS LOS LIBROS (${new Date().toLocaleDateString('es-EC')})</h3>${kardexResumenTabla(L)}</body></html>`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+html],{type:'application/vnd.ms-excel'}));
+  a.download='Kardex_todos_los_libros.xls';
+  document.body.appendChild(a);a.click();a.remove();
+}
+function kardexResumenImprimir(){
+  const L=kardexResumenDatos();
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Kárdex todos los libros</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:11px}th{background:#e0e0e0;padding:5px}td{padding:4px 6px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Kárdex — todos los libros','Al '+new Date().toLocaleDateString('es-EC'))}
+  ${kardexResumenTabla(L)}<\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
+function kardexImprimirTodosDetalle(){
+  const L=kardexResumenDatos();
+  if(!L.length)return toast('No hay libros para imprimir','err');
+  if(L.length>60&&!confirm('Son '+L.length+' libros, cada uno con su tabla: van a salir muchas hojas.\n\nSi quieres menos, primero escoge una editorial en el filtro.\n\n¿Imprimir igual?'))return;
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Kárdex completo</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}th{background:#e0e0e0;padding:4px}td{padding:3px 5px}
+  .lib{page-break-inside:avoid;margin-bottom:16px}h4{margin:0 0 4px;font-size:12px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Kárdex completo','Al '+new Date().toLocaleDateString('es-EC'))}
+  ${L.map(K=>`<div class="lib"><h4>${escH(kardexEtiqueta(K.p))} — Existencia: ${K.cant}</h4>${kardexTablaSimple(K)}</div>`).join('')}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
 function kardexExcel(){
   const K=kardexProdId?kardexDatos(kardexProdId):null;
-  if(!K)return toast('Escoge primero un libro','err');
+  if(!K)return kardexResumenExcel();
   const html=`<html><head><meta charset="utf-8"></head><body>
     <h3>KÁRDEX — ${escH(kardexEtiqueta(K.p))}</h3>
     <p>Existencia actual: ${K.cant} · Costo actual: ${K.cu.toFixed(2)} · PVP: ${(parseFloat(K.p.precioVenta)||0).toFixed(2)} · Método: Promedio</p>
@@ -3697,7 +3787,7 @@ function kardexExcel(){
 }
 function kardexImprimir(){
   const K=kardexProdId?kardexDatos(kardexProdId):null;
-  if(!K)return toast('Escoge primero un libro','err');
+  if(!K)return kardexResumenImprimir();
   const win=window.open('','_blank');
   win.document.write(`<html><head><title>Kárdex ${escH(K.p.nombre)}</title>
   <style>body{font-family:Arial,sans-serif;padding:15px;font-size:11px}th{background:#e0e0e0;padding:5px}td{padding:4px 6px}${dmPrintCSS()}</style></head><body>
