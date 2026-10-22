@@ -3596,6 +3596,7 @@ function kardexDetalle(m){
   if(m.origen==='ajusteConteo') return 'Ajuste por conteo físico';
   if(/^NC-/.test(ref)) return 'Devolución a la editorial'+(m.cliente?' — '+m.cliente.replace(/^Devolución a /,''):'');
   if(/^CONTROL /.test(ref)) return 'Ajuste Control de ventas — '+ref.slice(8);
+  if(/^DEV /.test(ref)) return 'Devolución del colegio '+ref.slice(4);
   if(m.tipo==='entrada') return 'Compra'+(ref?' Fact. '+ref:'')+(m.proveedor?' — '+m.proveedor:'');
   return (ref?'Guía '+ref:'Salida')+(m.cliente?' → '+m.cliente:'');
 }
@@ -3603,10 +3604,12 @@ function kardexDatos(prodId){
   const p=DB.productos.find(x=>x.id===prodId);if(!p)return null;
   const r2=n=>Math.round(n*100)/100;
   let cant=p.stockInicial||0, cu=parseFloat(p.precioCosto)||0, tot=cant*cu;
-  const filas=[{fecha:p.creadoEn?String(p.creadoEn).slice(0,10):'',det:'Saldo inicial',sc:cant,su:cu,st:tot}];
+  // Solo si el libro se creó con existencia (stockInicial) se muestra esa fila;
+  // si arrancó en 0, el kárdex empieza directo con la primera compra.
+  const filas=cant?[{fecha:p.creadoEn?String(p.creadoEn).slice(0,10):'',det:'Existencia cargada al crear el libro',ec:cant,eu:cu,et:tot,sc:cant,su:cu,st:tot}]:[];
   const movs=DB.movInv.map((m,i)=>({m,i})).filter(x=>x.m.prodId===prodId)
     .sort((a,b)=>String(a.m.fecha||'').localeCompare(String(b.m.fecha||''))||a.i-b.i).map(x=>x.m);
-  let tE=0,tEv=0,tS=0,tSv=0;
+  let tE=cant,tEv=tot,tS=0,tSv=0;
   movs.forEach(m=>{
     const q=parseFloat(m.cantidad)||0;
     const f={fecha:m.fecha||'',det:kardexDetalle(m)};
