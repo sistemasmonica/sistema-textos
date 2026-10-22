@@ -2218,6 +2218,8 @@ function load(){
       if(parsed.comisiones) DB.comisiones=parsed.comisiones;
       if(parsed.respaldosVendedor) DB.respaldosVendedor=parsed.respaldosVendedor;
       if(parsed.pagos) DB.pagos=parsed.pagos;
+      if(parsed.historial) DB.historial=parsed.historial;
+      if(parsed.reglasBanco) DB.reglasBanco=parsed.reglasBanco;
       if(parsed.conteo) DB.conteo=parsed.conteo;
     } else {
       // Migrar registros del sistema anterior (txe_v3) si existen
@@ -12059,7 +12061,14 @@ function reparacionProductosEditados(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 22-oct: costos del Catálogo recuperados';
   if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  // Lista fija (del respaldo de las 18:31) por si el Historial no está.
   const ult={};
+  [['LIBROS DE ROBOTICA DE OCTAVO',13,20],['LIBROS DE ROBOTICA DE 9NO',13,20],['LIBROS DE ROBOTICA DE 10MO',13,20],
+   ['PASAPORTE A LA LECTURA EGB 8',5,12],['PASAPORTE A LA LECTURA EGB 9',5,12],['PASAPORTE A LA LECTURA EGB 10',5,12],
+   ['CALIGRAFIA EGB 8',5,12],['CALIGRAFIA EGB 9',5,12],['CALIGRAFIA EGB 10',5,12],
+   ['CIVICA Y ACOMPAÑAMIENTO EGB 8',5,12],['CIVICA Y ACOMPAÑAMIENTO EGB 9',5,12],['CIVICA Y ACOMPAÑAMIENTO EGB 10',5,12],
+   ['EDUCACION RELIGIOSA 3 AÑOS',7,15],['EDUCACION RELIGIOSA 4 AÑOS',7,15],['EDUCACION RELIGIOSA EGB 1',7,15]]
+   .forEach(([n,c,v])=>ult[_normNombre(n)]={c,v,n});
   (DB.historial||[]).filter(h=>h.accion==='Producto editado'&&String(h.fecha||'')>='2026-10-22').forEach(h=>{
     const m=String(h.detalle||'').match(/^(.*) — costo \$([\d.]+) \/ venta \$([\d.]+)$/);
     if(m) ult[_normNombre(m[1])]={c:parseFloat(m[2]),v:parseFloat(m[3]),n:m[1]};
