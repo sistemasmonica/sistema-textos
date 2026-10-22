@@ -333,6 +333,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <button class="btn btn-d btn-sm" onclick="eliminarColegio()" title="Eliminar el colegio seleccionado"><i class="ti ti-trash"></i> Eliminar</button>
       <button class="btn btn-s btn-sm" id="btn-col-cerrar" onclick="toggleCierreColegio()" title="Marcar este colegio como cerrado / liquidado (ya se hicieron todas las cuentas)">✅ Marcar cerrado</button>
       <button class="btn btn-s btn-sm" onclick="imprimirColegiosPorCerrar()" title="Imprimir la lista de colegios que faltan cerrar o liquidar"><i class="ti ti-printer"></i> Colegios por cerrar</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--mu)" title="Dinero en el Banco Pichincha, ya descontado lo pagado a la editorial y a inglés. Sale en el reporte. Déjalo vacío si no quieres que salga.">💰 Banco Pichincha $<input id="col-cierre-banco" type="text" inputmode="decimal" placeholder="0" style="width:80px;padding:4px 6px;font-size:12px" oninput="try{localStorage.setItem('txe_cierre_banco',this.value.trim())}catch(e){}"></label>
     </div>
   </div>
 
@@ -9135,6 +9136,8 @@ function refrescarCierreColSel(){
   const btn=document.getElementById('btn-col-cerrar');
   const d=DB.colData?.[sel.value];
   if(btn) btn.innerHTML=d&&d.cerrado?'↩ Reabrir colegio':'✅ Marcar cerrado';
+  const ib=document.getElementById('col-cierre-banco');
+  if(ib&&!ib.value&&document.activeElement!==ib){try{ib.value=localStorage.getItem('txe_cierre_banco')||'';}catch(e){}}
 }
 function toggleCierreColegio(){
   const nombre=colSelValor();
@@ -9187,8 +9190,7 @@ function imprimirColegiosPorCerrar(){
   const hoy=new Date().toLocaleDateString('es-EC');
   // Dinero en el banco (opcional) — se recuerda para la próxima impresión
   let prevBanco='';try{prevBanco=localStorage.getItem('txe_cierre_banco')||'';}catch(e){}
-  const rb=prompt('¿Cuánto dinero tienes en el BANCO PICHINCHA, ya descontado lo pagado a la editorial y a inglés?\n(Déjalo vacío si no quieres que salga en el reporte)',prevBanco);
-  if(rb===null)return;
+  const rb=document.getElementById('col-cierre-banco')?.value||prevBanco;
   let tb=String(rb).replace(/[^0-9.,]/g,'');
   // 5.000 / 5,000 = cinco mil; solo es decimal si al final hay 1-2 cifras (5000.50)
   tb=/[.,][0-9]{1,2}$/.test(tb)?tb.replace(/[.,](?=.*[.,])/g,'').replace(',','.'):tb.replace(/[.,]/g,'');
@@ -9196,6 +9198,7 @@ function imprimirColegiosPorCerrar(){
   try{localStorage.setItem('txe_cierre_banco',String(rb).trim());}catch(e){}
   const bancoHTML=isFinite(banco)&&String(rb).trim()?`<div style="border:2px solid #66bb6a;background:#e8f5e9;border-radius:6px;padding:10px 14px;margin:10px 0;font-size:14px"><b>💰 DINERO EN EL BANCO PICHINCHA: ${fmt(banco)}</b><div style="font-size:11px;color:#555;margin-top:3px">Ya descontado lo pagado a la editorial y a inglés.</div></div>`:'';
   const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana del reporte: permite las ventanas emergentes para este sitio','err');
   win.document.write(`<html><head><title>Colegios por cerrar</title>
   <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}
   table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}
