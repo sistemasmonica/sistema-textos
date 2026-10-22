@@ -8934,6 +8934,16 @@ function imprimirColegiosPorCerrar(){
   };
   const filasPend=pend.map(fila).join('');
   const hoy=new Date().toLocaleDateString('es-EC');
+  // Dinero en el banco (opcional) — se recuerda para la próxima impresión
+  let prevBanco='';try{prevBanco=localStorage.getItem('txe_cierre_banco')||'';}catch(e){}
+  const rb=prompt('¿Cuánto dinero tienes en el BANCO PICHINCHA, ya descontado lo pagado a la editorial y a inglés?\n(Déjalo vacío si no quieres que salga en el reporte)',prevBanco);
+  if(rb===null)return;
+  let tb=String(rb).replace(/[^0-9.,]/g,'');
+  // 5.000 / 5,000 = cinco mil; solo es decimal si al final hay 1-2 cifras (5000.50)
+  tb=/[.,][0-9]{1,2}$/.test(tb)?tb.replace(/[.,](?=.*[.,])/g,'').replace(',','.'):tb.replace(/[.,]/g,'');
+  const banco=parseFloat(tb);
+  try{localStorage.setItem('txe_cierre_banco',String(rb).trim());}catch(e){}
+  const bancoHTML=isFinite(banco)&&String(rb).trim()?`<div style="border:2px solid #66bb6a;background:#e8f5e9;border-radius:6px;padding:10px 14px;margin:10px 0;font-size:14px"><b>💰 DINERO EN EL BANCO PICHINCHA: ${fmt(banco)}</b><div style="font-size:11px;color:#555;margin-top:3px">Ya descontado lo pagado a la editorial y a inglés.</div></div>`:'';
   const win=window.open('','_blank');
   win.document.write(`<html><head><title>Colegios por cerrar</title>
   <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}
@@ -8941,6 +8951,7 @@ function imprimirColegiosPorCerrar(){
   td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:18px 0 4px}
   .tot td{font-weight:bold;background:#fdecea}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Colegios por cerrar / liquidar','Al '+hoy)}
+  ${bancoHTML}
   <h3>⏳ FALTAN CERRAR (${pend.length})</h3>
   ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
   ${filasPend}<tr class="tot"><td colspan="4" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
