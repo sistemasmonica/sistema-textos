@@ -442,6 +442,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-sm" style="background:#0d6832;color:#fff" onclick="resolverTodoBanco()"><i class="ti ti-sparkles"></i> ✨ Resolver todo</button>
         <button class="btn btn-p btn-sm" onclick="autoConciliar()"><i class="ti ti-wand"></i> Auto-conciliar</button>
         <button class="btn btn-sm" style="background:#6a1b9a;color:#fff" onclick="autoClasificarSinFactura()"><i class="ti ti-tags"></i> Clasificar lo sin factura</button>
+        <button class="btn btn-sm" style="background:#475569;color:#fff" onclick="marcarPendientesPersonal()" title="Los movimientos que siguen esperando factura pasan a Gasto personal (no son del negocio)">🧍 Lo pendiente es personal</button>
         <button class="btn btn-s btn-sm" onclick="exportConcilCSV()"><i class="ti ti-download"></i> Exportar</button>
         <button class="btn btn-d btn-sm" onclick="limpiarBanco()"><i class="ti ti-trash"></i> Limpiar</button>
       </div>
@@ -1198,6 +1199,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 
 <!-- PANEL: COMISIONES -->
 <div id="pn-comisiones" class="pn">
+  <div class="card" style="border:2px solid #f59e0b">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div class="card-t" style="margin:0;color:#b45309"><i class="ti ti-list-check"></i> Comisiones que debo pagar a los colegios</div>
+      <button class="btn btn-s btn-sm" onclick="imprimirComisionesColegios()"><i class="ti ti-printer"></i> Imprimir lista</button>
+    </div>
+    <div id="com-col-lista"></div>
+  </div>
   <div class="card">
     <div class="card-t"><i class="ti ti-percentage"></i> Registrar comisión / capacitación</div>
     <div class="f3">
@@ -3094,6 +3102,18 @@ function guardarMiNombreBanco(){
   localStorage.setItem('txe_mi_nombre_banco',v);
 }
 
+// Los movimientos que siguen "esperando factura" (Pago a proveedor sin factura)
+// pasan a Gasto personal de una sola vez. Se puede cambiar uno por uno después.
+function marcarPendientesPersonal(){
+  const pend=(DB.banco||[]).filter(b=>!b.regId&&!b.sugerido&&(!b.clasificacion||REQUIERE_FACTURA[b.clasificacion]));
+  if(!pend.length) return toast('No hay movimientos pendientes','ok');
+  const tot=pend.reduce((a,b)=>a+(parseFloat(b.debito)||0),0);
+  if(!confirm('¿Marcar los '+pend.length+' movimientos pendientes ('+fmt(tot)+' en débitos) como GASTO PERSONAL?\n\nSon los que no tienen factura del negocio. Si alguno sí es del negocio, después lo cambias uno por uno.'))return;
+  pend.forEach(b=>{b.clasificacion='gastoPersonal';b.origenClasificacion='Marcado en bloque como personal';});
+  logHistorial('Banco: pendientes marcados como personal',pend.length+' movimientos '+fmt(tot));
+  save();renderBanco();
+  toast(pend.length+' movimientos marcados como gasto personal','ok');
+}
 function autoClasificarSinFactura(){
   if(!DB.banco.length)return toast('No hay movimientos bancarios cargados','err');
   const miNombre=(document.getElementById('banco-mi-nombre').value||'').trim();
@@ -12622,7 +12642,83 @@ function saveCom(){
   toast('Comisión guardada');
 }
 
+// Una fila por colegio con comisión (sale del Control de ventas). Mónica marca
+// "Ya pagada" cuando la entrega; queda guardado en colData[colegio].comisionPagada.
+// Es solo control: no crea movimientos en Pagos.
+function comisionesColegiosDatos(){
+  initColData();
+  return colegiosList().map(c=>{
+    const d=DB.colData[c.nombre];if(!d)return null;
+    const T=totalesColegio(d);
+    const pcts=[...new Set((d.lineas||[]).filter(l=>lineaComisiona(l)&&((l.cant||0)-(l.dev||0))>0).map(l=>pctLinea(d,l)))];
+    return {nombre:c.nombre,tv:T.tv,pct:pcts.length===1?pcts[0]+'%':(pcts.length?'varios':'—'),
+      com:T.comision,cap:T.comisionPV,total:T.totalColegio,pag:d.comisionPagada||null};
+  }).filter(x=>x&&x.tv>0);
+}
+function renderComisionesColegios(){
+  const box=document.getElementById('com-col-lista');if(!box)return;
+  const L=comisionesColegiosDatos();
+  const conCom=L.filter(x=>x.total>0.005), sinCom=L.filter(x=>x.total<=0.005);
+  const pend=conCom.filter(x=>!x.pag), pag=conCom.filter(x=>x.pag);
+  const tPend=pend.reduce((a,x)=>a+x.total,0), tPag=pag.reduce((a,x)=>a+x.total,0);
+  const fila=x=>`<tr style="${x.pag?'background:#f0fdf4':''}">
+    <td style="padding:6px 8px;font-weight:600">${escH(x.nombre)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.tv)}</td>
+    <td style="padding:6px 8px;text-align:center">${x.pct}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.com)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.cap)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;color:${x.pag?'var(--g1)':'#b45309'}">${fmt(x.total)}</td>
+    <td style="padding:6px 8px;text-align:center">${x.pag?'✅ Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/'))+' <button class="btn btn-s btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')" title="Deshacer">↩</button>'
+      :'<button class="btn btn-p btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')">Marcar pagada</button>'}</td></tr>`;
+  box.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:10px">
+      <div class="sc"><div class="sc-lbl">Falta pagar</div><div class="sc-val" style="color:#b45309">${fmt(tPend)}</div><div class="sc-sub">${pend.length} colegio(s)</div></div>
+      <div class="sc"><div class="sc-lbl">Ya pagado</div><div class="sc-val cg">${fmt(tPag)}</div><div class="sc-sub">${pag.length} colegio(s)</div></div>
+      <div class="sc"><div class="sc-lbl">Total comisiones</div><div class="sc-val">${fmt(tPend+tPag)}</div><div class="sc-sub">sale del Control de ventas</div></div>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px">
+      <thead><tr style="background:#fef3c7"><th style="padding:7px 8px;text-align:left">COLEGIO</th><th style="padding:7px 8px;text-align:right">VENDIDO (PVP)</th><th style="padding:7px 8px">%</th><th style="padding:7px 8px;text-align:right">COMISIÓN</th><th style="padding:7px 8px;text-align:right">CAPACITACIÓN</th><th style="padding:7px 8px;text-align:right">TOTAL A PAGAR</th><th style="padding:7px 8px">ESTADO</th></tr></thead>
+      <tbody>${pend.map(fila).join('')}${pag.map(fila).join('')}
+      <tr style="font-weight:700;background:#f4f4f4"><td colspan="5" style="padding:8px;text-align:right">FALTA PAGAR:</td><td style="padding:8px;text-align:right;font-family:monospace;color:#b45309">${fmt(tPend)}</td><td></td></tr></tbody>
+    </table></div>
+    ${sinCom.length?`<div style="font-size:11px;color:var(--mu);margin-top:8px">Sin comisión: ${sinCom.map(x=>escH(x.nombre)).join(' · ')}</div>`:''}
+    <div style="font-size:11px;color:var(--mu);margin-top:6px">Los valores salen del <b>Control de ventas</b> de cada colegio (comisión % + capacitación por libro). Si el colegio ya se descontó la comisión cuando te pagó, márcala como pagada igual.</div>`;
+}
+function toggleComisionPagada(nombre){
+  initColData();
+  const d=DB.colData[nombre];if(!d)return;
+  if(d.comisionPagada){
+    if(!confirm('¿Volver a poner como PENDIENTE la comisión de "'+nombre+'"?'))return;
+    delete d.comisionPagada;
+    logHistorial('Comisión colegio pendiente',nombre);
+  }else{
+    const T=totalesColegio(d);
+    if(!confirm('¿Marcar como PAGADA la comisión de "'+nombre+'" por '+fmt(T.totalColegio)+'?'))return;
+    d.comisionPagada={fecha:today(),monto:Math.round(T.totalColegio*100)/100};
+    logHistorial('Comisión colegio pagada',nombre+' '+fmt(T.totalColegio));
+  }
+  save();renderComisionesColegios();
+}
+function imprimirComisionesColegios(){
+  const L=comisionesColegiosDatos().filter(x=>x.total>0.005);
+  const pend=L.filter(x=>!x.pag), pag=L.filter(x=>x.pag);
+  const tPend=pend.reduce((a,x)=>a+x.total,0);
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  const fila=x=>`<tr><td style="text-align:center;width:24px">${x.pag?'✔':'☐'}</td><td><b>${escH(x.nombre)}</b></td><td align="right">${fmt(x.tv)}</td><td align="center">${x.pct}</td><td align="right">${fmt(x.com)}</td><td align="right">${fmt(x.cap)}</td><td align="right"><b>${fmt(x.total)}</b></td><td>${x.pag?'Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/')):'Pendiente'}</td></tr>`;
+  win.document.write(`<html><head><title>Comisiones a colegios</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:16px 0 4px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Comisiones que debo pagar a los colegios','Al '+new Date().toLocaleDateString('es-EC'))}
+  <div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:10px 14px;font-size:15px"><b>FALTA PAGAR EN COMISIONES: ${fmt(tPend)}</b> (${pend.length} colegio(s))</div>
+  <table><tr><th></th><th style="text-align:left">COLEGIO</th><th>VENDIDO (PVP)</th><th>%</th><th>COMISIÓN</th><th>CAPACITACIÓN</th><th>TOTAL A PAGAR</th><th>ESTADO</th></tr>
+  ${pend.map(fila).join('')}${pag.map(fila).join('')}
+  <tr><td colspan="6" align="right"><b>FALTA PAGAR:</b></td><td align="right"><b>${fmt(tPend)}</b></td><td></td></tr></table>
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
 function renderComisiones(){
+  try{renderComisionesColegios();}catch(e){console.warn('comisiones colegios',e);}
   const filTipo=document.getElementById('com-fil-tipo')?.value||'';
   const filEst=document.getElementById('com-fil-estado')?.value||'';
   let data=[...DB.comisiones];
