@@ -174,23 +174,23 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- NAV -->
 <div class="nav">
   <button class="nt on" onclick="tab('dash',this)"><i class="ti ti-dashboard"></i> Inicio</button>
-  <button class="nt" onclick="tab('xml',this)" id="btn-xml"><i class="ti ti-file-code"></i> XML+IA <span id="badge-correo" style="display:none;background:#e53935;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700"></span></button>
-  <button class="nt" onclick="tab('man',this)"><i class="ti ti-pencil"></i> Manual</button>
-  <button class="nt" onclick="tab('venta',this)"><i class="ti ti-currency-dollar"></i> Ventas</button>
-  <button class="nt" onclick="tab('colegios',this)"><i class="ti ti-school"></i> Colegios</button>
-  <button class="nt" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> Banco</button>
-  <button class="nt" onclick="tab('inv',this)"><i class="ti ti-package"></i> Inventario</button>
-  <button class="nt" onclick="tab('mov',this)"><i class="ti ti-list"></i> Movimientos</button>
-  <button class="nt" onclick="tab('decl',this)"><i class="ti ti-file-certificate"></i> Declaraciones</button>
-  <button class="nt" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
-  <button class="nt" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
-  <button class="nt" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> Editorial</button>
-  <button class="nt" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> Por Cobrar</button>
-  <button class="nt" onclick="tab('comisiones',this)"><i class="ti ti-percentage"></i> Comisiones</button>
-  <button class="nt" onclick="tab('deudas',this)"><i class="ti ti-credit-card-off"></i> Deudas</button>
+  <button class="nt" onclick="tab('xml',this)" id="btn-xml"><i class="ti ti-file-code"></i> <b style="color:#16a34a">1</b> XML+IA <span id="badge-correo" style="display:none;background:#e53935;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700"></span></button>
+  <button class="nt" onclick="tab('man',this)"><i class="ti ti-pencil"></i> <b style="color:#16a34a">1</b> Manual</button>
+  <button class="nt" onclick="tab('inv',this)"><i class="ti ti-package"></i> <b style="color:#16a34a">2</b> Inventario</button>
+  <button class="nt" onclick="tab('colegios',this)"><i class="ti ti-school"></i> <b style="color:#16a34a">3</b> Colegios</button>
+  <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> <b style="color:#16a34a">4</b> Pagos</button>
+  <button class="nt" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> <b style="color:#16a34a">5</b> Por Cobrar</button>
+  <button class="nt" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> <b style="color:#16a34a">6</b> Editorial</button>
+  <button class="nt" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> <b style="color:#16a34a">7</b> Banco</button>
   <button class="nt" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
   <button class="nt" onclick="tab('balance',this)"><i class="ti ti-scale"></i> Balance</button>
-  <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> Pagos</button>
+  <button class="nt" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
+  <button class="nt" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
+  <button class="nt" onclick="tab('decl',this)"><i class="ti ti-file-certificate"></i> Declaraciones</button>
+  <button class="nt" onclick="tab('mov',this)"><i class="ti ti-list"></i> Movimientos</button>
+  <button class="nt" onclick="tab('venta',this)"><i class="ti ti-currency-dollar"></i> Ventas</button>
+  <button class="nt" onclick="tab('comisiones',this)"><i class="ti ti-percentage"></i> Comisiones</button>
+  <button class="nt" onclick="tab('deudas',this)"><i class="ti ti-credit-card-off"></i> Deudas</button>
   <button class="nt" onclick="tab('historial',this)"><i class="ti ti-history"></i> Historial</button>
   <button class="nt" onclick="tab('ayuda',this)"><i class="ti ti-help"></i> Ayuda</button>
 </div>
@@ -388,7 +388,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
       <div class="sc"><div class="sc-lbl">Total vendido $</div><div class="sc-val cb" id="col-tv">$0.00</div></div>
       <div class="sc"><div class="sc-lbl">Total comisiones</div><div class="sc-val ca" id="col-tc">$0.00</div></div>
       <div class="sc"><div class="sc-lbl">Tu ingreso $</div><div class="sc-val cg" id="col-tp">$0.00</div></div>
-      <div class="sc"><div class="sc-lbl">Saldo por pagar editorial</div><div class="sc-val cr" id="col-tsaldo">$0.00</div></div>
+      <div class="sc"><div class="sc-lbl">Le debes a la editorial (hoy)</div><div class="sc-val cr" id="col-tsaldo">$0.00</div></div>
     </div>
     <div id="col-analisis-todos"></div>
     <div class="sh" style="margin-top:4px">
@@ -1271,13 +1271,13 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- PANEL: BALANCE -->
 <div id="pn-balance" class="pn">
   <div class="card" style="background:#e3f2fd;border-color:#90caf9;padding:10px 14px;margin-bottom:12px">
-    <small style="color:#1565c0"><b>ℹ️ Nota:</b> El Balance es una fotografía de lo que tienes (Activos) y lo que debes (Pasivos) en este momento. El saldo bancario se toma del último movimiento importado en <b>Conciliación bancaria</b> — si no has importado el extracto más reciente, el número puede no estar 100% al día.</small>
+    <small style="color:#1565c0"><b>ℹ️ Nota:</b> El Balance es una fotografía de lo que tienes (Activos) y lo que debes (Pasivos) en este momento. La plata disponible sale de lo que registras en <b>Pagos</b> (cobros − pagos), igual que en Inicio. Abajo se muestra también el saldo del último extracto del banco importado, solo como referencia.</small>
   </div>
   <div class="two">
     <div class="card">
       <div class="card-t cg"><i class="ti ti-wallet"></i> Activos</div>
       <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <tr><td style="padding:6px 0">Saldo bancario</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-banco">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Plata que ya tengo <span style="font-size:10px;color:var(--mu)">(cobros − pagos, pestaña Pagos)</span><div id="bal-banco-nota" style="font-size:10px;color:var(--mu)"></div></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-banco">$0.00</td></tr>
         <tr><td style="padding:6px 0">Inventario a costo</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-inv">$0.00</td></tr>
         <tr><td style="padding:6px 0">Cuentas por cobrar</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-cxc">$0.00</td></tr>
         <tr style="border-top:2px solid var(--bd);font-weight:700"><td style="padding:8px 0">Total activos</td><td style="padding:8px 0;text-align:right;font-family:monospace;color:var(--g1)" id="bal-a-total">$0.00</td></tr>
@@ -2374,6 +2374,7 @@ function tab(id,el){
   document.getElementById('pn-'+id).classList.add('on');
   el.classList.add('on');
   if(id==='dash')renderDash();
+  if(id==='venta'){const ub=document.getElementById('u-big');if(ub)ub.textContent=fmt(resumenGanancia().neta);}
   if(id==='mov')renderMov();
   if(id==='rep')renderRep();
   if(id==='cons')renderConsolidado();
@@ -3800,6 +3801,12 @@ function kardexImprimir(){
   win.onload=()=>win.print();
 }
 
+// Valor de lo que hay en bodega a precio de costo del catálogo — mismo número
+// que Reporte de stock y Balance.
+function valorInventarioCosto(){
+  let v=0;DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{v+=stockActual(p.id)*(parseFloat(p.precioCosto)||0);});
+  return v;
+}
 function stockActual(prodId){
   const prod=DB.productos.find(p=>p.id===prodId);
   const inicial=prod?.stockInicial||0;
@@ -5618,14 +5625,11 @@ function renderHistorial(){
 function renderBalance(){
   // Activos
   const bancoOrd=[...DB.banco].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-  const saldoBanco=bancoOrd.length?(bancoOrd[bancoOrd.length-1].saldo||0):0;
-  let invCosto=0;
-  DB.productos.filter(p=>p.editorial!=='Hist.').forEach(p=>{
-    const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
-    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
-    const st=p.stockInicial+ent-sal;
-    invCosto+=st*p.precioCosto;
-  });
+  const ultBanco=bancoOrd.length?bancoOrd[bancoOrd.length-1]:null;
+  const saldoBanco=resumenNegocio().caja;   // cobros − pagos (Pagos), igual que "Plata que ya tengo" en Inicio
+  const nb=document.getElementById('bal-banco-nota');
+  if(nb) nb.textContent=ultBanco?('Último extracto importado ('+String(ultBanco.fecha||'').split('-').reverse().join('/')+'): '+fmt(ultBanco.saldo||0)):'';
+  const invCosto=valorInventarioCosto();
   // Cuentas por cobrar: lo que te deben los colegios de verdad (ingreso esperado
   // por Control de ventas − lo ya cobrado en Pagos), misma cuenta que "Por Cobrar".
   // Antes esto buscaba en DB.regs tipo 'venta' (una pestaña que casi no usas) y
@@ -8132,12 +8136,12 @@ function renderResumenGanancia(){
       <div style="flex:1;min-width:200px;background:#fff;border:1px solid #bbf7d0;border-radius:7px;padding:7px 11px">
         <span style="color:#166534">🔺 <b>Vendido a colegios:</b></span>
         <b style="font-family:monospace;font-size:14px;color:#15803d"> ${fmt(g.ventasCol)}</b>
-        <div style="font-size:10px;color:#64748b;margin-top:2px">total facturado (el sistema no registra los cobros de los colegios)</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">${(()=>{try{const R=resumenNegocio();return 'a precio de venta · ya te pagaron '+fmt(R.cobrado)+' · falta cobrar '+fmt(R.porCobrar);}catch(e){return 'a precio de venta';}})()}</div>
       </div>
       <div style="flex:1;min-width:200px;background:#fff;border:1px solid #cbd5e1;border-radius:7px;padding:7px 11px">
         <span style="color:#334155">📦 <b>Inventario sin vender:</b></span>
-        <b style="font-family:monospace;font-size:14px;color:#334155"> ${fmt(Math.max(0,(g.costoLibros-g.notasCred)-g.costoVendido))}</b>
-        <div style="font-size:10px;color:#64748b;margin-top:2px">libros comprados a la editorial que todavía no vendes</div>
+        <b style="font-family:monospace;font-size:14px;color:#334155"> ${fmt(valorInventarioCosto())}</b>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">libros en bodega a costo (igual que Reporte de stock)</div>
       </div>
     </div>
   </div>`;
@@ -8245,13 +8249,16 @@ function renderConsolidado(){
   const totalVentas=guias.reduce((a,g)=>a+g.total,0);
   const totalUnidades=guias.reduce((a,g)=>a+g.lineas.reduce((s,l)=>s+l.cantidad,0),0);
   const totalCompras=entradas.reduce((a,m)=>a+m.cantidad*(m.precioCosto||0),0);
-  const ganancia=totalVentas-totalCompras;
+  // Ganancia real = la de Liquidación (ventas de Control de ventas − costo de lo vendido −
+  // comisiones − gastos). Guías − entradas NO es ganancia (lo que no se vende se devuelve).
+  const GR=resumenGanancia();
+  const ganancia=GR.neta;
 
   document.getElementById('cons-cards').innerHTML=`
-    <div class="sc"><div class="sc-lbl">Total ventas</div><div class="sc-val cb">${fmt(totalVentas)}</div><div class="sc-sub">${guias.length} guías · ${totalUnidades} unid.</div></div>
-    <div class="sc"><div class="sc-lbl">Total compras inventario</div><div class="sc-val cg">${fmt(totalCompras)}</div><div class="sc-sub">${entradas.length} movimientos</div></div>
-    <div class="sc"><div class="sc-lbl">Ganancia bruta</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${fmt(ganancia)}</div><div class="sc-sub">Ventas − Compras inventario</div></div>
-    <div class="sc"><div class="sc-lbl">Margen</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${totalVentas?((ganancia/totalVentas)*100).toFixed(1):'0.0'}%</div><div class="sc-sub">Sobre ventas totales</div></div>`;
+    <div class="sc"><div class="sc-lbl">Entregado en guías</div><div class="sc-val cb">${fmt(totalVentas)}</div><div class="sc-sub">${guias.length} guías · ${totalUnidades} unid. (precio de la guía; muchas van sin precio)</div></div>
+    <div class="sc"><div class="sc-lbl">Mercadería ingresada</div><div class="sc-val cg">${fmt(totalCompras)}</div><div class="sc-sub">${entradas.length} movimientos (lo que no se vende se devuelve)</div></div>
+    <div class="sc"><div class="sc-lbl">Ganancia real</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${fmt(ganancia)}</div><div class="sc-sub">igual que Liquidación e Inicio</div></div>
+    <div class="sc"><div class="sc-lbl">Margen</div><div class="sc-val" style="color:${ganancia>=0?'var(--g1)':'var(--r1)'}">${GR.margen.toFixed(1)}%</div><div class="sc-sub">sobre lo vendido a colegios</div></div>`;
 
   // Ventas por colegio
   const porColegio={};
@@ -8360,7 +8367,7 @@ function imprimirConsolidado(){
   <table><thead><tr><th>Concepto</th><th style="text-align:right">Valor</th></tr></thead><tbody>
   <tr><td>Total ventas (guías de retiro)</td><td style="text-align:right;font-family:monospace;font-weight:600;color:#1565c0">${fmt(totalVentas)}</td></tr>
   <tr><td>Total compras inventario (entradas)</td><td style="text-align:right;font-family:monospace;font-weight:600;color:#1a6b3c">${fmt(totalCompras)}</td></tr>
-  <tr class="tr-tot"><td>GANANCIA BRUTA</td><td style="text-align:right;font-family:monospace;color:${ganancia>=0?'#1a6b3c':'#c0392b'}">${fmt(ganancia)}</td></tr>
+  <tr class="tr-tot"><td>GANANCIA REAL (igual que Liquidación)</td><td style="text-align:right;font-family:monospace;color:${ganancia>=0?'#1a6b3c':'#c0392b'}">${fmt(ganancia)}</td></tr>
   </tbody></table>
   </body></html>`);
   win.document.close();
@@ -8388,12 +8395,17 @@ function renderRep(){
   const sv=rv.reduce((a,r)=>a+r.total,0);
   const siva=rn.reduce((a,r)=>a+r.iva,0);
   const ssub=rn.reduce((a,r)=>a+r.subtotal,0);
-  const u=sv-sn;
+  // Las ventas a colegios están en Control de ventas (no tienen mes): se usan
+  // cuando no hay un mes escogido, y la utilidad es la misma de Liquidación.
+  const G=resumenGanancia();
+  const svShow=mes?sv:G.ventas;
+  const u=mes?sv-sn:G.neta;
   document.getElementById('rep-res').innerHTML=`
-    <div class="pf"><label>Ventas totales</label><span class="cb">${fmt(sv)}</span></div>
+    <div class="pf"><label>Ventas totales ${mes?'':'<small style="color:var(--mu)">(colegios)</small>'}</label><span class="cb">${fmt(svShow)}</span></div>
+    ${mes?'<div style="font-size:10px;color:var(--mu);margin:-2px 0 4px">Las ventas a colegios no tienen mes: escoge "Todos los meses" para verlas.</div>':''}
     <div class="pf"><label>Compras negocio</label><span class="cg">${fmt(sn)}</span></div>
     <div class="pf"><label>Gastos personales</label><span class="ca">${fmt(sp)}</span></div>
-    <div class="pf" style="border-top:2px solid var(--bd);padding-top:8px;margin-top:4px"><label><strong>Utilidad estimada</strong></label><span style="font-weight:700;color:${u>=0?'var(--g1)':'var(--r1)'}">${fmt(u)}</span></div>`;
+    <div class="pf" style="border-top:2px solid var(--bd);padding-top:8px;margin-top:4px"><label><strong>${mes?'Ventas − compras del mes':'Ganancia (igual que Liquidación)'}</strong></label><span style="font-weight:700;color:${u>=0?'var(--g1)':'var(--r1)'}">${fmt(u)}</span></div>`;
   document.getElementById('rep-sri').innerHTML=`
     <div class="pf"><label>Comprobantes deducibles</label><span>${rn.length}</span></div>
     <div class="pf"><label>Subtotal deducible</label><span>${fmt(ssub)}</span></div>
@@ -9106,7 +9118,9 @@ function estadoCierreColegio(nombre){
   const d=DB.colData?.[nombre];
   if(!d) return {est:'sin',cobrar:0,edit:0,tv:0,fecha:''};
   const T=totalesColegio(d);
-  const cobrar=saldoCobroColegio(nombre,d), edit=T.saldoEdit;
+  // Solo si anotaste pagos a la editorial DENTRO de este colegio se mira su saldo;
+  // si no, la editorial se paga toda junta y no frena el cierre del colegio.
+  const cobrar=saldoCobroColegio(nombre,d), edit=(d.pagosEdit||[]).length?T.saldoEdit:0;
   const r={cobrar,edit,tv:T.tv,fecha:d.cerrado||''};
   if(d.cerrado) r.est='cerrado';
   else if(!T.cant&&!T.tv) r.est='sin';
@@ -9206,13 +9220,14 @@ function imprimirColegiosPorCerrar(){
   .tot td{font-weight:bold;background:#fdecea}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Colegios por cerrar / liquidar','Al '+hoy)}
   ${bancoHTML}
+  ${(()=>{try{const R=resumenNegocio();return '<div style="border:1px solid #f5c6cb;background:#fdecea;border-radius:6px;padding:8px 14px;margin:6px 0;font-size:13px"><b>Le debo a las editoriales (todas juntas): '+fmt(Math.max(0,R.debeEd))+'</b> · Me falta cobrar a los colegios: <b>'+fmt(R.porCobrar)+'</b></div>';}catch(e){return '';}})()}
   <h3>⏳ FALTAN CERRAR (${pend.length})</h3>
   ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
   ${filasPend}<tr class="tot"><td colspan="4" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
   ${cerr.length?`<h3>✅ YA CERRADOS (${cerr.length})</h3><table><tr><th style="text-align:left">COLEGIO</th><th>VENDIDO $</th><th>CERRADO EL</th></tr>
   ${cerr.map(x=>`<tr><td>${escH(x.nombre)}</td><td style="text-align:right">${fmt(x.tv)}</td><td style="text-align:center">${escH(String(x.fecha).split('-').reverse().join('/'))}</td></tr>`).join('')}</table>`:''}
   ${sinV.length?`<h3>⚪ SIN VENTAS ESTE AÑO (${sinV.length})</h3><p>${sinV.map(x=>escH(x.nombre)).join(' · ')}</p>`:''}
-  <p style="margin-top:14px;font-size:10px;color:#666">"Falta que pague el colegio" sale de los cobros registrados en Pagos. "Falta pagar a editorial" sale de los pagos a la editorial anotados en el Control de ventas de cada colegio.</p>
+  <p style="margin-top:14px;font-size:10px;color:#666">"Falta que pague el colegio" sale de los cobros registrados en Pagos. Lo que se debe a la editorial se paga todo junto y está arriba en el recuadro rojo.</p>
   <\/body><\/html>`);
   win.document.close();
   win.onload=()=>win.print();
@@ -10846,7 +10861,8 @@ function renderColResumen(){
       <td><button class="btn btn-s btn-sm" onclick="irDetalle('${c.nombre}')"><i class="ti ti-pencil"></i></button></td>
     </tr>`;
   }).join('');
-  const totalSaldoEd=totalCostoEd-totalPagEd;
+  let totalSaldoEd=totalCostoEd-totalPagEd, RNc=null;
+  try{RNc=resumenNegocio();totalSaldoEd=Math.max(0,RNc.debeEd);}catch(e){}
   document.getElementById('col-n').textContent=activos;
   document.getElementById('col-tv').textContent=fmt(totalTV);
   document.getElementById('col-tc').textContent=fmt(totalC);
@@ -10885,8 +10901,8 @@ function renderColResumen(){
         <tr><td style="padding:4px 0">Costo editorial de lo vendido</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--r1)">− ${fmt(totalCostoEd)}</td></tr>
         <tr style="border-top:2px solid #90caf9"><td style="padding:6px 0;font-weight:700">GANANCIA NETA REAL</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${gan>=0?'var(--g1)':'var(--r1)'}">${fmt(gan)}</td></tr>
         <tr><td colspan="2" style="padding:8px 0 2px"><hr style="border:none;border-top:1px dashed #ccc"></td></tr>
-        <tr><td style="padding:4px 0">Deuda con la editorial (costo de lo vendido)</td><td style="text-align:right;font-family:monospace">${fmt(totalCostoEd)}</td></tr>
-        <tr><td style="padding:4px 0">Ya pagado a la editorial</td><td style="text-align:right;font-family:monospace;color:var(--g1)">− ${fmt(totalPagEd)}</td></tr>
+        <tr><td style="padding:4px 0">Te facturaron las editoriales − notas de crédito</td><td style="text-align:right;font-family:monospace">${fmt(RNc?RNc.facturado-RNc.notas:totalCostoEd)}</td></tr>
+        <tr><td style="padding:4px 0">Ya les pagaste (pestaña Pagos)</td><td style="text-align:right;font-family:monospace;color:var(--g1)">− ${fmt(RNc?RNc.pagadoEd:totalPagEd)}</td></tr>
         <tr style="border-top:1px solid #ddd"><td style="padding:6px 0;font-weight:700">SALDO POR PAGAR A LA EDITORIAL</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${totalSaldoEd>0.005?'var(--r1)':'var(--g1)'}">${fmt(totalSaldoEd)}</td></tr>
       </table>
       <div style="background:#e3f2fd;border-radius:6px;padding:7px 11px;margin-top:9px;font-size:11px;color:#1565c0">Suma del cuadro "Lo real" de cada colegio. Para ver el detalle de uno, ábrelo en la tabla de abajo.</div>
@@ -11723,6 +11739,25 @@ function esCompraEditorial(r){return r.tipo==='negocio'&&r.categoria==='Textos e
 // ── UN SOLO CÁLCULO DE "CUÁNTO LE DEBO A LA EDITORIAL" ──────────────────────
 // Lo usan el Cuadre, la Deuda editorial y el resumen de ganancia de Inicio,
 // para que los tres muestren siempre el mismo número.
+function facturasEditorialSaldo(){
+  const R=resumenNegocio();
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const credito={};
+  Object.entries(R.ed).forEach(([g,x])=>credito[g]=(x.notas||0)+(x.pagado||0));
+  const porFactura=new Map();let vencida=0,nVenc=0,nPend=0;
+  DB.regs.filter(esCompraEditorial).sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))).forEach(r=>{
+    const g=grupoEditorial(r.proveedor)||(r.proveedor||'Otra editorial');
+    const t=parseFloat(r.total)||0;
+    const usa=Math.min(t,Math.max(0,credito[g]||0));credito[g]=(credito[g]||0)-usa;
+    const resta=t-usa;
+    const v=parseLocalDate(r.fecha);v.setDate(v.getDate()+180);
+    const dias=Math.ceil((v-hoy)/86400000);
+    if(resta>0.005){nPend++;if(dias<0){vencida+=resta;nVenc++;}}
+    porFactura.set(r.id,{resta,abonado:usa,dias});
+  });
+  const deuda=Math.max(0,R.debeEd);
+  return {porFactura,deuda,vencida,porVencer:Math.max(0,deuda-vencida),nVenc,nPend};
+}
 function resumenEditorial(){
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const facturas=DB.regs.filter(esCompraEditorial);
@@ -11742,7 +11777,8 @@ function resumenEditorial(){
   // Tech Books), para que Editorial, Balance e Inicio digan lo mismo.
   // Antes no restaba los abonos de Pagos (solo facturas marcadas "Pagada").
   let pagosPagos=0,deudaReal;
-  try{const RN=resumenNegocio();pagosPagos=RN.pagadoEd;deudaReal=Math.max(0,RN.debeEd);}
+  try{const RN=resumenNegocio();pagosPagos=RN.pagadoEd;deudaReal=Math.max(0,RN.debeEd);
+    const FS=facturasEditorialSaldo();vencida=FS.vencida;porVencer=FS.porVencer;nVenc=FS.nVenc;nPend=FS.nPend;}
   catch(e){console.warn('resumenEditorial:',e);deudaReal=Math.max(0,pendiente-notasCred);}
   return {facturas:facturas.length,facturado,pagado,pendiente,vencida,porVencer,
           nPend,nVenc,notasCred,deudaReal,pagosPagos};
@@ -12235,15 +12271,11 @@ function renderDeudaEditorial(){
     (r.ruc||'').toLowerCase().includes(q)
   );
 
-  // Los totales de arriba siempre son de la deuda editorial real (no del filtro)
-  let totalDeuda=0,totalVencida=0,totalPorVencer=0;
-  editoriales.forEach(r=>{
-    if(r.pagadaEditorial)return;
-    const v=parseLocalDate(r.fecha);v.setDate(v.getDate()+180);
-    const dias=Math.ceil((v-hoy)/(1000*60*60*24));
-    totalDeuda+=r.total;
-    if(dias<0)totalVencida+=r.total;else totalPorVencer+=r.total;
-  });
+  // Los totales de arriba son la deuda REAL (facturas − notas de crédito −
+  // abonos de Pagos), la misma de Inicio y Balance. Abonos y notas se reparten
+  // sobre las facturas de la más vieja a la más nueva.
+  const FS=facturasEditorialSaldo();
+  const totalDeuda=FS.deuda,totalVencida=FS.vencida,totalPorVencer=FS.porVencer;
 
   const html=lista.length===0
     ?`<tr><td colspan="10" class="empty">${DB.regs.length?'Ninguna factura coincide con este filtro. Prueba con <b>📄 Absolutamente todas</b>.':'No hay compras registradas. Agrega facturas en el módulo Manual o XML+IA.'}</td></tr>`
@@ -12251,10 +12283,12 @@ function renderDeudaEditorial(){
       const esEd=esCompraEditorial(r);
       const vence=parseLocalDate(r.fecha);vence.setDate(vence.getDate()+180);
       const dias=Math.ceil((vence-hoy)/(1000*60*60*24));
-      const pagado=r.pagadaEditorial||false;
+      const fs_=FS.porFactura.get(r.id);
+      const pagado=r.pagadaEditorial||(fs_&&fs_.resta<=0.005)||false;
       let bdg,txt;
       if(!esEd){bdg='bdg-warn';txt='No cuenta';}
-      else if(pagado){bdg='bdg-ok';txt='Pagada';}
+      else if(pagado){bdg='bdg-ok';txt='Pagada (abonos/NC)';}
+      else if(fs_&&fs_.abonado>0.005){bdg=dias<0?'bdg-err':'bdg-warn';txt='Abonada · falta '+fmt(fs_.resta)+(dias<0?' · vencida':'');}
       else if(dias<0){bdg='bdg-err';txt=`Vencida ${Math.abs(dias)}d`;}
       else if(dias<=30){bdg='bdg-warn';txt=`${dias} días`;}
       else{bdg='bdg-ok';txt=`${dias} días`;}
@@ -12596,7 +12630,11 @@ function renderComisiones(){
   if(filEst)data=data.filter(c=>c.estado===filEst);
   const totalCol=DB.comisiones.filter(c=>c.tipo==='colegio').reduce((a,c)=>a+c.monto,0);
   const totalLib=DB.comisiones.filter(c=>c.tipo==='libreria').reduce((a,c)=>a+c.monto,0);
-  document.getElementById('com-total').textContent=fmt(totalCol+totalLib);
+  const comCtrl=resumenGanancia().comisionCol;
+  document.getElementById('com-total').textContent=fmt(totalCol+totalLib+comCtrl);
+  let ci=document.getElementById('com-ctrl-info');
+  if(!ci){const ref=document.getElementById('com-total').closest('.sc')?.parentElement;if(ref){ci=document.createElement('div');ci.id='com-ctrl-info';ref.parentElement.insertBefore(ci,ref.nextSibling);}}
+  if(ci) ci.innerHTML='<div style="background:#e3f2fd;border-radius:6px;padding:8px 12px;margin:8px 0;font-size:12px;color:#1565c0">ℹ️ El total incluye <b>'+fmt(comCtrl)+'</b> de comisión de los colegios, que sale solo del <b>Control de ventas</b> de cada colegio (no hace falta anotarla aquí). Aquí se anotan solo comisiones aparte: capacitaciones, librerías, etc.</div>';
   document.getElementById('com-col-total').textContent=fmt(totalCol);
   document.getElementById('com-lib-total').textContent=fmt(totalLib);
   document.getElementById('com-tb').innerHTML=data.length===0
