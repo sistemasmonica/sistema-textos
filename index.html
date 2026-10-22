@@ -1997,6 +1997,8 @@ async function _subirANube(data){
       respaldosVendedor:data.respaldosVendedor||[],pagos:data.pagos||[],historial:data.historial||[],reglasBanco:data.reglasBanco||{},conteo:data.conteo||{}
     };
     await nubeGuardar('app_data','txe_main',payload);
+    // Mantener igual la copia aparte de productos (por si algún aparato viejo la lee)
+    if(payload.productos.length) guardarProductosNube(payload.productos);
     const nuevaRev=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
     await nubeGuardar('app_data','txe_rev',{rev:nuevaRev,at:ts});
     _miRev=nuevaRev;
@@ -2133,8 +2135,11 @@ async function syncFromCloud(){
       else{renderCatalogo();}
     }
     setSyncStatus('ok');
-    // Siempre cargar productos desde Supabase (clave independiente txe_config/productos)
-    {
+    // Los productos vienen del guardado principal (txe_main). La copia aparte
+    // txe_config/productos se usa SOLO si el principal no trae productos: antes
+    // se usaba siempre y, como casi nunca se actualizaba, al recargar volvían
+    // los costos viejos y se perdían las ediciones del Catálogo (22-oct-2026).
+    if(!(main?.value?.productos?.length>0)){
       const prodRow=await nubeLeer('txe_config','productos');
       if(prodRow?.value?.data?.length>0){
         DB.productos=prodRow.value.data;
@@ -2145,6 +2150,7 @@ async function syncFromCloud(){
     try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
     try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
     try{reparacionOct2026b();}catch(e){console.warn('Reparación oct-2026 (2):',e);}
+    try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
@@ -12046,6 +12052,32 @@ function reparacionOct2026(){
 // el inventario físico cuadra con ella) dice 10 de 3 años + 10 de 5 años. Mismo
 // precio: la plata no cambia, solo qué libro es. Luego save() aplica "el Control
 // de ventas manda" para todos los colegios.
+// Vuelve a aplicar las ediciones del Catálogo que se perdieron al recargar
+// (bug de la copia vieja de productos). Usa el ÚLTIMO 'Producto editado' de
+// cada libro en el Historial desde el 22-oct-2026. Corre una sola vez.
+function reparacionProductosEditados(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 22-oct: costos del Catálogo recuperados';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const ult={};
+  (DB.historial||[]).filter(h=>h.accion==='Producto editado'&&String(h.fecha||'')>='2026-10-22').forEach(h=>{
+    const m=String(h.detalle||'').match(/^(.*) — costo \$([\d.]+) \/ venta \$([\d.]+)$/);
+    if(m) ult[_normNombre(m[1])]={c:parseFloat(m[2]),v:parseFloat(m[3]),n:m[1]};
+  });
+  const hechos=[];
+  Object.entries(ult).forEach(([k,x])=>{
+    const ps=DB.productos.filter(p=>p.editorial!=='Hist.'&&_normNombre(p.nombre)===k);
+    if(ps.length!==1)return;
+    const p=ps[0];
+    if((parseFloat(p.precioCosto)||0)!==x.c||(parseFloat(p.precioVenta)||0)!==x.v){
+      p.precioCosto=x.c;p.precioVenta=x.v;hechos.push(x.n+' → costo '+fmt(x.c));
+    }
+  });
+  logHistorial(MARCA,hechos.length?hechos.join(' · '):'nada que recuperar');
+  save();
+  try{renderCatalogo();renderStockReport();}catch(e){}
+  if(hechos.length) toast(hechos.length+' costo(s) del Catálogo recuperados','ok');
+}
 function reparacionOct2026b(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 20-oct (2): Control de ventas manda';
