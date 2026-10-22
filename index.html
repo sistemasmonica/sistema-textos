@@ -325,11 +325,14 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="fg" style="margin:0;flex:1;min-width:200px">
       <label style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase">Seleccionar colegio</label>
       <select id="col-sel" onchange="renderColViews()" style="font-size:13px;font-weight:600"></select>
+      <div id="col-cierre-resumen" style="font-size:11px;color:var(--mu);margin-top:3px"></div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn btn-p btn-sm" onclick="nuevoColegio()" title="Agregar un colegio nuevo a la lista"><i class="ti ti-plus"></i> Nuevo colegio</button>
       <button class="btn btn-s btn-sm" onclick="renombrarColegio()" title="Cambiar el nombre del colegio seleccionado"><i class="ti ti-pencil"></i> Renombrar</button>
       <button class="btn btn-d btn-sm" onclick="eliminarColegio()" title="Eliminar el colegio seleccionado"><i class="ti ti-trash"></i> Eliminar</button>
+      <button class="btn btn-s btn-sm" id="btn-col-cerrar" onclick="toggleCierreColegio()" title="Marcar este colegio como cerrado / liquidado (ya se hicieron todas las cuentas)">✅ Marcar cerrado</button>
+      <button class="btn btn-s btn-sm" onclick="imprimirColegiosPorCerrar()" title="Imprimir la lista de colegios que faltan cerrar o liquidar"><i class="ti ti-printer"></i> Colegios por cerrar</button>
     </div>
   </div>
 
@@ -8826,6 +8829,7 @@ function renderColegios(){
     const prev=sel.value;
     const lista=colegiosList();
     sel.innerHTML=lista.map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    refrescarCierreColSel();
     if(prev&&lista.some(c=>c.nombre===prev)) sel.value=prev;
     else if(lista.length) sel.value=lista[0].nombre;
   }
@@ -8842,6 +8846,113 @@ function renderColegios(){
   renderColViews();
 }
 
+// ── CIERRE / LIQUIDACIÓN DE COLEGIOS ────────────────────────────────────────
+// d.cerrado = 'YYYY-MM-DD' cuando Mónica lo marca a mano como cerrado/liquidado.
+// Si no está marcado, el estado sale solo de lo que falta cobrar al colegio
+// (cobros de Pagos) y lo que falta pagar a la editorial (pagos de este colegio).
+function estadoCierreColegio(nombre){
+  const d=DB.colData?.[nombre];
+  if(!d) return {est:'sin',cobrar:0,edit:0,tv:0,fecha:''};
+  const T=totalesColegio(d);
+  const cobrar=saldoCobroColegio(nombre,d), edit=T.saldoEdit;
+  const r={cobrar,edit,tv:T.tv,fecha:d.cerrado||''};
+  if(d.cerrado) r.est='cerrado';
+  else if(!T.cant&&!T.tv) r.est='sin';
+  else if(cobrar>TOL_COBRO||edit>TOL_COBRO) r.est='falta';
+  else r.est='listo';
+  return r;
+}
+function etiquetaCierre(nombre,e){
+  if(e.est==='cerrado') return '✅ '+nombre+'  (cerrado)';
+  if(e.est==='sin') return '⚪ '+nombre+'  (sin ventas)';
+  if(e.est==='listo') return '🟢 '+nombre+'  (al día, falta marcar cerrado)';
+  const f=[];
+  if(e.cobrar>TOL_COBRO) f.push('cobrar '+fmt(e.cobrar));
+  if(e.edit>TOL_COBRO) f.push('editorial '+fmt(e.edit));
+  return '⏳ '+nombre+'  — falta: '+f.join(', ');
+}
+function refrescarCierreColSel(){
+  const sel=document.getElementById('col-sel');if(!sel)return;
+  let falta=0,listo=0,cerr=0;
+  [...sel.options].forEach(o=>{
+    const e=estadoCierreColegio(o.value);
+    o.textContent=etiquetaCierre(o.value,e);
+    if(e.est==='falta')falta++;else if(e.est==='listo')listo++;else if(e.est==='cerrado')cerr++;
+  });
+  const res=document.getElementById('col-cierre-resumen');
+  if(res) res.innerHTML=`⏳ <b>${falta}</b> por cerrar · 🟢 <b>${listo}</b> al día sin marcar · ✅ <b>${cerr}</b> cerrados`;
+  const btn=document.getElementById('btn-col-cerrar');
+  const d=DB.colData?.[sel.value];
+  if(btn) btn.innerHTML=d&&d.cerrado?'↩ Reabrir colegio':'✅ Marcar cerrado';
+}
+function toggleCierreColegio(){
+  const nombre=colSelValor();
+  if(!nombre) return toast('Selecciona primero un colegio','err');
+  initColData();
+  const d=DB.colData[nombre];if(!d)return;
+  if(d.cerrado){
+    if(!confirm('¿Reabrir "'+nombre+'"? Volverá a salir como pendiente si le falta algo.'))return;
+    delete d.cerrado;
+    logHistorial('Colegio reabierto',nombre);
+  }else{
+    const e=estadoCierreColegio(nombre);
+    let aviso='¿Marcar "'+nombre+'" como CERRADO / LIQUIDADO?';
+    if(e.cobrar>TOL_COBRO||e.edit>TOL_COBRO){
+      aviso+='\n\nOjo: el sistema todavía ve pendiente:';
+      if(e.cobrar>TOL_COBRO) aviso+='\n• Falta que te pague el colegio: '+fmt(e.cobrar);
+      if(e.edit>TOL_COBRO) aviso+='\n• Falta pagar a la editorial: '+fmt(e.edit);
+      aviso+='\n\n¿Cerrarlo igual?';
+    }
+    if(!confirm(aviso))return;
+    d.cerrado=new Date().toISOString().slice(0,10);
+    logHistorial('Colegio cerrado/liquidado',nombre);
+  }
+  save();
+  refrescarCierreColSel();
+  toast(d.cerrado?'"'+nombre+'" marcado como cerrado':'"'+nombre+'" reabierto','ok');
+}
+function imprimirColegiosPorCerrar(){
+  initColData();
+  const orden={falta:0,listo:1,sin:2,cerrado:3};
+  const lista=colegiosList().map(c=>({nombre:c.nombre,...estadoCierreColegio(c.nombre)}))
+    .sort((a,b)=>orden[a.est]-orden[b.est]||a.nombre.localeCompare(b.nombre,'es'));
+  const pend=lista.filter(x=>x.est==='falta'||x.est==='listo');
+  const cerr=lista.filter(x=>x.est==='cerrado');
+  const sinV=lista.filter(x=>x.est==='sin');
+  let tCob=0,tEd=0;
+  const fila=x=>{
+    const fc=x.cobrar>TOL_COBRO, fe=x.edit>TOL_COBRO;
+    if(fc)tCob+=x.cobrar; if(fe)tEd+=x.edit;
+    const que=[];
+    if(fc) que.push('Cobrar al colegio');
+    if(fe) que.push('Pagar a la editorial');
+    if(!que.length) que.push('Todo al día — solo falta marcarlo cerrado');
+    return `<tr><td style="text-align:center;width:28px">☐</td><td><b>${escH(x.nombre)}</b></td><td>${que.join(' + ')}</td>
+      <td style="text-align:right">${fmt(x.tv)}</td>
+      <td style="text-align:right;${fc?'color:#c0392b;font-weight:bold':''}">${fc?fmt(x.cobrar):'—'}</td>
+      <td style="text-align:right;${fe?'color:#c0392b;font-weight:bold':''}">${fe?fmt(x.edit):'—'}</td></tr>`;
+  };
+  const filasPend=pend.map(fila).join('');
+  const hoy=new Date().toLocaleDateString('es-EC');
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Colegios por cerrar</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}
+  table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}
+  td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:18px 0 4px}
+  .tot td{font-weight:bold;background:#fdecea}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Colegios por cerrar / liquidar','Al '+hoy)}
+  <h3>⏳ FALTAN CERRAR (${pend.length})</h3>
+  ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
+  ${filasPend}<tr class="tot"><td colspan="4" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
+  ${cerr.length?`<h3>✅ YA CERRADOS (${cerr.length})</h3><table><tr><th style="text-align:left">COLEGIO</th><th>VENDIDO $</th><th>CERRADO EL</th></tr>
+  ${cerr.map(x=>`<tr><td>${escH(x.nombre)}</td><td style="text-align:right">${fmt(x.tv)}</td><td style="text-align:center">${escH(String(x.fecha).split('-').reverse().join('/'))}</td></tr>`).join('')}</table>`:''}
+  ${sinV.length?`<h3>⚪ SIN VENTAS ESTE AÑO (${sinV.length})</h3><p>${sinV.map(x=>escH(x.nombre)).join(' · ')}</p>`:''}
+  <p style="margin-top:14px;font-size:10px;color:#666">"Falta que pague el colegio" sale de los cobros registrados en Pagos. "Falta pagar a editorial" sale de los pagos a la editorial anotados en el Control de ventas de cada colegio.</p>
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
+
 function colTab(id,el){
   document.querySelectorAll('.col-pn').forEach(p=>p.style.display='none');
   document.querySelectorAll('#pn-colegios .nav>.nt').forEach(n=>n.classList.remove('on'));
@@ -8851,6 +8962,7 @@ function colTab(id,el){
 }
 
 function renderColViews(){
+  refrescarCierreColSel();
   // Detect active tab
   const active=[...document.querySelectorAll('.col-pn')].find(p=>p.style.display!=='none');
   const id=active?active.id.replace('col-pn-',''):'control';
