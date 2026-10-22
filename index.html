@@ -479,6 +479,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 <!-- ===================== INVENTARIO ===================== -->
 <div id="pn-inv" class="pn">
   <div class="nav" style="margin-bottom:12px;background:var(--lt)">
+    <button class="nt" onclick="invTab('kardex',this)" style="font-weight:700">📒 Kárdex</button>
     <button class="nt on" onclick="invTab('catalogo',this)"><i class="ti ti-list-details"></i> Catálogo</button>
     <button class="nt" onclick="invTab('entradas',this)"><i class="ti ti-arrow-bar-down"></i> Entradas</button>
     <button class="nt" onclick="invTab('guias',this)"><i class="ti ti-truck-delivery"></i> Guías de retiro</button>
@@ -486,6 +487,25 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt" onclick="invTab('rep',this)"><i class="ti ti-chart-bar"></i> Reporte stock</button>
     <button class="nt" onclick="invTab('conteo',this)"><i class="ti ti-checklist"></i> Conteo físico</button>
     <button class="nt" onclick="invTab('audit',this)"><i class="ti ti-search"></i> Auditoría</button>
+  </div>
+
+  <!-- KÁRDEX -->
+  <div id="inv-kardex" class="inv-pn" style="display:none">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;align-items:center;flex:1;min-width:260px;max-width:520px">
+          <span style="background:#1f4e5f;color:#fff;border-radius:8px 0 0 8px;padding:9px 12px"><i class="ti ti-search"></i></span>
+          <input id="kdx-q" list="kdx-lista" placeholder="Escribe el nombre o código del libro…" oninput="kardexBuscar(this.value)" onchange="kardexBuscar(this.value)" onfocus="this.select()" style="flex:1;font-size:15px;padding:8px 12px;border:1px solid #2ec4a0;border-radius:0 8px 8px 0">
+          <datalist id="kdx-lista"></datalist>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700;color:#1f4e5f;font-size:12px">EXPORTAR</span>
+          <button class="btn btn-sm" style="background:#2ec4a0;color:#fff;font-weight:700;min-width:80px" onclick="kardexExcel()">Excel</button>
+          <button class="btn btn-sm" style="background:#2ec4a0;color:#fff;font-weight:700;min-width:80px" onclick="kardexImprimir()">PDF</button>
+        </div>
+      </div>
+      <div id="kdx-body"></div>
+    </div>
   </div>
 
   <!-- CATÁLOGO -->
@@ -2379,6 +2399,7 @@ function invTab(id,el){
   document.querySelectorAll('#pn-inv .nav > .nt').forEach(n=>n.classList.remove('on'));
   document.getElementById('inv-'+id).style.display='block';
   el.classList.add('on');
+  if(id==='kardex')renderKardex();
   if(id==='catalogo')renderCatalogo();
   if(id==='entradas')renderEntradas();
   if(id==='guias')renderGuias();
@@ -3546,6 +3567,143 @@ function esGuiaMuestra(g){
   if(g.esMuestra===true) return true;
   if(g.esMuestra===false) return false;
   return /CONTROL DE MUESTRAS|MUESTRA/i.test(g.observacion||g.nota||'');
+}
+
+// ── KÁRDEX ──────────────────────────────────────────────────────────────────
+// Un solo libro a la vez: datos arriba y debajo cada movimiento con
+// ENTRADAS / SALIDAS / SALDOS (cantidad, costo unit., costo total).
+// Método: costo promedio ponderado. Lee solo DB.movInv + stockInicial, así
+// que la existencia final siempre es igual a stockActual().
+let kardexProdId='';
+function kardexEtiqueta(p){ return (p.codigo?p.codigo+' - ':'')+p.nombre+(p.editorial?' ('+p.editorial+')':''); }
+function renderKardexLista(){
+  const dl=document.getElementById('kdx-lista');if(!dl)return;
+  dl.innerHTML=DB.productos.filter(p=>p.editorial!=='Hist.')
+    .map(p=>`<option value="${escH(kardexEtiqueta(p))}"></option>`).join('');
+}
+function kardexBuscar(v){
+  const t=String(v||'').trim().toLowerCase();if(!t)return;
+  const ps=DB.productos.filter(p=>p.editorial!=='Hist.');
+  const p=ps.find(x=>kardexEtiqueta(x).toLowerCase()===t)
+       ||ps.find(x=>x.codigo&&x.codigo.toLowerCase()===t);
+  if(!p)return;
+  kardexProdId=p.id;
+  try{localStorage.setItem('txe_kardex_prod',p.id);}catch(e){}
+  renderKardex();
+}
+function kardexDetalle(m){
+  const ref=m.ref||'';
+  if(m.origen==='ajusteConteo') return 'Ajuste por conteo físico';
+  if(/^NC-/.test(ref)) return 'Devolución a la editorial'+(m.cliente?' — '+m.cliente.replace(/^Devolución a /,''):'');
+  if(/^CONTROL /.test(ref)) return 'Ajuste Control de ventas — '+ref.slice(8);
+  if(m.tipo==='entrada') return 'Compra'+(ref?' Fact. '+ref:'')+(m.proveedor?' — '+m.proveedor:'');
+  return (ref?'Guía '+ref:'Salida')+(m.cliente?' → '+m.cliente:'');
+}
+function kardexDatos(prodId){
+  const p=DB.productos.find(x=>x.id===prodId);if(!p)return null;
+  const r2=n=>Math.round(n*100)/100;
+  let cant=p.stockInicial||0, cu=parseFloat(p.precioCosto)||0, tot=cant*cu;
+  const filas=[{fecha:p.creadoEn?String(p.creadoEn).slice(0,10):'',det:'Saldo inicial',sc:cant,su:cu,st:tot}];
+  const movs=DB.movInv.map((m,i)=>({m,i})).filter(x=>x.m.prodId===prodId)
+    .sort((a,b)=>String(a.m.fecha||'').localeCompare(String(b.m.fecha||''))||a.i-b.i).map(x=>x.m);
+  let tE=0,tEv=0,tS=0,tSv=0;
+  movs.forEach(m=>{
+    const q=parseFloat(m.cantidad)||0;
+    const f={fecha:m.fecha||'',det:kardexDetalle(m)};
+    if(m.tipo==='entrada'){
+      const u=parseFloat(m.precioCosto)||cu;
+      f.ec=q;f.eu=u;f.et=q*u;tE+=q;tEv+=q*u;
+      tot+=q*u;cant+=q;cu=cant>0?tot/cant:u;
+    }else{
+      f.oc=q;f.ou=cu;f.ot=q*cu;tS+=q;tSv+=q*cu;
+      cant-=q;tot=cant*cu;
+    }
+    f.sc=cant;f.su=cu;f.st=r2(tot);
+    filas.push(f);
+  });
+  return {p,filas,tE,tEv,tS,tSv,cant,cu,tot};
+}
+function renderKardex(){
+  const box=document.getElementById('kdx-body');if(!box)return;
+  renderKardexLista();
+  if(!kardexProdId){try{kardexProdId=localStorage.getItem('txe_kardex_prod')||'';}catch(e){}}
+  const K=kardexProdId?kardexDatos(kardexProdId):null;
+  const inp=document.getElementById('kdx-q');
+  if(!K){box.innerHTML='<div class="empty">Escribe arriba el nombre o el código del libro y escógelo de la lista.</div>';return;}
+  if(inp&&document.activeElement!==inp) inp.value=kardexEtiqueta(K.p);
+  const n=v=>v===undefined?'':(+v).toFixed(2);
+  const c=v=>v===undefined?'':v;
+  const dato=(l,v)=>`<div style="display:flex;align-items:center;gap:10px"><span style="width:120px;color:#555;font-size:13px">${l}</span><span style="flex:1;background:#f1f1f1;border-radius:5px;padding:6px 12px;font-size:13px">${escH(String(v))}</span></div>`;
+  const th='padding:7px 6px;background:#e5e5e5;border:2px solid #fff;font-weight:600;font-size:11px;color:#444;text-align:center';
+  const td='padding:7px 6px;background:#f4f4f4;border:2px solid #fff;font-size:12px';
+  const tdn=td+';text-align:right;font-family:monospace';
+  box.innerHTML=`
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 30px;margin:6px 0 18px">
+    ${dato('Código',K.p.codigo||'—')}
+    ${dato('Existencia actual',K.cant)}
+    ${dato('PVP',(parseFloat(K.p.precioVenta)||0).toFixed(2))}
+    ${dato('Editorial',K.p.editorial||'—')}
+    ${dato('Costo actual',K.cu.toFixed(2))}
+    ${dato('Método','Promedio')}
+  </div>
+  <div style="border-top:2px solid #2ec4a0;margin-bottom:14px"></div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;min-width:900px">
+    <tr><th style="${th};background:transparent" colspan="2"></th>
+      <th style="${th};font-size:15px" colspan="3">ENTRADAS</th>
+      <th style="${th};font-size:15px" colspan="3">SALIDAS</th>
+      <th style="${th};font-size:15px" colspan="3">SALDOS</th></tr>
+    <tr><th style="${th}">FECHA</th><th style="${th}">DETALLE</th>
+      <th style="${th}">CANTIDAD</th><th style="${th}">COSTO UNIT</th><th style="${th}">COSTO TOTAL</th>
+      <th style="${th}">CANTIDAD</th><th style="${th}">COSTO UNIT</th><th style="${th}">COSTO TOTAL</th>
+      <th style="${th}">CANTIDAD</th><th style="${th}">COSTO UNIT</th><th style="${th}">COSTO TOTAL</th></tr>
+    ${K.filas.map(f=>`<tr>
+      <td style="${td};white-space:nowrap">${escH(String(f.fecha).split('-').reverse().join('/'))}</td>
+      <td style="${td}">${escH(f.det)}</td>
+      <td style="${tdn};color:#1b5e20">${c(f.ec)}</td><td style="${tdn}">${n(f.eu)}</td><td style="${tdn}">${n(f.et)}</td>
+      <td style="${tdn};color:#b71c1c">${c(f.oc)}</td><td style="${tdn}">${n(f.ou)}</td><td style="${tdn}">${n(f.ot)}</td>
+      <td style="${tdn};font-weight:700">${f.sc}</td><td style="${tdn}">${n(f.su)}</td><td style="${tdn};font-weight:700">${n(f.st)}</td>
+    </tr>`).join('')}
+    <tr style="font-weight:700"><td colspan="2" style="padding:8px;text-align:right">Totales</td>
+      <td style="padding:8px;text-align:right">${K.tE}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace">${K.tEv.toFixed(2)}</td>
+      <td style="padding:8px;text-align:right">${K.tS}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace">${K.tSv.toFixed(2)}</td>
+      <td style="padding:8px;text-align:right">${K.cant}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace">${K.tot.toFixed(2)}</td></tr>
+  </table></div>
+  <div style="border-top:2px solid #2ec4a0;margin-top:14px"></div>`;
+}
+function kardexTablaSimple(K){
+  const n=v=>v===undefined?'':(+v).toFixed(2), c=v=>v===undefined?'':v;
+  return `<table border="1" style="border-collapse:collapse;width:100%;font-size:11px">
+    <tr><th colspan="2"></th><th colspan="3">ENTRADAS</th><th colspan="3">SALIDAS</th><th colspan="3">SALDOS</th></tr>
+    <tr><th>FECHA</th><th>DETALLE</th><th>CANT.</th><th>COSTO UNIT</th><th>COSTO TOTAL</th><th>CANT.</th><th>COSTO UNIT</th><th>COSTO TOTAL</th><th>CANT.</th><th>COSTO UNIT</th><th>COSTO TOTAL</th></tr>
+    ${K.filas.map(f=>`<tr><td>${escH(String(f.fecha).split('-').reverse().join('/'))}</td><td>${escH(f.det)}</td><td align="right">${c(f.ec)}</td><td align="right">${n(f.eu)}</td><td align="right">${n(f.et)}</td><td align="right">${c(f.oc)}</td><td align="right">${n(f.ou)}</td><td align="right">${n(f.ot)}</td><td align="right"><b>${f.sc}</b></td><td align="right">${n(f.su)}</td><td align="right"><b>${n(f.st)}</b></td></tr>`).join('')}
+    <tr><td colspan="2" align="right"><b>Totales</b></td><td align="right"><b>${K.tE}</b></td><td></td><td align="right"><b>${K.tEv.toFixed(2)}</b></td><td align="right"><b>${K.tS}</b></td><td></td><td align="right"><b>${K.tSv.toFixed(2)}</b></td><td align="right"><b>${K.cant}</b></td><td></td><td align="right"><b>${K.tot.toFixed(2)}</b></td></tr>
+  </table>`;
+}
+function kardexExcel(){
+  const K=kardexProdId?kardexDatos(kardexProdId):null;
+  if(!K)return toast('Escoge primero un libro','err');
+  const html=`<html><head><meta charset="utf-8"></head><body>
+    <h3>KÁRDEX — ${escH(kardexEtiqueta(K.p))}</h3>
+    <p>Existencia actual: ${K.cant} · Costo actual: ${K.cu.toFixed(2)} · PVP: ${(parseFloat(K.p.precioVenta)||0).toFixed(2)} · Método: Promedio</p>
+    ${kardexTablaSimple(K)}</body></html>`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+html],{type:'application/vnd.ms-excel'}));
+  a.download='Kardex_'+(K.p.codigo||K.p.nombre).replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]+/g,'_')+'.xls';
+  document.body.appendChild(a);a.click();a.remove();
+}
+function kardexImprimir(){
+  const K=kardexProdId?kardexDatos(kardexProdId):null;
+  if(!K)return toast('Escoge primero un libro','err');
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Kárdex ${escH(K.p.nombre)}</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:11px}th{background:#e0e0e0;padding:5px}td{padding:4px 6px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Kárdex',kardexEtiqueta(K.p))}
+  <p>Código: <b>${escH(K.p.codigo||'—')}</b> · Existencia actual: <b>${K.cant}</b> · Costo actual: <b>${K.cu.toFixed(2)}</b> · PVP: <b>${(parseFloat(K.p.precioVenta)||0).toFixed(2)}</b> · Método: Promedio</p>
+  ${kardexTablaSimple(K)}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
 }
 
 function stockActual(prodId){
