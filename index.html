@@ -1257,7 +1257,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="sc"><div class="sc-lbl">Total ventas</div><div class="sc-val cg" id="liq-ventas">$0.00</div></div>
     <div class="sc"><div class="sc-lbl">Costo editorial neto</div><div class="sc-val cr" id="liq-costo">$0.00</div><div class="sc-sub">Facturas − notas crédito</div></div>
-    <div class="sc"><div class="sc-lbl">Comisiones pagadas</div><div class="sc-val ca" id="liq-comisiones">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Comisiones a colegios</div><div class="sc-val ca" id="liq-comisiones">$0.00</div></div>
     <div class="sc"><div class="sc-lbl">Utilidad estimada</div><div class="sc-val" id="liq-utilidad">$0.00</div></div>
   </div>
   <div class="two" style="margin-top:12px">
@@ -3744,6 +3744,7 @@ function renderKardexResumen(box){
       <button class="btn btn-s btn-sm" onclick="kardexImprimirTodosDetalle()" title="Imprime el kárdex completo (con cada factura y guía) de todos los libros de la lista">🖨️ Kárdex completo de todos</button>
     </div>
     <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Toca un libro para ver su kárdex completo, con cada factura y cada guía.</div>
+    <div id="kdx-res-nota" style="font-size:11px;color:#1565c0;margin-bottom:6px"></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:820px">
       <thead><tr style="background:#e5e5e5">
         <th style="padding:7px;text-align:left">CÓDIGO</th><th style="padding:7px;text-align:left">LIBRO</th><th style="padding:7px;text-align:left">EDITORIAL</th>
@@ -3763,6 +3764,9 @@ function renderKardexResumen(box){
       <td style="padding:6px 7px;text-align:right;font-family:monospace">${K.cu.toFixed(2)}</td><td style="padding:6px 7px;text-align:right;font-family:monospace;font-weight:700">${K.tot.toFixed(2)}</td></tr>`;
   }).join('')+`<tr style="font-weight:700;background:#f4f4f4"><td colspan="3" style="padding:8px;text-align:right">TOTALES (${L.length} libros)</td><td style="padding:8px;text-align:right">${tE}</td><td style="padding:8px;text-align:right">${tS}</td><td style="padding:8px;text-align:right">${tC}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace">${tV.toFixed(2)}</td></tr>`
   :'<tr><td colspan="8"><div class="empty">Sin libros con movimientos para ese filtro</div></td></tr>';
+  const nt=document.getElementById('kdx-res-nota');
+  if(nt){const fq=document.getElementById('kdx-fq')?.value||'',fe=document.getElementById('kdx-fed')?.value||'';const rs=valorInventarioCosto();
+    nt.textContent=(!fq&&!fe&&Math.abs(rs-tV)>0.005)?('ℹ️ El kárdex valora cada libro al costo promedio de sus facturas ('+fmt(tV)+'). El Reporte de stock, Inicio y Balance usan el costo del Catálogo ('+fmt(rs)+'). Diferencia: '+fmt(rs-tV)+' — normal cuando un libro entró a dos precios distintos.'):'';}
 }
 function kardexResumenTabla(L){
   let tE=0,tS=0,tC=0,tV=0;
@@ -5451,6 +5455,7 @@ function renderPorCobrar(){
     }).join('');
   }
   const np=document.getElementById('pc-s-npag');if(np)np.textContent=nPag;
+  try{total=resumenNegocio().porCobrar;}catch(e){}   // igual que Inicio y Balance
   document.getElementById('pc-s-total').textContent=fmt(total);
   document.getElementById('pc-s-ncol').textContent=nDeben;
   const totSinCol=sinColegio.reduce((a,x)=>a+x.valor,0);
@@ -5663,7 +5668,7 @@ function renderBalance(){
   // por Control de ventas − lo ya cobrado en Pagos), misma cuenta que "Por Cobrar".
   // Antes esto buscaba en DB.regs tipo 'venta' (una pestaña que casi no usas) y
   // siempre daba $0, así que el Patrimonio quedaba subestimado.
-  const cxc=saldosPorCobrarColegios().filas.reduce((a,f)=>a+Math.max(0,f.saldo),0);
+  const cxc=resumenNegocio().porCobrar;   // igual que Inicio y Por Cobrar
   const totalActivos=saldoBanco+invCosto+cxc;
 
   // Pasivos — se usa resumenEditorial() (misma fuente que Editorial y Auditoría)
@@ -10928,7 +10933,7 @@ function renderColResumen(){
   if(elSaldo)elSaldo.textContent=fmt(totalSaldoEd);
 
   // Tarjeta "análisis" igual a la de Financiero pero sumando TODOS los colegios
-  const gan=totalP-totalCostoEd;
+  const gan=Math.round((totalP-totalCostoEd)*100)/100;
   const cajAT=document.getElementById('col-analisis-todos');
   if(cajAT)cajAT.innerHTML=`
     <div style="border:2px solid #90caf9;border-radius:8px;padding:12px;background:#fff;margin:12px 0">
@@ -10956,7 +10961,8 @@ function renderColResumen(){
         <tr><td style="padding:4px 0">Comisión de los colegios</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--a1)">− ${fmt(totalC)}</td></tr>
         <tr style="border-top:1px solid #ddd"><td style="padding:4px 0;font-weight:700">Tu ingreso real</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--g1)">${fmt(totalP)}</td></tr>
         <tr><td style="padding:4px 0">Costo editorial de lo vendido</td><td style="text-align:right;font-family:monospace;font-weight:700;color:var(--r1)">− ${fmt(totalCostoEd)}</td></tr>
-        <tr style="border-top:2px solid #90caf9"><td style="padding:6px 0;font-weight:700">GANANCIA NETA REAL</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${gan>=0?'var(--g1)':'var(--r1)'}">${fmt(gan)}</td></tr>
+        <tr style="border-top:2px solid #90caf9"><td style="padding:6px 0;font-weight:700">GANANCIA DE LOS COLEGIOS (antes de otros gastos)</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:${gan>=0?'var(--g1)':'var(--r1)'}">${fmt(gan)}</td></tr>
+        ${(()=>{const G=resumenGanancia();return G.otrosGastos>0.005?`<tr><td style="padding:4px 0">Otros gastos del negocio (internet, servicios…)</td><td style="text-align:right;font-family:monospace;color:var(--r1)">− ${fmt(G.otrosGastos)}</td></tr><tr style="border-top:2px solid #90caf9"><td style="padding:6px 0;font-weight:700">GANANCIA FINAL (igual que Inicio y Liquidación)</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:15px;color:var(--g1)">${fmt(G.neta)}</td></tr>`:"";})()}
         <tr><td colspan="2" style="padding:8px 0 2px"><hr style="border:none;border-top:1px dashed #ccc"></td></tr>
         <tr><td style="padding:4px 0">Te facturaron las editoriales − notas de crédito</td><td style="text-align:right;font-family:monospace">${fmt(RNc?RNc.facturado-RNc.notas:totalCostoEd)}</td></tr>
         <tr><td style="padding:4px 0">Ya les pagaste (pestaña Pagos)</td><td style="text-align:right;font-family:monospace;color:var(--g1)">− ${fmt(RNc?RNc.pagadoEd:totalPagEd)}</td></tr>
@@ -12250,7 +12256,8 @@ function resumenNegocioHTML(R){
       ${cab}
       ${f3('Vendí (sin comisión del colegio)',R.ventaEd['Didáctica']||0,R.ventaEd['Tech Books']||0)}
       ${f3('(−) Costo de esos libros',R.costoVend['Didáctica']||0,R.costoVend['Tech Books']||0)}
-      ${f3('= GANO',gD,gT,{b:1,color:verde,bg:'#e8f5e9'})}
+      ${f3('= GANO con los libros',gD,gT,{b:1,color:verde,bg:'#e8f5e9'})}
+      ${(()=>{const G=resumenGanancia();const td='padding:6px 10px;text-align:right;font-family:monospace';return G.otrosGastos>0.005?`<tr><td style="padding:6px 10px;color:#555">(−) Otros gastos del negocio <span style="font-size:10px;color:#999">(internet, servicios…)</span></td><td></td><td></td><td style="${td}">${m(G.otrosGastos)}</td></tr><tr style="background:#e8f5e9"><td style="padding:6px 10px;font-weight:700">= GANANCIA FINAL <span style="font-size:10px;color:#555;font-weight:400">(igual que Liquidación)</span></td><td></td><td></td><td style="${td};font-weight:700">${m(G.neta)}</td></tr>`:'';})()}
     </table>
     ${tit('④ AL FINAL')}
     <table style="width:100%;border-collapse:collapse">
@@ -12317,7 +12324,7 @@ function resumenGanancia(){
   const comisiones=comisionCol+(DB.comisiones||[]).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
 
   const bruta=ventas-costoNeto;
-  const neta=bruta-otrosGastos-comisiones;
+  const neta=Math.round((bruta-otrosGastos-comisiones)*100)/100;   // redondeada a centavos: la misma cifra en todas las pestañas
   const margen=ventas>0?(neta/ventas*100):0;
 
   const ed=resumenEditorial();
@@ -12886,7 +12893,7 @@ function renderLiquidacion(){
   const costoNeto=Math.max(0,costoVendidoCol);   // costo de lo YA vendido
   const comisiones=comisionCol+f(DB.comisiones).reduce((a,c)=>a+c.monto,0);
   const otrosGastos=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria!=='Textos escolares').reduce((a,r)=>a+r.total,0);
-  const utilidad=ventas-costoNeto-comisiones-otrosGastos;
+  const utilidad=resumenGanancia().neta;   // misma cifra exacta que Inicio, Reportes y Consolidado
   document.getElementById('liq-ventas').textContent=fmt(ventas);
   document.getElementById('liq-costo').textContent=fmt(costoNeto);
   document.getElementById('liq-comisiones').textContent=fmt(comisiones);
