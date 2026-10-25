@@ -12740,6 +12740,35 @@ function veredictoComision(x){
   if(x.total>x.gan) return {txt:'🟠 Di más de lo que gané',col:'#c2410c'};
   return {txt:'🟢 Me resulta',col:'#16a34a'};
 }
+// Todo el negocio en UNA tabla y en orden, de izquierda a derecha (pedido del
+// esposo de Mónica): vendí − comisión = me pagan los colegios − editorial − gastos
+// = gano. Filas: cuánto es / ya se hizo / falta. Mismas cifras que el Resumen.
+function resumenSecuenciaHTML(print){
+  const G=resumenGanancia(), R=resumenNegocio();
+  const L=comisionesColegiosDatos();
+  const comPag=L.filter(x=>x.pag).reduce((a,x)=>a+x.total,0)+(DB.comisiones||[]).filter(c=>c.estado==='pagada').reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+  const netoCol=G.ventas-G.comisionCol;
+  const edVend=G.costoNeto, edYa=R.pagadoEd, edFalta=Math.max(0,edVend-edYa);
+  const c=(v,col,b,big)=>`<td style="padding:8px 10px;text-align:right;${print?'':'font-family:monospace;'}color:${col||'#111'};${b?'font-weight:700;':''}${big?'font-size:15px;':''}">${v===null?'':fmt(v)}</td>`;
+  const op=t=>`<td style="padding:0 2px;text-align:center;font-size:18px;font-weight:700;color:#94a3b8">${t}</td>`;
+  const h=(n,t,sub,bg)=>`<th style="padding:8px 10px;text-align:right;background:${bg}"><span style="font-size:11px;color:#475569">${n}</span><br>${t}<br><span style="font-weight:400;font-size:11px">${sub}</span></th>`;
+  const hop=t=>`<th style="background:#fff;font-size:18px;color:#94a3b8">${t}</th>`;
+  const lbl=(t,sub)=>`<td style="padding:8px 10px;font-weight:700;white-space:nowrap">${t}${sub?'<div style="font-size:11px;font-weight:400;color:#64748b">'+sub+'</div>':''}</td>`;
+  return `<div style="margin:${print?'10px 0':'0 0 16px'};font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <div style="font-weight:700;font-size:15px;margin-bottom:6px">🧮 TODO EL NEGOCIO EN ORDEN (de izquierda a derecha)</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:900px'}">
+  <thead><tr><th style="background:#fff"></th>${h('1','VENDÍ','a precio de venta (PVP)','#f1f5f9')}${hop('−')}${h('2','COMISIÓN','para los colegios','#fef3c7')}${hop('=')}${h('3','ME PAGAN','los colegios','#e0f2fe')}${hop('−')}${h('4','EDITORIAL','costo de los libros vendidos','#dbeafe')}${hop('−')}${h('5','OTROS GASTOS','internet, servicios…','#f1f5f9')}${hop('=')}${h('6','GANO','mi ganancia','#dcfce7')}</tr></thead>
+  <tbody>
+  <tr style="border-top:2px solid #cbd5e1">${lbl('CUÁNTO ES')}${c(G.ventas,'',1,1)}${op('−')}${c(G.comisiones,'#b45309',1,1)}${op('=')}${c(netoCol,'#0369a1',1,1)}${op('−')}${c(edVend,'#1d4ed8',1,1)}${op('−')}${c(G.otrosGastos,'#475569',1,1)}${op('=')}${c(G.neta,G.neta>=0?'#16a34a':'#dc2626',1,1)}</tr>
+  <tr style="border-top:1px solid #e2e8f0">${lbl('✅ YA SE HIZO','cobrado / pagado')}${c(null)}${op('')}${c(comPag,'#16a34a')}${op('')}${c(R.cobrado,'#16a34a')}<td></td>${c(edYa,'#16a34a')}${op('')}${c(G.otrosGastos,'#16a34a')}${op('')}${c(null)}</tr>
+  <tr style="border-top:1px solid #e2e8f0;border-bottom:2px solid #cbd5e1">${lbl('⏳ FALTA','cobrar / pagar')}${c(null)}${op('')}${c(Math.max(0,G.comisiones-comPag),'#dc2626',1)}${op('')}${c(R.porCobrar,'#dc2626',1)}<td></td>${c(edFalta,'#dc2626',1)}${op('')}${c(0,'#475569')}${op('')}${c(null)}</tr>
+  </tbody></table></div>
+  <ul style="margin:8px 0 0;padding-left:20px;line-height:1.6">
+   <li><b>Vendí</b> ${fmt(G.ventas)} → los colegios se quedan su <b>comisión</b> ${fmt(G.comisiones)} → los colegios me pagan ${fmt(netoCol)}: ya me pagaron <b style="color:#16a34a">${fmt(R.cobrado)}</b> y <b>me falta cobrar <span style="color:#dc2626">${fmt(R.porCobrar)}</span></b>.</li>
+   <li>A la <b>editorial</b> le toca ${fmt(edVend)} por los libros vendidos: ya le di <b style="color:#16a34a">${fmt(edYa)}</b> y <b>me falta darle <span style="color:#dc2626">${fmt(edFalta)}</span></b>.${R.porDevolver>0.005?` Aparte tengo libros guardados por <b style="color:#1d4ed8">${fmt(R.porDevolver)}</b> (bodega o muestras): si los devuelvo no los pago; si los vendo, se pagan y también gano con ellos. (Por eso la editorial dice que le debo ${fmt(Math.max(0,R.debeEd))} = ${fmt(edFalta)} + ${fmt(R.porDevolver)}.)`:''}</li>
+   <li><b>Gano ${fmt(G.neta)}</b> después de pagar comisiones, editorial y gastos.</li>
+  </ul></div>`;
+}
 // Cuenta con la editorial en filas (una por editorial), igual que la tabla de
 // colegios: facturas − devoluciones − abonos = lo que falta darle. Mónica y su
 // esposo lo entienden mejor así que en un párrafo. print=true para la impresión.
@@ -12793,7 +12822,9 @@ function renderComisionesColegios(){
     <td style="padding:6px 8px;text-align:center;font-weight:600;color:${veredictoComision(x).col}">${veredictoComision(x).txt}<div style="font-size:10px;color:var(--mu);font-weight:400">comisión ${x.tv>0?Math.round(x.total/x.tv*100):0}% · ganancia ${x.tv>0?Math.round(x.gan/x.tv*100):0}% de lo vendido</div></td>
     <td style="padding:6px 8px;text-align:center">${x.pag?'✅ Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/'))+' <button class="btn btn-s btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')" title="Deshacer">↩</button>'
       :'<button class="btn btn-p btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')">Marcar pagada</button>'}</td></tr>`;
+  let secBox='';try{secBox=resumenSecuenciaHTML(false);}catch(e){console.warn('comisiones secuencia',e);}
   box.innerHTML=`
+    ${secBox}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:10px">
       <div class="sc"><div class="sc-lbl">Falta pagar</div><div class="sc-val" style="color:#b45309">${fmt(tPend)}</div><div class="sc-sub">${pend.length} colegio(s)</div></div>
       <div class="sc"><div class="sc-lbl">Ya pagado</div><div class="sc-val cg">${fmt(tPag)}</div><div class="sc-sub">${pag.length} colegio(s)</div></div>
@@ -12835,6 +12866,7 @@ function imprimirComisionesColegios(){
   win.document.write(`<html><head><title>Comisiones a colegios</title>
   <style>@page{size:landscape}body{font-family:Arial,sans-serif;padding:15px;font-size:11px}table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:16px 0 4px}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Comisiones que debo pagar a los colegios','Al '+new Date().toLocaleDateString('es-EC'))}
+  ${(()=>{try{return resumenSecuenciaHTML(true);}catch(e){return '';}})()}
   <div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:10px 14px;font-size:15px"><b>FALTA PAGAR EN COMISIONES: ${fmt(tPend)}</b> (${pend.length} colegio(s))</div>
   ${(()=>{try{return tablaEditorialHTML(true);}catch(e){return '';}})()}
   <table><tr><th></th><th style="text-align:left">COLEGIO</th><th>VENDIDO (PVP)</th><th>%</th><th>PARA EL COLEGIO (comisión)</th><th>PARA LA EDITORIAL</th><th>PARA MÍ (ganancia)</th><th>¿ME RESULTA?</th><th>ESTADO</th></tr>
