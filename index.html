@@ -12769,6 +12769,45 @@ function resumenSecuenciaHTML(print){
    <li><b>Gano ${fmt(G.neta)}</b> después de pagar comisiones, editorial y gastos.</li>
   </ul></div>`;
 }
+// Último estado de cuenta que mandó Didáctica (papel). Al llegar uno nuevo,
+// cambiar solo estos números y la fecha de corte.
+const ESTADO_CUENTA_DIDACTICA={corte:'2026-10-06',facturas:54443,anticipos:7000,saldo:47443};
+// Cuadre "tal cual" contra el estado de cuenta de Didáctica: lo que dice el
+// papel, lo que pasó después de su fecha de corte, y lo que se debe hoy.
+function cuadreEstadoCuentaHTML(print){
+  const E=ESTADO_CUENTA_DIDACTICA, F=d=>String(d||'').split('-').reverse().join('/');
+  const esD=n=>grupoEditorial(n)==='Didáctica';
+  const fac=DB.regs.filter(r=>esCompraEditorial(r)&&esD(r.proveedor)).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  const pag=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&editorialDePago(p)==='Didáctica');
+  const nc=(DB.notasCredito||[]).filter(n=>esD(n.editorial||'Didáctica'));
+  const v=x=>parseFloat(x.total??x.valor)||0, sum=a=>a.reduce((t,x)=>t+v(x),0);
+  const antes=x=>String(x.fecha||'')<=E.corte;
+  const fA=sum(fac.filter(antes)),pA=sum(pag.filter(antes)),nA=sum(nc.filter(antes));
+  const fD=fac.filter(x=>!antes(x)),pD=pag.filter(x=>!antes(x)),nD=nc.filter(x=>!antes(x));
+  const hoy=E.saldo+sum(fD)-sum(pD)-sum(nD);
+  const ok=Math.abs(fA-E.facturas)<0.01&&Math.abs(pA+nA-E.anticipos)<0.01;
+  const c=(x,col,b)=>`<td style="padding:7px 10px;text-align:right;${print?'':'font-family:monospace;'}${col?'color:'+col+';':''}${b?'font-weight:700':''}">${x===null?'':fmt(x)}</td>`;
+  const op=t=>`<td style="text-align:center;font-size:16px;font-weight:700;color:#94a3b8">${t}</td>`;
+  const lbl=(t,sub)=>`<td style="padding:7px 10px;font-weight:700">${t}${sub?'<div style="font-size:11px;font-weight:400;color:#64748b">'+sub+'</div>':''}</td>`;
+  const lista=a=>a.map(x=>F(x.fecha)+' '+fmt(v(x))).join(' · ');
+  const det=[fD.length?fD.length+' factura(s) nueva(s): '+lista(fD):'',pD.length?'abono(s): '+lista(pD):'',nD.length?'devolución(es): '+lista(nD):''].filter(Boolean).join('<br>');
+  const facList=fac.map(r=>`<span style="display:inline-block;min-width:150px;${antes(r)?'':'color:#7c3aed;font-weight:700'}">${escH(String(r.numFact||'').split('-').pop().replace(/^0+/,''))} · ${fmt(v(r))}</span>`).join('');
+  return `<div style="margin-top:12px;border:2px solid #93c5fd;border-radius:8px;padding:10px 12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <div style="font-weight:700;font-size:14px;margin-bottom:6px">📄 CUADRE CON EL ESTADO DE CUENTA DE DIDÁCTICA (al ${F(E.corte)})</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:700px'}">
+  <thead><tr style="background:#dbeafe"><th></th><th style="padding:7px 10px;text-align:right">FACTURAS</th><th></th><th style="padding:7px 10px;text-align:right">ABONOS<br><span style="font-weight:400;font-size:11px">(la editorial dice "anticipos")</span></th><th></th><th style="padding:7px 10px;text-align:right">DEVOLUCIONES<br><span style="font-weight:400;font-size:11px">notas de crédito</span></th><th></th><th style="padding:7px 10px;text-align:right;background:#fee2e2">SALDO<br><span style="font-weight:400;font-size:11px">lo que le debo</span></th></tr></thead>
+  <tbody>
+  <tr style="border-top:1px solid #e2e8f0">${lbl('1. Lo que dice el estado de cuenta','papel de la editorial, al '+F(E.corte))}${c(E.facturas)}${op('−')}${c(E.anticipos,'#16a34a')}${op('−')}${c(0,'#7c3aed')}${op('=')}${c(E.saldo,'#dc2626',1)}</tr>
+  <tr style="border-top:1px solid #e2e8f0">${lbl('2. Lo que pasó después del '+F(E.corte),'todavía no sale en ese papel')}${c(sum(fD))}${op('−')}${c(sum(pD),'#16a34a')}${op('−')}${c(sum(nD),'#7c3aed')}${op('')}${c(null)}</tr>
+  <tr style="border-top:2px solid #334155;background:#f8fafc">${lbl('3. = HOY','1 + 2')}${c(E.facturas+sum(fD),'',1)}${op('−')}${c(E.anticipos+sum(pD),'#16a34a',1)}${op('−')}${c(sum(nD),'#7c3aed',1)}${op('=')}${c(hoy,'#dc2626',1)}</tr>
+  </tbody></table></div>
+  <div style="font-size:12px;margin-top:6px">${ok?'✅ <b>Las '+fac.filter(antes).length+' facturas y el abono hasta el '+F(E.corte)+' son iguales en el sistema y en el estado de cuenta.</b>':'⚠️ <b>Ojo:</b> hasta el '+F(E.corte)+' el sistema tiene facturas '+fmt(fA)+' y abonos '+fmt(pA+nA)+' (el papel dice '+fmt(E.facturas)+' y '+fmt(E.anticipos)+').'}</div>
+  ${det?`<div style="font-size:11px;color:#475569;margin-top:4px">Después del ${F(E.corte)}: ${det}</div>`:''}
+  <div style="font-size:12px;margin-top:6px">De los <b style="color:#dc2626">${fmt(hoy)}</b> de hoy: <b style="color:#b45309">${fmt(Math.max(0,hoy-(R_porDevolverDid()||0)))}</b> son libros que ya vendí (sí o sí pago) y <b style="color:#1d4ed8">${fmt(R_porDevolverDid())}</b> son libros que todavía tengo (si devuelvo, no pago).</div>
+  <details style="margin-top:6px" ${print?'open':''}><summary style="font-size:12px;cursor:pointer">Ver las ${fac.length} facturas (N° · valor) para marcar con el papel</summary><div style="font-size:11px;line-height:1.7;margin-top:4px">${facList}</div><div style="font-size:10px;color:#7c3aed">En morado: las que llegaron después del ${F(E.corte)}.</div></details>
+  </div>`;
+}
+function R_porDevolverDid(){try{const x=resumenNegocio().ed['Didáctica'];return x?x.porDevolver:0;}catch(e){return 0;}}
 // Cuenta con la editorial en filas (una por editorial), igual que la tabla de
 // colegios: facturas − devoluciones − abonos = lo que falta darle. Mónica y su
 // esposo lo entienden mejor así que en un párrafo. print=true para la impresión.
@@ -12800,7 +12839,7 @@ function tablaEditorialHTML(print){
   <tbody>${eds.map(fila).join('')}
   ${eds.length>1?`<tr style="font-weight:700;background:#f4f4f4"><td style="${td}">TOTAL</td>${n(S('facturado'),'',1)}${n(S('notas'),'#7c3aed',1)}${n(S('pagado'),'#16a34a',1)}${n(falta,'#dc2626',1)}${n(Math.max(0,falta-R.porDevolver),'#b45309',1)}${n(R.porDevolver,'#1d4ed8',1)}</tr>`:''}</tbody></table></div>
   ${frases?`<ul style="margin:8px 0 4px;padding-left:20px;line-height:1.5">${frases}</ul>`:''}
-  <div style="font-size:11px;color:#64748b;margin-top:4px">${det.join(' · ')}</div></div>`;
+  <div style="font-size:11px;color:#64748b;margin-top:4px">${det.join(' · ')}</div>${(()=>{try{return R.ed['Didáctica']?cuadreEstadoCuentaHTML(print):'';}catch(e){console.warn('cuadre estado cuenta',e);return '';}})()}</div>`;
 }
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
