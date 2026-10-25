@@ -12729,8 +12729,16 @@ function comisionesColegiosDatos(){
     const T=totalesColegio(d);
     const pcts=[...new Set((d.lineas||[]).filter(l=>lineaComisiona(l)&&((l.cant||0)-(l.dev||0))>0).map(l=>pctLinea(d,l)))];
     return {nombre:c.nombre,tv:T.tv,pct:pcts.length===1?pcts[0]+'%':(pcts.length?'varios':'—'),
-      com:T.comision,cap:T.comisionPV,total:T.totalColegio,pag:d.comisionPagada||null};
+      com:T.comision,cap:T.comisionPV,total:T.totalColegio,pag:d.comisionPagada||null,
+      neto:T.ingreso,costo:T.costo,gan:T.ganancia};
   }).filter(x=>x&&x.tv>0);
+}
+// ¿Me resulta? Compara lo que se fue en comisión con lo que me queda de ganancia.
+function veredictoComision(x){
+  if(x.total<=0.005) return {txt:'Sin comisión',col:'#16a34a'};
+  if(x.gan<=0.005) return {txt:'🔴 Pierdo',col:'#dc2626'};
+  if(x.total>x.gan) return {txt:'🟠 Di más de lo que gané',col:'#c2410c'};
+  return {txt:'🟢 Me resulta',col:'#16a34a'};
 }
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
@@ -12738,28 +12746,32 @@ function renderComisionesColegios(){
   const conCom=L.filter(x=>x.total>0.005), sinCom=L.filter(x=>x.total<=0.005);
   const pend=conCom.filter(x=>!x.pag), pag=conCom.filter(x=>x.pag);
   const tPend=pend.reduce((a,x)=>a+x.total,0), tPag=pag.reduce((a,x)=>a+x.total,0);
+  const S=k=>conCom.reduce((a,x)=>a+x[k],0);
   const fila=x=>`<tr style="${x.pag?'background:#f0fdf4':''}">
     <td style="padding:6px 8px;font-weight:600">${escH(x.nombre)}</td>
     <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.tv)}</td>
     <td style="padding:6px 8px;text-align:center">${x.pct}</td>
-    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.com)}</td>
-    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.cap)}</td>
-    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;color:${x.pag?'var(--g1)':'#b45309'}">${fmt(x.total)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;color:${x.pag?'var(--g1)':'#b45309'}">${fmt(x.total)}${x.cap>0.005?'<div style="font-size:10px;color:var(--mu);font-weight:400">incl. capacit. '+fmt(x.cap)+'</div>':''}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.neto)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace;color:var(--mu)">${fmt(x.costo)}</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;color:${x.gan>0?'#16a34a':'#dc2626'}">${fmt(x.gan)}</td>
+    <td style="padding:6px 8px;text-align:center;font-weight:600;color:${veredictoComision(x).col}">${veredictoComision(x).txt}<div style="font-size:10px;color:var(--mu);font-weight:400">comisión ${x.tv>0?Math.round(x.total/x.tv*100):0}% · ganancia ${x.tv>0?Math.round(x.gan/x.tv*100):0}% de lo vendido</div></td>
     <td style="padding:6px 8px;text-align:center">${x.pag?'✅ Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/'))+' <button class="btn btn-s btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')" title="Deshacer">↩</button>'
       :'<button class="btn btn-p btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')">Marcar pagada</button>'}</td></tr>`;
   box.innerHTML=`
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:10px">
       <div class="sc"><div class="sc-lbl">Falta pagar</div><div class="sc-val" style="color:#b45309">${fmt(tPend)}</div><div class="sc-sub">${pend.length} colegio(s)</div></div>
       <div class="sc"><div class="sc-lbl">Ya pagado</div><div class="sc-val cg">${fmt(tPag)}</div><div class="sc-sub">${pag.length} colegio(s)</div></div>
-      <div class="sc"><div class="sc-lbl">Total comisiones</div><div class="sc-val">${fmt(tPend+tPag)}</div><div class="sc-sub">sale del Control de ventas</div></div>
+      <div class="sc"><div class="sc-lbl">Total comisiones</div><div class="sc-val">${fmt(tPend+tPag)}</div><div class="sc-sub">${S('tv')>0?Math.round((tPend+tPag)/S('tv')*100):0}% de lo vendido</div></div>
+      <div class="sc"><div class="sc-lbl">Mi ganancia (estos colegios)</div><div class="sc-val cg">${fmt(S('gan'))}</div><div class="sc-sub">ya descontada comisión y costo</div></div>
     </div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px">
-      <thead><tr style="background:#fef3c7"><th style="padding:7px 8px;text-align:left">COLEGIO</th><th style="padding:7px 8px;text-align:right">VENDIDO (PVP)</th><th style="padding:7px 8px">%</th><th style="padding:7px 8px;text-align:right">COMISIÓN</th><th style="padding:7px 8px;text-align:right">CAPACITACIÓN</th><th style="padding:7px 8px;text-align:right">TOTAL A PAGAR</th><th style="padding:7px 8px">ESTADO</th></tr></thead>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:980px">
+      <thead><tr style="background:#fef3c7"><th style="padding:7px 8px;text-align:left">COLEGIO</th><th style="padding:7px 8px;text-align:right">VENDIDO (PVP)</th><th style="padding:7px 8px">%</th><th style="padding:7px 8px;text-align:right">COMISIÓN A PAGAR</th><th style="padding:7px 8px;text-align:right">ME QUEDA<br><span style="font-weight:400;font-size:10px">vendido − comisión</span></th><th style="padding:7px 8px;text-align:right">COSTO LIBROS</th><th style="padding:7px 8px;text-align:right">MI GANANCIA</th><th style="padding:7px 8px">¿ME RESULTA?</th><th style="padding:7px 8px">ESTADO</th></tr></thead>
       <tbody>${pend.map(fila).join('')}${pag.map(fila).join('')}
-      <tr style="font-weight:700;background:#f4f4f4"><td colspan="5" style="padding:8px;text-align:right">FALTA PAGAR:</td><td style="padding:8px;text-align:right;font-family:monospace;color:#b45309">${fmt(tPend)}</td><td></td></tr></tbody>
+      <tr style="font-weight:700;background:#f4f4f4"><td style="padding:8px">TOTAL</td><td style="padding:8px;text-align:right;font-family:monospace">${fmt(S('tv'))}</td><td></td><td style="padding:8px;text-align:right;font-family:monospace;color:#b45309">${fmt(S('total'))}</td><td style="padding:8px;text-align:right;font-family:monospace">${fmt(S('neto'))}</td><td style="padding:8px;text-align:right;font-family:monospace">${fmt(S('costo'))}</td><td style="padding:8px;text-align:right;font-family:monospace;color:#16a34a">${fmt(S('gan'))}</td><td colspan="2" style="padding:8px">Falta pagar: <span style="color:#b45309">${fmt(tPend)}</span></td></tr></tbody>
     </table></div>
     ${sinCom.length?`<div style="font-size:11px;color:var(--mu);margin-top:8px">Sin comisión: ${sinCom.map(x=>escH(x.nombre)).join(' · ')}</div>`:''}
-    <div style="font-size:11px;color:var(--mu);margin-top:6px">Los valores salen del <b>Control de ventas</b> de cada colegio (comisión % + capacitación por libro). Si el colegio ya se descontó la comisión cuando te pagó, márcala como pagada igual.</div>`;
+    <div style="font-size:11px;color:var(--mu);margin-top:6px">Los valores salen del <b>Control de ventas</b> de cada colegio (comisión % + capacitación por libro). Si el colegio ya se descontó la comisión cuando te pagó, márcala como pagada igual.<br><b>¿Me resulta?</b> 🟢 tu ganancia es mayor que la comisión · 🟠 le diste al colegio más de lo que ganaste tú · 🔴 pierdes plata.</div>`;
 }
 function toggleComisionPagada(nombre){
   initColData();
@@ -12782,14 +12794,15 @@ function imprimirComisionesColegios(){
   const tPend=pend.reduce((a,x)=>a+x.total,0);
   const win=window.open('','_blank');
   if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
-  const fila=x=>`<tr><td style="text-align:center;width:24px">${x.pag?'✔':'☐'}</td><td><b>${escH(x.nombre)}</b></td><td align="right">${fmt(x.tv)}</td><td align="center">${x.pct}</td><td align="right">${fmt(x.com)}</td><td align="right">${fmt(x.cap)}</td><td align="right"><b>${fmt(x.total)}</b></td><td>${x.pag?'Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/')):'Pendiente'}</td></tr>`;
+  const S=k=>L.reduce((a,x)=>a+x[k],0);
+  const fila=x=>`<tr><td style="text-align:center;width:24px">${x.pag?'✔':'☐'}</td><td><b>${escH(x.nombre)}</b></td><td align="right">${fmt(x.tv)}</td><td align="center">${x.pct}</td><td align="right"><b>${fmt(x.total)}</b></td><td align="right">${fmt(x.neto)}</td><td align="right">${fmt(x.costo)}</td><td align="right"><b>${fmt(x.gan)}</b></td><td>${veredictoComision(x).txt}</td><td>${x.pag?'Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/')):'Pendiente'}</td></tr>`;
   win.document.write(`<html><head><title>Comisiones a colegios</title>
-  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:16px 0 4px}${dmPrintCSS()}</style></head><body>
+  <style>@page{size:landscape}body{font-family:Arial,sans-serif;padding:15px;font-size:11px}table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:16px 0 4px}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Comisiones que debo pagar a los colegios','Al '+new Date().toLocaleDateString('es-EC'))}
   <div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:10px 14px;font-size:15px"><b>FALTA PAGAR EN COMISIONES: ${fmt(tPend)}</b> (${pend.length} colegio(s))</div>
-  <table><tr><th></th><th style="text-align:left">COLEGIO</th><th>VENDIDO (PVP)</th><th>%</th><th>COMISIÓN</th><th>CAPACITACIÓN</th><th>TOTAL A PAGAR</th><th>ESTADO</th></tr>
+  <table><tr><th></th><th style="text-align:left">COLEGIO</th><th>VENDIDO (PVP)</th><th>%</th><th>COMISIÓN A PAGAR</th><th>ME QUEDA</th><th>COSTO LIBROS</th><th>MI GANANCIA</th><th>¿ME RESULTA?</th><th>ESTADO</th></tr>
   ${pend.map(fila).join('')}${pag.map(fila).join('')}
-  <tr><td colspan="6" align="right"><b>FALTA PAGAR:</b></td><td align="right"><b>${fmt(tPend)}</b></td><td></td></tr></table>
+  <tr><td></td><td><b>TOTAL</b></td><td align="right"><b>${fmt(S('tv'))}</b></td><td></td><td align="right"><b>${fmt(S('total'))}</b></td><td align="right"><b>${fmt(S('neto'))}</b></td><td align="right"><b>${fmt(S('costo'))}</b></td><td align="right"><b>${fmt(S('gan'))}</b></td><td colspan="2"><b>Falta pagar: ${fmt(tPend)}</b></td></tr></table>
   <\/body><\/html>`);
   win.document.close();
   win.onload=()=>win.print();
