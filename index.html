@@ -12747,23 +12747,31 @@ function tablaEditorialHTML(print){
   const R=resumenNegocio();
   const eds=Object.keys(R.ed);
   const F=d=>String(d||'').split('-').reverse().join('/');
-  const td=print?'':'padding:6px 8px;';
-  const n=(v,col,b)=>`<td style="${td}text-align:right;font-family:monospace;${col&&!print?'color:'+col+';':''}${b?'font-weight:700':''}">${fmt(v)}</td>`;
-  const fila=k=>{const x=R.ed[k];const falta=Math.max(0,x.debe);
-    return `<tr><td style="${td}font-weight:600">${escH(k)}${x.sinFacturas?'<div style="font-size:10px;font-weight:400;color:#64748b">se le paga por lo vendido</div>':''}</td>${n(x.facturado)}${n(x.notas,'#7c3aed')}${n(x.pagado,'#16a34a')}${n(falta,'#dc2626',1)}${n(Math.max(0,falta-x.porDevolver),'#b45309')}${n(x.porDevolver,'#1d4ed8')}</tr>`;};
+  const td=print?'padding:7px 8px;':'padding:7px 8px;';
+  const n=(v,col,b)=>`<td style="${td}text-align:right;${print?'':'font-family:monospace;'}${col?'color:'+col+';':''}${b?'font-weight:700':''}">${fmt(v)}</td>`;
+  const sinNC=x=>Math.max(0,x.debe);
+  const vend=x=>Math.max(0,sinNC(x)-x.porDevolver);
+  const fila=k=>{const x=R.ed[k];
+    return `<tr><td style="${td}font-weight:700">${escH(k)}${x.sinFacturas?'<div style="font-size:11px;font-weight:400;color:#64748b">se le paga solo lo vendido</div>':''}</td>${n(x.facturado)}${n(x.notas,'#7c3aed')}${n(x.pagado,'#16a34a')}${n(sinNC(x),'#dc2626',1)}${n(vend(x),'#b45309',1)}${n(x.porDevolver,'#1d4ed8',1)}</tr>`;};
   const S=k=>eds.reduce((a,e)=>a+R.ed[e][k],0);
   const falta=Math.max(0,R.debeEd);
   const det=[];
   eds.forEach(k=>{const x=R.ed[k];
     x.pagos.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).forEach(p=>det.push('Abono '+escH(k)+' '+F(p.fecha)+': <b>'+fmt(parseFloat(p.valor)||0)+'</b>'));
-    x.ncs.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).forEach(c=>det.push('Devolución '+escH(k)+' '+F(c.fecha)+(c.numero||c.num?' N° '+escH(String(c.numero||c.num).split('-').pop().replace(/^0+/,'')):'')+': '+fmt(parseFloat(c.total)||0)));});
-  const th=(t,sub,bg)=>`<th style="${print?'':'padding:7px 8px;'}text-align:right${bg&&!print?';background:'+bg:''}">${t}${sub?'<br><span style="font-weight:400;font-size:10px">'+sub+'</span>':''}</th>`;
-  return `<div style="${print?'margin-top:8px':'margin:0 0 12px'}"><div style="font-weight:700;font-size:13px;margin-bottom:4px">📚 EDITORIAL — se le paga todo junto, no por colegio</div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px${print?'':';min-width:800px'}">
-  <thead><tr style="${print?'':'background:#dbeafe'}"><th style="${print?'':'padding:7px 8px;'}text-align:left">EDITORIAL</th>${th('FACTURAS','libros que me mandó')}${th('− DEVOLUCIONES','notas de crédito')}${th('− ABONOS','lo que ya le di')}${th('= ME FALTA DARLE','',print?'':'#fee2e2')}${th('De eso: por libros','YA VENDIDOS')}${th('De eso: por libros','QUE TODAVÍA TENGO')}</tr></thead>
+    x.ncs.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).forEach(c=>det.push('Devolución '+escH(k)+' '+F(c.fecha)+': '+fmt(parseFloat(c.total)||0)));});
+  // Explicación en palabras de las dos últimas columnas (Mónica no las entendía).
+  const frases=eds.map(k=>{const x=R.ed[k];if(sinNC(x)<0.005)return '';
+    return `<li>A <b>${escH(k)}</b> le falta darle <b style="color:#dc2626">${fmt(sinNC(x))}</b>: `+
+      `<b style="color:#b45309">${fmt(vend(x))}</b> son libros que <b>ya vendí</b> a los colegios → <b>eso sí o sí hay que pagarlo</b>`+
+      (x.porDevolver>0.005?`; y <b style="color:#1d4ed8">${fmt(x.porDevolver)}</b> son libros que <b>todavía tengo</b> (en bodega o de muestra en los colegios) → <b>si los devuelvo, no los pago</b> (la editorial me hace nota de crédito).`:'.')+'</li>';}).join('');
+  const th=(t,sub,bg)=>`<th style="padding:7px 8px;text-align:right${bg?';background:'+bg:''}">${t}${sub?'<br><span style="font-weight:400;font-size:11px">'+sub+'</span>':''}</th>`;
+  return `<div style="${print?'margin-top:10px':'margin:0 0 14px'};font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-weight:700;font-size:14px;margin-bottom:4px">📚 EDITORIAL — se le paga todo junto, no por colegio</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:800px'}">
+  <thead><tr style="background:#dbeafe"><th style="padding:7px 8px;text-align:left">EDITORIAL</th>${th('FACTURAS','libros que me mandó')}${th('− DEVOLUCIONES','notas de crédito')}${th('− ABONOS','lo que ya le di')}${th('= ME FALTA DARLE','','#fee2e2')}${th('SÍ O SÍ PAGO','libros que ya vendí','#ffedd5')}${th('SI DEVUELVO, NO PAGO','libros que todavía tengo','#dbeafe')}</tr></thead>
   <tbody>${eds.map(fila).join('')}
-  ${eds.length>1?`<tr style="font-weight:700;${print?'':'background:#f4f4f4'}"><td style="${td}">TOTAL</td>${n(S('facturado'),'',1)}${n(S('notas'),'#7c3aed',1)}${n(S('pagado'),'#16a34a',1)}${n(falta,'#dc2626',1)}${n(Math.max(0,falta-R.porDevolver),'#b45309',1)}${n(R.porDevolver,'#1d4ed8',1)}</tr>`:''}</tbody></table></div>
-  <div style="font-size:11px;color:#64748b;margin-top:4px">${det.join(' · ')}${det.length?'<br>':''}Los libros que <b>todavía tengo</b> (bodega o muestras en colegios): si los devuelvo con nota de crédito, eso ya no se paga.</div></div>`;
+  ${eds.length>1?`<tr style="font-weight:700;background:#f4f4f4"><td style="${td}">TOTAL</td>${n(S('facturado'),'',1)}${n(S('notas'),'#7c3aed',1)}${n(S('pagado'),'#16a34a',1)}${n(falta,'#dc2626',1)}${n(Math.max(0,falta-R.porDevolver),'#b45309',1)}${n(R.porDevolver,'#1d4ed8',1)}</tr>`:''}</tbody></table></div>
+  ${frases?`<ul style="margin:8px 0 4px;padding-left:20px;line-height:1.5">${frases}</ul>`:''}
+  <div style="font-size:11px;color:#64748b;margin-top:4px">${det.join(' · ')}</div></div>`;
 }
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
