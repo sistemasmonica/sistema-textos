@@ -1202,7 +1202,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="card" style="border:2px solid #f59e0b">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
       <div class="card-t" style="margin:0;color:#b45309"><i class="ti ti-list-check"></i> Comisiones que debo pagar a los colegios</div>
-      <button class="btn btn-s btn-sm" onclick="imprimirComisionesColegios()"><i class="ti ti-printer"></i> Imprimir lista</button>
+      <button class="btn btn-s btn-sm" onclick="imprimirComisionesColegios()"><i class="ti ti-printer"></i> Imprimir</button>
     </div>
     <div id="com-col-lista"></div>
   </div>
@@ -12835,7 +12835,9 @@ function tablaComisionesHTML(print){
 }
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
-  try{box.innerHTML=tablaComisionesHTML(false);}catch(e){console.warn('comisiones colegios',e);box.innerHTML='';}
+  // Botón grande de imprimir arriba y abajo de la tabla (Mónica no veía el de la esquina).
+  const btn=`<div style="text-align:right;margin:6px 0"><button class="btn btn-p" style="font-size:14px;padding:8px 16px" onclick="imprimirComisionesColegios()">🖨️ IMPRIMIR ESTA TABLA</button></div>`;
+  try{box.innerHTML=btn+tablaComisionesHTML(false)+btn;}catch(e){console.warn('comisiones colegios',e);box.innerHTML='';}
 }
 function toggleComisionPagada(nombre){
   initColData();
