@@ -12740,106 +12740,70 @@ function veredictoComision(x){
   if(x.total>x.gan) return {txt:'🟠 Di más de lo que gané',col:'#c2410c'};
   return {txt:'🟢 Me resulta',col:'#16a34a'};
 }
-// Todo el negocio en UNA tabla y en orden, de izquierda a derecha (pedido del
-// esposo de Mónica): vendí − comisión = me pagan los colegios − editorial − gastos
-// = gano. Filas: cuánto es / ya se hizo / falta. Mismas cifras que el Resumen.
-function resumenSecuenciaHTML(print){
-  const G=resumenGanancia(), R=resumenNegocio();
-  const L=comisionesColegiosDatos();
-  const comPag=L.filter(x=>x.pag).reduce((a,x)=>a+x.total,0)+(DB.comisiones||[]).filter(c=>c.estado==='pagada').reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
-  const netoCol=G.ventas-G.comisionCol;
-  const edVend=G.costoNeto, edYa=R.pagadoEd, edFalta=Math.max(0,edVend-edYa);
-  const c=(v,col,b,big)=>`<td style="padding:8px 10px;text-align:right;${print?'':'font-family:monospace;'}color:${col||'#111'};${b?'font-weight:700;':''}${big?'font-size:15px;':''}">${v===null?'':fmt(v)}</td>`;
-  const op=t=>`<td style="padding:0 2px;text-align:center;font-size:18px;font-weight:700;color:#94a3b8">${t}</td>`;
-  const h=(n,t,sub,bg)=>`<th style="padding:8px 10px;text-align:right;background:${bg}"><span style="font-size:11px;color:#475569">${n}</span><br>${t}<br><span style="font-weight:400;font-size:11px">${sub}</span></th>`;
-  const hop=t=>`<th style="background:#fff;font-size:18px;color:#94a3b8">${t}</th>`;
-  const lbl=(t,sub)=>`<td style="padding:8px 10px;font-weight:700;white-space:nowrap">${t}${sub?'<div style="font-size:11px;font-weight:400;color:#64748b">'+sub+'</div>':''}</td>`;
-  return `<div style="margin:${print?'10px 0':'0 0 16px'};font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-  <div style="font-weight:700;font-size:15px;margin-bottom:6px">🧮 TODO EL NEGOCIO EN ORDEN (de izquierda a derecha)</div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:900px'}">
-  <thead><tr><th style="background:#fff"></th>${h('1','VENDÍ','a precio de venta (PVP)','#f1f5f9')}${hop('−')}${h('2','COMISIÓN','para los colegios','#fef3c7')}${hop('=')}${h('3','ME PAGAN','los colegios','#e0f2fe')}${hop('−')}${h('4','EDITORIAL','costo de los libros vendidos','#dbeafe')}${hop('−')}${h('5','OTROS GASTOS','internet, servicios…','#f1f5f9')}${hop('=')}${h('6','GANO','mi ganancia','#dcfce7')}</tr></thead>
-  <tbody>
-  <tr style="border-top:2px solid #cbd5e1">${lbl('CUÁNTO ES')}${c(G.ventas,'',1,1)}${op('−')}${c(G.comisiones,'#b45309',1,1)}${op('=')}${c(netoCol,'#0369a1',1,1)}${op('−')}${c(edVend,'#1d4ed8',1,1)}${op('−')}${c(G.otrosGastos,'#475569',1,1)}${op('=')}${c(G.neta,G.neta>=0?'#16a34a':'#dc2626',1,1)}</tr>
-  <tr style="border-top:1px solid #e2e8f0">${lbl('✅ YA SE HIZO','cobrado / pagado')}${c(null)}${op('')}${c(comPag,'#16a34a')}${op('')}${c(R.cobrado,'#16a34a')}<td></td>${c(edYa,'#16a34a')}${op('')}${c(G.otrosGastos,'#16a34a')}${op('')}${c(null)}</tr>
-  <tr style="border-top:1px solid #e2e8f0;border-bottom:2px solid #cbd5e1">${lbl('⏳ FALTA','cobrar / pagar')}${c(null)}${op('')}${c(Math.max(0,G.comisiones-comPag),'#dc2626',1)}${op('')}${c(R.porCobrar,'#dc2626',1)}<td></td>${c(edFalta,'#dc2626',1)}${op('')}${c(0,'#475569')}${op('')}${c(null)}</tr>
-  </tbody></table></div>
-  <ul style="margin:8px 0 0;padding-left:20px;line-height:1.6">
-   <li><b>Vendí</b> ${fmt(G.ventas)} → los colegios se quedan su <b>comisión</b> ${fmt(G.comisiones)} → los colegios me pagan ${fmt(netoCol)}: ya me pagaron <b style="color:#16a34a">${fmt(R.cobrado)}</b> y <b>me falta cobrar <span style="color:#dc2626">${fmt(R.porCobrar)}</span></b>.</li>
-   <li>A la <b>editorial</b> le toca ${fmt(edVend)} por los libros vendidos: ya le di <b style="color:#16a34a">${fmt(edYa)}</b> y <b>me falta darle <span style="color:#dc2626">${fmt(edFalta)}</span></b>.${R.porDevolver>0.005?` Aparte tengo libros guardados por <b style="color:#1d4ed8">${fmt(R.porDevolver)}</b> (bodega o muestras): si los devuelvo no los pago; si los vendo, se pagan y también gano con ellos. (Por eso la editorial dice que le debo ${fmt(Math.max(0,R.debeEd))} = ${fmt(edFalta)} + ${fmt(R.porDevolver)}.)`:''}</li>
-   <li><b>Gano ${fmt(G.neta)}</b> después de pagar comisiones, editorial y gastos.</li>
-  </ul></div>`;
-}
 // Último estado de cuenta que mandó Didáctica (papel). Al llegar uno nuevo,
 // cambiar solo estos números y la fecha de corte.
 const ESTADO_CUENTA_DIDACTICA={corte:'2026-10-06',facturas:54443,anticipos:7000,saldo:47443};
-// Cuadre "tal cual" contra el estado de cuenta de Didáctica: lo que dice el
-// papel, lo que pasó después de su fecha de corte, y lo que se debe hoy.
-function cuadreEstadoCuentaHTML(print){
-  const E=ESTADO_CUENTA_DIDACTICA, F=d=>String(d||'').split('-').reverse().join('/');
-  const esD=n=>grupoEditorial(n)==='Didáctica';
-  const fac=DB.regs.filter(r=>esCompraEditorial(r)&&esD(r.proveedor)).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
-  const pag=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&editorialDePago(p)==='Didáctica');
-  const nc=(DB.notasCredito||[]).filter(n=>esD(n.editorial||'Didáctica'));
-  const v=x=>parseFloat(x.total??x.valor)||0, sum=a=>a.reduce((t,x)=>t+v(x),0);
-  const antes=x=>String(x.fecha||'')<=E.corte;
-  const fA=sum(fac.filter(antes)),pA=sum(pag.filter(antes)),nA=sum(nc.filter(antes));
-  const fD=fac.filter(x=>!antes(x)),pD=pag.filter(x=>!antes(x)),nD=nc.filter(x=>!antes(x));
-  const hoy=E.saldo+sum(fD)-sum(pD)-sum(nD);
-  const ok=Math.abs(fA-E.facturas)<0.01&&Math.abs(pA+nA-E.anticipos)<0.01;
-  const c=(x,col,b)=>`<td style="padding:7px 10px;text-align:right;${print?'':'font-family:monospace;'}${col?'color:'+col+';':''}${b?'font-weight:700':''}">${x===null?'':fmt(x)}</td>`;
-  const op=t=>`<td style="text-align:center;font-size:16px;font-weight:700;color:#94a3b8">${t}</td>`;
-  const lbl=(t,sub)=>`<td style="padding:7px 10px;font-weight:700">${t}${sub?'<div style="font-size:11px;font-weight:400;color:#64748b">'+sub+'</div>':''}</td>`;
-  const lista=a=>a.map(x=>F(x.fecha)+' '+fmt(v(x))).join(' · ');
-  const det=[fD.length?fD.length+' factura(s) nueva(s): '+lista(fD):'',pD.length?'abono(s): '+lista(pD):'',nD.length?'devolución(es): '+lista(nD):''].filter(Boolean).join('<br>');
-  const facList=fac.map(r=>`<span style="display:inline-block;min-width:150px;${antes(r)?'':'color:#7c3aed;font-weight:700'}">${escH(String(r.numFact||'').split('-').pop().replace(/^0+/,''))} · ${fmt(v(r))}</span>`).join('');
-  return `<div style="margin-top:12px;border:2px solid #93c5fd;border-radius:8px;padding:10px 12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-  <div style="font-weight:700;font-size:14px;margin-bottom:6px">📄 CUADRE CON EL ESTADO DE CUENTA DE DIDÁCTICA (al ${F(E.corte)})</div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:700px'}">
-  <thead><tr style="background:#dbeafe"><th></th><th style="padding:7px 10px;text-align:right">FACTURAS</th><th></th><th style="padding:7px 10px;text-align:right">ABONOS<br><span style="font-weight:400;font-size:11px">(la editorial dice "anticipos")</span></th><th></th><th style="padding:7px 10px;text-align:right">DEVOLUCIONES<br><span style="font-weight:400;font-size:11px">notas de crédito</span></th><th></th><th style="padding:7px 10px;text-align:right;background:#fee2e2">SALDO<br><span style="font-weight:400;font-size:11px">lo que le debo</span></th></tr></thead>
-  <tbody>
-  <tr style="border-top:1px solid #e2e8f0">${lbl('1. Lo que dice el estado de cuenta','papel de la editorial, al '+F(E.corte))}${c(E.facturas)}${op('−')}${c(E.anticipos,'#16a34a')}${op('−')}${c(0,'#7c3aed')}${op('=')}${c(E.saldo,'#dc2626',1)}</tr>
-  <tr style="border-top:1px solid #e2e8f0">${lbl('2. Lo que pasó después del '+F(E.corte),'todavía no sale en ese papel')}${c(sum(fD))}${op('−')}${c(sum(pD),'#16a34a')}${op('−')}${c(sum(nD),'#7c3aed')}${op('')}${c(null)}</tr>
-  <tr style="border-top:2px solid #334155;background:#f8fafc">${lbl('3. = HOY','1 + 2')}${c(E.facturas+sum(fD),'',1)}${op('−')}${c(E.anticipos+sum(pD),'#16a34a',1)}${op('−')}${c(sum(nD),'#7c3aed',1)}${op('=')}${c(hoy,'#dc2626',1)}</tr>
-  </tbody></table></div>
-  <div style="font-size:12px;margin-top:6px">${ok?'✅ <b>Las '+fac.filter(antes).length+' facturas y el abono hasta el '+F(E.corte)+' son iguales en el sistema y en el estado de cuenta.</b>':'⚠️ <b>Ojo:</b> hasta el '+F(E.corte)+' el sistema tiene facturas '+fmt(fA)+' y abonos '+fmt(pA+nA)+' (el papel dice '+fmt(E.facturas)+' y '+fmt(E.anticipos)+').'}</div>
-  ${det?`<div style="font-size:11px;color:#475569;margin-top:4px">Después del ${F(E.corte)}: ${det}</div>`:''}
-  <div style="font-size:12px;margin-top:6px">De los <b style="color:#dc2626">${fmt(hoy)}</b> de hoy: <b style="color:#b45309">${fmt(Math.max(0,hoy-(R_porDevolverDid()||0)))}</b> son libros que ya vendí (sí o sí pago) y <b style="color:#1d4ed8">${fmt(R_porDevolverDid())}</b> son libros que todavía tengo (si devuelvo, no pago).</div>
-  <details style="margin-top:6px" ${print?'open':''}><summary style="font-size:12px;cursor:pointer">Ver las ${fac.length} facturas (N° · valor) para marcar con el papel</summary><div style="font-size:11px;line-height:1.7;margin-top:4px">${facList}</div><div style="font-size:10px;color:#7c3aed">En morado: las que llegaron después del ${F(E.corte)}.</div></details>
-  </div>`;
-}
-function R_porDevolverDid(){try{const x=resumenNegocio().ed['Didáctica'];return x?x.porDevolver:0;}catch(e){return 0;}}
-// Cuenta con la editorial en filas (una por editorial), igual que la tabla de
-// colegios: facturas − devoluciones − abonos = lo que falta darle. Mónica y su
-// esposo lo entienden mejor así que en un párrafo. print=true para la impresión.
-function tablaEditorialHTML(print){
-  const R=resumenNegocio();
-  const eds=Object.keys(R.ed);
+// TODO el análisis de libros en UNA sola tabla, de arriba a abajo (pedido de
+// Mónica y su esposo): lo que vendí, lo que le debo a la editorial (cuadrado con
+// su estado de cuenta) y lo que gano. Sin gastos de internet/luz: es solo libros.
+function resumenLibrosHTML(print){
+  const R=resumenNegocio(), G=resumenGanancia(), E=ESTADO_CUENTA_DIDACTICA;
   const F=d=>String(d||'').split('-').reverse().join('/');
-  const td=print?'padding:7px 8px;':'padding:7px 8px;';
-  const n=(v,col,b)=>`<td style="${td}text-align:right;${print?'':'font-family:monospace;'}${col?'color:'+col+';':''}${b?'font-weight:700':''}">${fmt(v)}</td>`;
-  const sinNC=x=>Math.max(0,x.debe);
-  const vend=x=>Math.max(0,sinNC(x)-x.porDevolver);
-  const fila=k=>{const x=R.ed[k];
-    return `<tr><td style="${td}font-weight:700">${escH(k)}${x.sinFacturas?'<div style="font-size:11px;font-weight:400;color:#64748b">se le paga solo lo vendido</div>':''}</td>${n(x.facturado)}${n(x.notas,'#7c3aed')}${n(x.pagado,'#16a34a')}${n(sinNC(x),'#dc2626',1)}${n(vend(x),'#b45309',1)}${n(x.porDevolver,'#1d4ed8',1)}</tr>`;};
-  const S=k=>eds.reduce((a,e)=>a+R.ed[e][k],0);
-  const falta=Math.max(0,R.debeEd);
-  const det=[];
-  eds.forEach(k=>{const x=R.ed[k];
-    x.pagos.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).forEach(p=>det.push('Abono '+escH(k)+' '+F(p.fecha)+': <b>'+fmt(parseFloat(p.valor)||0)+'</b>'));
-    x.ncs.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).forEach(c=>det.push('Devolución '+escH(k)+' '+F(c.fecha)+': '+fmt(parseFloat(c.total)||0)));});
-  // Explicación en palabras de las dos últimas columnas (Mónica no las entendía).
-  const frases=eds.map(k=>{const x=R.ed[k];if(sinNC(x)<0.005)return '';
-    return `<li>A <b>${escH(k)}</b> le falta darle <b style="color:#dc2626">${fmt(sinNC(x))}</b>: `+
-      `<b style="color:#b45309">${fmt(vend(x))}</b> son libros que <b>ya vendí</b> a los colegios → <b>eso sí o sí hay que pagarlo</b>`+
-      (x.porDevolver>0.005?`; y <b style="color:#1d4ed8">${fmt(x.porDevolver)}</b> son libros que <b>todavía tengo</b> (en bodega o de muestra en los colegios) → <b>si los devuelvo, no los pago</b> (la editorial me hace nota de crédito).`:'.')+'</li>';}).join('');
-  const th=(t,sub,bg)=>`<th style="padding:7px 8px;text-align:right${bg?';background:'+bg:''}">${t}${sub?'<br><span style="font-weight:400;font-size:11px">'+sub+'</span>':''}</th>`;
-  return `<div style="${print?'margin-top:10px':'margin:0 0 14px'};font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-weight:700;font-size:14px;margin-bottom:4px">📚 EDITORIAL — se le paga todo junto, no por colegio</div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px${print?'':';min-width:800px'}">
-  <thead><tr style="background:#dbeafe"><th style="padding:7px 8px;text-align:left">EDITORIAL</th>${th('FACTURAS','libros que me mandó')}${th('− DEVOLUCIONES','notas de crédito')}${th('− ABONOS','lo que ya le di')}${th('= ME FALTA DARLE','','#fee2e2')}${th('SÍ O SÍ PAGO','libros que ya vendí','#ffedd5')}${th('SI DEVUELVO, NO PAGO','libros que todavía tengo','#dbeafe')}</tr></thead>
-  <tbody>${eds.map(fila).join('')}
-  ${eds.length>1?`<tr style="font-weight:700;background:#f4f4f4"><td style="${td}">TOTAL</td>${n(S('facturado'),'',1)}${n(S('notas'),'#7c3aed',1)}${n(S('pagado'),'#16a34a',1)}${n(falta,'#dc2626',1)}${n(Math.max(0,falta-R.porDevolver),'#b45309',1)}${n(R.porDevolver,'#1d4ed8',1)}</tr>`:''}</tbody></table></div>
-  ${frases?`<ul style="margin:8px 0 4px;padding-left:20px;line-height:1.5">${frases}</ul>`:''}
-  <div style="font-size:11px;color:#64748b;margin-top:4px">${det.join(' · ')}</div>${(()=>{try{return R.ed['Didáctica']?cuadreEstadoCuentaHTML(print):'';}catch(e){console.warn('cuadre estado cuenta',e);return '';}})()}</div>`;
+  const L=comisionesColegiosDatos();
+  const comPag=L.filter(x=>x.pag).reduce((a,x)=>a+x.total,0);
+  const com=G.comisionCol, vend=G.ventas, meSale=vend-com;
+  const D=R.ed['Didáctica']||{facturado:0,notas:0,pagado:0,debe:0,porDevolver:0,pagos:[],ncs:[]};
+  const T=R.ed['Tech Books']||{facturado:0,notas:0,pagado:0,debe:0,porDevolver:0};
+  const deboEd=Math.max(0,R.debeEd), tengo=R.porDevolver, costo=G.costoNeto;
+  // Cuadre con el papel de Didáctica: facturas y abonos hasta la fecha de corte.
+  const esD=n=>grupoEditorial(n)==='Didáctica';
+  const fac=DB.regs.filter(r=>esCompraEditorial(r)&&esD(r.proveedor)).sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+  const val=x=>parseFloat(x.total??x.valor)||0, sum=arr=>arr.reduce((t,x)=>t+val(x),0);
+  const antes=x=>String(x.fecha||'')<=E.corte;
+  const facA=fac.filter(antes), facD=fac.filter(x=>!antes(x));
+  const pagos=D.pagos.slice().sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+  const pagA=pagos.filter(antes);
+  const cuadra=Math.abs(sum(facA)-E.facturas)<0.01&&Math.abs(sum(pagA)-E.anticipos)<0.01;
+  const mono=print?'':'font-family:monospace;';
+  const sec=(t,bg)=>`<tr><td colspan="4" style="padding:8px 10px;background:${bg};font-weight:800;font-size:13px;letter-spacing:.3px">${t}</td></tr>`;
+  // tipo: '' normal, 'igual' (resultado, en negrita), 'sub' (detalle, con sangría)
+  const row=(n,txt,v,nota,tipo,col)=>{
+    const big=tipo==='igual', sub=tipo==='sub';
+    return `<tr style="border-top:${big?'2px solid #334155':'1px solid #e2e8f0'}${big?';background:#f8fafc':''}">
+      <td style="padding:7px 8px;text-align:center;color:#64748b;width:28px">${n}</td>
+      <td style="padding:7px 10px;${sub?'padding-left:30px;color:#475569;':''}${big?'font-weight:800;':'font-weight:600;'}">${txt}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap;${mono}${big?'font-weight:800;font-size:15px;':sub?'':'font-weight:700;'}color:${col||'#111'}">${v}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#475569">${nota||''}</td></tr>`;};
+  const m=v=>fmt(v), menos=v=>'− '+fmt(v);
+  return `<div style="margin:${print?'10px 0':'0 0 16px'};font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <div style="font-weight:800;font-size:16px;margin-bottom:6px">📚 MIS LIBROS: lo que vendí, lo que le debo a la editorial y lo que gano</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #cbd5e1">
+  <thead><tr><th style="padding:7px 8px;background:#e2e8f0;color:#0f172a;font-weight:800">#</th><th style="padding:7px 10px;text-align:left;background:#e2e8f0;color:#0f172a;font-weight:800">CONCEPTO</th><th style="padding:7px 10px;text-align:right;background:#e2e8f0;color:#0f172a;font-weight:800">VALOR</th><th style="padding:7px 10px;text-align:left;background:#e2e8f0;color:#0f172a;font-weight:800">PARA ENTENDER</th></tr></thead>
+  <tbody>
+  ${sec('① LO QUE VENDÍ A LOS COLEGIOS','#fef3c7')}
+  ${row(1,'Vendí a los colegios',m(vend),'a precio de venta (PVP)')}
+  ${row(2,'Comisión para los colegios',menos(com),'ya entregué '+m(comPag)+' · falta entregar '+m(Math.max(0,com-comPag)),'','#b45309')}
+  ${row(3,'= Me toca recibir de los colegios',m(meSale),'1 − 2','igual','#0369a1')}
+  ${row('','Ya me pagaron',m(R.cobrado),'','sub','#16a34a')}
+  ${row('','Me falta cobrar',m(R.porCobrar),'','sub','#dc2626')}
+  ${sec('② LO QUE LE DEBO A LA EDITORIAL','#dbeafe')}
+  ${row(4,'Facturas de Didáctica',m(D.facturado),(cuadra?'✅ ':'⚠️ ')+'su estado de cuenta al '+F(E.corte)+' dice '+m(E.facturas)+(facD.length?' + '+facD.length+' factura(s) que llegaron después ('+m(sum(facD))+')':'')+(cuadra?'':' · <b>no cuadra con el sistema ('+m(sum(facA))+')</b>'))}
+  ${row(5,'Devoluciones a Didáctica',menos(D.notas),D.ncs.length?D.ncs.length+' nota(s) de crédito, '+[...new Set(D.ncs.map(n=>F(n.fecha)))].sort().join(' y '):'','','#7c3aed')}
+  ${row(6,'Abonos a Didáctica',menos(D.pagado),pagos.map(p=>F(p.fecha)+' '+m(val(p))).join(' · ')+(pagA.length&&pagA.length<pagos.length?' (su estado de cuenta solo trae '+m(sum(pagA))+' porque es del '+F(E.corte)+')':''),'','#16a34a')}
+  ${row(7,'= Le debo a Didáctica',m(Math.max(0,D.debe)),'4 − 5 − 6','igual','#dc2626')}
+  ${T.facturado||T.pagado?row(8,'Le debo a Tech Books',m(Math.max(0,T.debe)),'se le paga solo lo vendido ('+m(T.facturado)+') − abonos ('+m(T.pagado)+')','','#dc2626'):''}
+  ${row(9,'= TOTAL que le debo a las editoriales',m(deboEd),'7 + 8','igual','#dc2626')}
+  ${tengo>0.005?row('','De eso, libros que ya vendí',m(Math.max(0,deboEd-tengo)),'→ <b>esto sí o sí lo pago</b>','sub','#b45309'):''}
+  ${tengo>0.005?row('','De eso, libros que todavía tengo',m(tengo),'en bodega o de muestra en colegios → <b>si los devuelvo, no los pago</b>','sub','#1d4ed8'):''}
+  ${sec('③ LO QUE GANO CON LOS LIBROS','#dcfce7')}
+  ${row(10,'Me toca recibir de los colegios',m(meSale),'es la fila 3')}
+  ${row(11,'Costo de los libros que vendí',menos(costo),'lo que la editorial me cobra solo por los libros vendidos','','#1d4ed8')}
+  ${row(12,'= GANO',m(meSale-costo),'10 − 11 · solo libros (sin internet, luz, etc.)','igual','#16a34a')}
+  </tbody></table>
+  <details style="margin-top:6px" ${print?'open':''}><summary style="font-size:12px;cursor:pointer">Ver las ${fac.length} facturas de Didáctica para marcar con su estado de cuenta</summary>
+  <div style="font-size:11px;line-height:1.7;margin-top:4px">${fac.map(r=>`<span style="display:inline-block;min-width:140px;${antes(r)?'':'color:#7c3aed;font-weight:700'}">${escH(String(r.numFact||'').split('-').pop().replace(/^0+/,''))} · ${m(val(r))}</span>`).join('')}</div>
+  ${facD.length?`<div style="font-size:10px;color:#7c3aed">En morado: las que llegaron después del ${F(E.corte)} (todavía no salen en su estado de cuenta).</div>`:''}</details>
+  </div>`;
 }
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
@@ -12848,9 +12812,6 @@ function renderComisionesColegios(){
   const pend=conCom.filter(x=>!x.pag), pag=conCom.filter(x=>x.pag);
   const tPend=pend.reduce((a,x)=>a+x.total,0), tPag=pag.reduce((a,x)=>a+x.total,0);
   const S=k=>conCom.reduce((a,x)=>a+x[k],0);
-  // La editorial se paga toda junta (no por colegio): mismo cálculo que el Resumen del negocio.
-  let edBox='';
-  try{edBox=tablaEditorialHTML(false);}catch(e){console.warn('comisiones editorial',e);}
   const fila=x=>`<tr style="${x.pag?'background:#f0fdf4':''}">
     <td style="padding:6px 8px;font-weight:600">${escH(x.nombre)}</td>
     <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmt(x.tv)}</td>
@@ -12861,16 +12822,10 @@ function renderComisionesColegios(){
     <td style="padding:6px 8px;text-align:center;font-weight:600;color:${veredictoComision(x).col}">${veredictoComision(x).txt}<div style="font-size:10px;color:var(--mu);font-weight:400">comisión ${x.tv>0?Math.round(x.total/x.tv*100):0}% · ganancia ${x.tv>0?Math.round(x.gan/x.tv*100):0}% de lo vendido</div></td>
     <td style="padding:6px 8px;text-align:center">${x.pag?'✅ Pagada '+escH(String(x.pag.fecha||'').split('-').reverse().join('/'))+' <button class="btn btn-s btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')" title="Deshacer">↩</button>'
       :'<button class="btn btn-p btn-sm" onclick="toggleComisionPagada(\''+escH(x.nombre).replace(/'/g,"\\'")+'\')">Marcar pagada</button>'}</td></tr>`;
-  let secBox='';try{secBox=resumenSecuenciaHTML(false);}catch(e){console.warn('comisiones secuencia',e);}
+  let resBox='';try{resBox=resumenLibrosHTML(false);}catch(e){console.warn('comisiones resumen libros',e);}
   box.innerHTML=`
-    ${secBox}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:10px">
-      <div class="sc"><div class="sc-lbl">Falta pagar</div><div class="sc-val" style="color:#b45309">${fmt(tPend)}</div><div class="sc-sub">${pend.length} colegio(s)</div></div>
-      <div class="sc"><div class="sc-lbl">Ya pagado</div><div class="sc-val cg">${fmt(tPag)}</div><div class="sc-sub">${pag.length} colegio(s)</div></div>
-      <div class="sc"><div class="sc-lbl">Total comisiones</div><div class="sc-val">${fmt(tPend+tPag)}</div><div class="sc-sub">${S('tv')>0?Math.round((tPend+tPag)/S('tv')*100):0}% de lo vendido</div></div>
-      <div class="sc"><div class="sc-lbl">Mi ganancia (estos colegios)</div><div class="sc-val cg">${fmt(S('gan'))}</div><div class="sc-sub">ya descontada comisión y editorial</div></div>
-    </div>
-    ${edBox}
+    ${resBox}
+    <div style="font-weight:800;font-size:14px;margin:4px 0 6px">🏫 COMISIÓN POR COLEGIO (falta entregar ${fmt(tPend)} · ya entregado ${fmt(tPag)})</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
       <thead><tr style="background:#fef3c7"><th style="padding:7px 8px;text-align:left">COLEGIO</th><th style="padding:7px 8px;text-align:right">VENDIDO (PVP)</th><th style="padding:7px 8px">%</th><th style="padding:7px 8px;text-align:right">PARA EL COLEGIO<br><span style="font-weight:400;font-size:10px">comisión</span></th><th style="padding:7px 8px;text-align:right">PARA LA EDITORIAL<br><span style="font-weight:400;font-size:10px">costo de los libros</span></th><th style="padding:7px 8px;text-align:right">PARA MÍ<br><span style="font-weight:400;font-size:10px">mi ganancia</span></th><th style="padding:7px 8px">¿ME RESULTA?</th><th style="padding:7px 8px">ESTADO</th></tr></thead>
       <tbody>${pend.map(fila).join('')}${pag.map(fila).join('')}
@@ -12905,9 +12860,8 @@ function imprimirComisionesColegios(){
   win.document.write(`<html><head><title>Comisiones a colegios</title>
   <style>@page{size:landscape}body{font-family:Arial,sans-serif;padding:15px;font-size:11px}table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#e0e0e0;padding:6px;border:1px solid #999}td{padding:6px 7px;border:1px solid #ccc}h3{font-size:13px;margin:16px 0 4px}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Comisiones que debo pagar a los colegios','Al '+new Date().toLocaleDateString('es-EC'))}
-  ${(()=>{try{return resumenSecuenciaHTML(true);}catch(e){return '';}})()}
-  <div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:10px 14px;font-size:15px"><b>FALTA PAGAR EN COMISIONES: ${fmt(tPend)}</b> (${pend.length} colegio(s))</div>
-  ${(()=>{try{return tablaEditorialHTML(true);}catch(e){return '';}})()}
+  ${(()=>{try{return resumenLibrosHTML(true);}catch(e){return '';}})()}
+  <h3>COMISIÓN POR COLEGIO — falta entregar ${fmt(tPend)} (${pend.length} colegio(s))</h3>
   <table><tr><th></th><th style="text-align:left">COLEGIO</th><th>VENDIDO (PVP)</th><th>%</th><th>PARA EL COLEGIO (comisión)</th><th>PARA LA EDITORIAL</th><th>PARA MÍ (ganancia)</th><th>¿ME RESULTA?</th><th>ESTADO</th></tr>
   ${pend.map(fila).join('')}${pag.map(fila).join('')}
   <tr><td></td><td><b>TOTAL</b></td><td align="right"><b>${fmt(S('tv'))}</b></td><td></td><td align="right"><b>${fmt(S('total'))}</b></td><td align="right"><b>${fmt(S('costo'))}</b></td><td align="right"><b>${fmt(S('gan'))}</b></td><td colspan="2"><b>Falta pagar: ${fmt(tPend)}</b></td></tr></table>
