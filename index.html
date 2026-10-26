@@ -10413,8 +10413,15 @@ function abonosColegio(nombre){
 // ¿Este cobro es de este colegio? Primero por el nombre de quien pagó. Si ese
 // nombre no es de NINGÚN colegio (ej. "Dra. Patricia Osorio", la rectora), se
 // mira la nota ("abono ... Colegio Hernán Malo Gonzales").
+// Quienes depositan a nombre propio para un colegio (lo dijo Mónica, 26-oct-2026):
+// "Librería La Feria Tumbaco" y Nicole Ninahualpa pagan por COMENIOS.
+const PAGADORES_COLEGIO={'COMENIOS':/TUMBACO|LA FERIA|NINAHUALPA/i};
 function _cobroEsDeColegio(p,nombre){
   const nom=p.nombre||'';
+  const txt=nom+' '+(p.nota||'');
+  const deAlias=Object.keys(PAGADORES_COLEGIO).find(k=>PAGADORES_COLEGIO[k].test(txt));
+  if(deAlias&&!colegiosList().some(c=>c.nombre!==deAlias&&(c.nombre===nom||_coincideColegio(nom,c.nombre))))
+    return _normNombre(deAlias)===_normNombre(nombre);
   if(nom===nombre||_coincideColegio(nom,nombre))return true;
   if(!p.nota)return false;
   if(colegiosList().some(c=>c.nombre===nom||_coincideColegio(nom,c.nombre)))return false;
