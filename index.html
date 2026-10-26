@@ -5808,12 +5808,56 @@ function guardarRetiroGuia(id){
   alert(msg);
 }
 
-// Descarga un .xls de verdad (no CSV) para que Excel abra las columnas
-// separadas siempre, sin depender de la configuración regional de la PC.
+// Descarga un Excel .xlsx DE VERDAD, armado con SheetJS a partir de la misma
+// tabla HTML que arman las funciones de exportar: x:num = número, x:fmla =
+// fórmula, colspan = celdas combinadas, mso-number-format '0.00' / '0' = formato.
+// Antes se bajaba un .xls que por dentro era HTML: la PC lo abría bien, pero en
+// el celular (WhatsApp) el PVP salía "027" (26-oct-2026). Sin SheetJS (sin
+// internet) queda el .xls de antes.
 function bajarXLS(html,nombre){
-  // Celdas de dinero sin x:num: se lo pongo, para que Excel/WPS las lea como
-  // número aunque la PC use coma decimal.
+  // Celdas de dinero sin x:num: se lo pongo, para que se lean como número.
   html=html.replace(/<td([^>]*mso-number-format:'0\.00'[^>]*)>(-?\d+(?:\.\d+)?)<\/td>/g,(m,a,v)=>/x:num/.test(a)?m:'<td'+a+' x:num="'+v+'">'+v+'</td>');
+  if(typeof XLSX!=='undefined'){
+    try{
+      const tabla=new DOMParser().parseFromString('<html><body>'+html+'</body></html>','text/html').querySelector('table');
+      const ws={},merges=[],ocupado={},anchos=[];
+      let maxC=0,r=0;
+      tabla.querySelectorAll('tr').forEach(tr=>{
+        let c=0;
+        tr.querySelectorAll('td,th').forEach(td=>{
+          while(ocupado[r+','+c])c++;
+          const cs=parseInt(td.getAttribute('colspan')||'1',10)||1;
+          const st=td.getAttribute('style')||'';
+          const fm=td.getAttribute('x:fmla'), xn=td.getAttribute('x:num');
+          const txt=(td.textContent||'').replace(/\s+/g,' ').trim();
+          const ref=XLSX.utils.encode_cell({r,c});
+          // Número: el x:num, o el texto si la celda tiene formato '0' / '0.00'
+          // (las demás exportaciones no ponen x:num en los enteros).
+          const esFmtNum=/mso-number-format:'0(\.00)?'/.test(st);
+          const nv=(xn!==null&&xn!==''&&!isNaN(parseFloat(xn)))?parseFloat(xn):(esFmtNum&&/^-?\d+(\.\d+)?$/.test(txt)?parseFloat(txt):null);
+          if(nv!==null){
+            const cel={t:'n',v:nv};
+            if(fm)cel.f=fm.replace(/^=/,'');
+            if(/mso-number-format:'0\.00'/.test(st))cel.z='#,##0.00';
+            else if(/mso-number-format:'0'/.test(st))cel.z='0';
+            ws[ref]=cel;
+          }else if(txt){
+            ws[ref]={t:'s',v:txt};
+          }
+          if(cs>1){merges.push({s:{r,c},e:{r,c:c+cs-1}});for(let k=1;k<cs;k++)ocupado[r+','+(c+k)]=1;}
+          else if(txt)anchos[c]=Math.max(anchos[c]||0,Math.min(50,txt.length+2));
+          c+=cs;maxC=Math.max(maxC,c);
+        });
+        r++;
+      });
+      ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(0,r-1),c:Math.max(0,maxC-1)}});
+      if(merges.length)ws['!merges']=merges;
+      ws['!cols']=Array.from({length:maxC},(_,i)=>({wch:Math.max(9,anchos[i]||9)}));
+      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Hoja1');
+      XLSX.writeFile(wb,nombre.replace(/\.xlsx?$/i,'')+'.xlsx');
+      return;
+    }catch(e){console.warn('xlsx: se baja el .xls de antes',e);}
+  }
   const doc=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="utf-8">
   <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
@@ -10576,7 +10620,7 @@ function exportarComoEditorialXLS(nombre,parte){
       <tr><td colspan="${N-1}" class="tot" style="text-align:right">SALDO A CANCELAR (USD) — si sale negativo, es saldo a favor del colegio</td><td class="tot" style="${XLS_NUM}" x:num="${saldo.toFixed(2)}" x:fmla="=${V}${filaTot}-${V}${filaAb}">${saldo.toFixed(2)}</td></tr>`;
     })()}
   </table>`;
-  const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+(PARTES_EDITORIAL[parte]?' '+PARTES_EDITORIAL[parte]:'')+' '+today()+'.xls';
+  const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+(PARTES_EDITORIAL[parte]?' '+PARTES_EDITORIAL[parte]:'')+' '+today()+'.xlsx';
   bajarXLS(html,archivo);
   toast('Excel descargado: '+archivo,'ok');
 }
@@ -12990,7 +13034,7 @@ function exportarComisionesXLS(){
     <tr><th class="th">COLEGIO</th><th class="th">1 VENDÍ (precio de venta)</th><th class="th">2 − COMISIÓN (para el colegio)</th><th class="th">3 = ME TOCA RECIBIR (1−2)</th><th class="th">YA ME PAGÓ</th><th class="th">ME FALTA COBRAR</th><th class="th">4 − EDITORIAL (costo libros vendidos)</th><th class="th">5 = GANO (3−4)</th><th class="th">¿ME RESULTA?</th><th class="th">COMISIÓN ¿entregada?</th></tr>
     ${filas}${totRow}${ed}
   </table>`;
-  const archivo='Comisiones y ganancia '+today()+'.xls';
+  const archivo='Comisiones y ganancia '+today()+'.xlsx';
   bajarXLS(html,archivo);
   toast('Excel descargado: '+archivo,'ok');
 }
