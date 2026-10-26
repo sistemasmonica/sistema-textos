@@ -9914,6 +9914,7 @@ function renderControl(){
     <button class="btn btn-s" onclick="imprimirControl('${nombre}')"><i class="ti ti-printer"></i> Imprimir</button>
     <button class="btn btn-s" style="background:#2e7d32;color:#fff" onclick="imprimirEstadoCuenta('${nombre}')" title="Documento para llevar a cobrar: lo vendido, lo pagado y el saldo — sin mostrar tu costo ni ganancia"><i class="ti ti-file-invoice"></i> Estado de cuenta</button>
     <button class="btn btn-s" style="background:#6a1b9a;color:#fff" onclick="imprimirComoEditorial('${nombre}',parteEditorialSel())" title="Mismo formato que usan las editoriales (Cantidad inicial/Devueltos/Cantidad final/PVP/Descuento/Precio final), agrupado y con subtotales — para mandarle a la rectora o al colegio en el formato que ya conocen"><i class="ti ti-file-text"></i> Formato editorial</button>
+    <button class="btn btn-s" style="background:#b45309;color:#fff" onclick="imprimirComoEditorial('${nombre}',parteEditorialSel(),true)" title="Hoja impresa con DEVUELTOS, CANTIDAD FINAL y VALOR en blanco, para anotar a mano en el colegio">📝 Hoja para anotar devoluciones</button>
     <button class="btn btn-s" style="background:#1d6f42;color:#fff" onclick="exportarComoEditorialXLS('${nombre}',parteEditorialSel())" title="El mismo Formato editorial, pero en Excel"><i class="ti ti-file-spreadsheet"></i> Formato editorial Excel</button>
     <select id="ctrl-parte-ed" title="Qué libros incluir en el Formato editorial (impreso y Excel)" style="padding:6px 8px;border:2px solid #6a1b9a;border-radius:6px;font-size:12px;font-weight:600;color:#6a1b9a" onchange="window._parteEd=this.value">
       <option value="todo">📚 Todo</option>
@@ -10371,14 +10372,18 @@ function _cobroEsDeColegio(p,nombre){
 }
 // enBlanco=true: hoja para llevar al colegio y anotar a mano lo devuelto
 // (DEVUELTOS, CANTIDAD FINAL, VALOR TOTAL y saldos salen vacíos).
-function imprimirComoEditorial(nombre,parte,enBlanco){
+function imprimirComoEditorial(nombre,parte,enBlanco,destino){
   const d=DB.colData[nombre];if(!d)return;
   parte=parte||'todo';
   const B=v=>enBlanco?'':v;
   const grupos=gruposComoEditorial(d,parte);
   if(!grupos.length) return toast(parte==='en'?'Este colegio no tiene libros de Tech Books':'Este colegio no tiene libros de Didáctica','err');
   const sufijo=PARTES_EDITORIAL[parte]?' — '+PARTES_EDITORIAL[parte]:'';
-  const win=window.open('','_blank');
+  // destino: la misma ventana del estado de cuenta (botón naranja). Abrir otra
+  // ventana desde ahí la bloquea el navegador.
+  const win=destino||window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  if(destino) win.document.open();
   let granTotal=0;
   const bloques=grupos.map(g=>{
     let sCant=0,sDev=0,sFinal=0,sValor=0;
@@ -10470,7 +10475,7 @@ function imprimirComoEditorial(nombre,parte,enBlanco){
   </style></head><body>
   <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
   <button class="btn-print" style="background:#1d6f42" onclick="window.opener&&window.opener.exportarComoEditorialXLS(${JSON.stringify(nombre).replace(/"/g,'&quot;')},'${parte}')">📊 Descargar Excel</button>
-  <button class="btn-print" style="background:#b45309" onclick="window.opener&&window.opener.imprimirComoEditorial(${JSON.stringify(nombre).replace(/"/g,'&quot;')},'${parte}',true)" title="Para llevar impresa al colegio y escribir a mano los devueltos">📝 Hoja para anotar devoluciones (en blanco)</button>
+  <button class="btn-print" style="background:#b45309" onclick="window.opener&&window.opener.imprimirComoEditorial(${JSON.stringify(nombre).replace(/"/g,'&quot;')},'${parte}',true,window)" title="Para llevar impresa al colegio y escribir a mano los devueltos">📝 Hoja para anotar devoluciones (en blanco)</button>
   ${dmPrintHeader('Estado de cuenta'+sufijo,nombre)}
   ${bloques}
   <div style="height:10px"></div>
