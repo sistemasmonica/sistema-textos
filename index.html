@@ -2151,6 +2151,7 @@ async function syncFromCloud(){
     try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
     try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
     try{reparacionOct2026b();}catch(e){console.warn('Reparación oct-2026 (2):',e);}
+    try{reparacionOct2026c();}catch(e){console.warn('Reparación oct-2026 (3):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -12218,6 +12219,24 @@ function reparacionOct2026b(){
   logHistorial(MARCA,nota+aj.length+' ajuste(s) automático(s) de inventario según Control de ventas');
   save();
   try{renderCatalogo();renderStockReport();renderAuditoria();}catch(e){}
+}
+// Los depósitos "LIBRERIA LA FERIA TUMBACO" (ago–sep 2026, $2,162) son pagos del
+// colegio COMENIOS (lo confirmó Mónica el 26-oct). Se cambian solo esos 11, una vez.
+function reparacionOct2026c(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 26-oct: depósitos Tumbaco son de COMENIOS';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const ids=['1787410756149_t1wn88','1788482588259_7n376k','1788482895576_ymay9t','1788482947929_61un60','1788553721327_cztmgu','1789425389064_sjqlal','1789425449941_bil740','1789425673312_znxo9u','1789425726981_uctpiq','1790807378697_v6u8cn','1790807645519_yca9mu'];
+  const col=colegiosList().find(c=>/COMENIO/i.test(c.nombre));if(!col)return;
+  let n=0,t=0;
+  (DB.pagos||[]).forEach(p=>{
+    if(!ids.includes(p.id)||p.tipo!=='cobro'||!/TUMBACO/i.test(p.nombre||''))return;
+    p.nota='Depósito Tumbaco (antes a nombre de '+p.nombre+')'+(p.nota?' · '+p.nota:'');
+    p.nombre=col.nombre;n++;t+=parseFloat(p.valor)||0;
+  });
+  logHistorial(MARCA,n+' cobro(s) por $'+t.toFixed(2)+' pasan a '+col.nombre);
+  save();
+  try{renderPagos();renderPorCobrar();renderComisiones();}catch(e){}
 }
 // Libros que se le pagan a Tech Books: los de inglés y los de Robótica
 // (Robótica la provee Marcos de Tech Books aunque el catálogo diga "DM BOOKS").
