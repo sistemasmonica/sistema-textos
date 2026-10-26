@@ -12817,10 +12817,10 @@ const ESTADO_CUENTA_DIDACTICA={corte:'2026-10-06',facturas:54443,anticipos:7000,
 // editorial = gano. Abajo, en la misma tabla, cómo va la cuenta con la
 // editorial (cuadrada con su estado de cuenta). Solo libros: sin internet/luz.
 // Pedido de Mónica y su esposo: no varias tablas, todo junto y en horizontal.
-function tablaComisionesHTML(print){
+// Una fila por colegio con venta (o con cobros): misma cifra en pantalla,
+// impresión y Excel.
+function filasComisiones(){
   initColData();
-  const R=resumenNegocio(), E=ESTADO_CUENTA_DIDACTICA;
-  const F=d=>String(d||'').split('-').reverse().join('/');
   const pc={};saldosPorCobrarColegios().filas.forEach(x=>pc[x.colegio]=x);
   const L=colegiosList().map(c=>{
     const d=DB.colData[c.nombre];if(!d)return null;
@@ -12831,6 +12831,12 @@ function tablaComisionesHTML(print){
     const pct=total<=0.005?'':(pcts.length===1&&pcts[0]>0?pcts[0]+'%':(pcts.filter(p=>p>0).length?'varios %':'capacitación'));
     return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(neto-cobrado),costo,gan:r2(neto-costo),pag:d.comisionPagada||null};
   }).filter(x=>x&&(x.tv>0||x.cobrado>0)).sort((a,b)=>b.tv-a.tv);
+  return L;
+}
+function tablaComisionesHTML(print){
+  const R=resumenNegocio(), E=ESTADO_CUENTA_DIDACTICA;
+  const F=d=>String(d||'').split('-').reverse().join('/');
+  const L=filasComisiones();
   const S=k=>L.reduce((a,x)=>a+x[k],0);
   const comPend=L.filter(x=>x.total>0.005&&!x.pag).reduce((a,x)=>a+x.total,0);
   const mono=print?'':'font-family:monospace;';
@@ -12909,10 +12915,65 @@ function tablaComisionesHTML(print){
   <div style="font-size:11px;color:#64748b;margin-top:6px">Todo sale del <b>Control de ventas</b> de cada colegio y de Pagos. Es solo de libros: no incluye internet, luz ni otros gastos.<br><b>¿Me resulta?</b> 🟢 mi ganancia es mayor que la comisión · 🟠 le di al colegio más de lo que gané yo · 🔴 pierdo plata.</div>
   </div>`;
 }
+// Misma tabla de Comisiones en Excel, para mandársela al esposo de Mónica.
+// Con fórmulas: D=B−C, F=D−E, H=D−G, totales con SUMA y la cuenta de cada
+// editorial (facturas − devoluciones − abonos). x:num: número sin depender de
+// la coma o punto decimal de la PC.
+function exportarComisionesXLS(){
+  const L=filasComisiones(), R=resumenNegocio(), E=ESTADO_CUENTA_DIDACTICA;
+  const F=d=>String(d||'').split('-').reverse().join('/');
+  const c='class="c"';
+  const num=(v,extra)=>`<td ${c} style="${XLS_NUM}${extra||''}" x:num="${(+v).toFixed(2)}">${(+v).toFixed(2)}</td>`;
+  const fx=(f,v,extra,cls)=>`<td class="${cls||'c'}" style="${XLS_NUM}${extra||''}" x:num="${(+v).toFixed(2)}" x:fmla="${f}">${(+v).toFixed(2)}</td>`;
+  const corto={'Sin comisión':'—','🟢 Me resulta':'Sí','🟠 Di más de lo que gané':'Di más de lo que gané','🔴 Pierdo':'Pierdo'};
+  // Filas de Excel: 1 título, 2 fecha, 3 vacía, 4 encabezado, 5.. colegios
+  let fila=4;const desde=5;
+  const filas=L.map(x=>{fila++;const v=veredictoComision(x);
+    return `<tr><td ${c} style="${XLS_TXT};font-weight:bold">${escH(x.nombre)}</td>${num(x.tv)}${num(x.total,';color:#b45309')}${fx('=B'+fila+'-C'+fila,x.neto,';color:#0369a1;font-weight:bold')}${num(x.cobrado,';color:#16a34a')}${fx('=D'+fila+'-E'+fila,x.falta,';color:#dc2626')}${num(x.costo,';color:#1d4ed8')}${fx('=D'+fila+'-G'+fila,x.gan,';color:#16a34a;font-weight:bold')}<td ${c} style="text-align:center">${corto[v.txt]||v.txt}</td><td ${c} style="text-align:center">${x.total<=0.005?'—':(x.pag?'Entregada '+F(x.pag.fecha):'Por entregar')}</td></tr>`;}).join('');
+  const hasta=fila;fila++;const filaTot=fila;
+  const S=k=>L.reduce((a,x)=>a+x[k],0);
+  const sumCol=(k,col,extra)=>fx('=SUM('+col+desde+':'+col+hasta+')',S(k),extra,'tot');
+  const totRow=`<tr><td class="tot">TOTAL</td>${sumCol('tv','B')}${sumCol('total','C')}${sumCol('neto','D')}${sumCol('cobrado','E')}${sumCol('falta','F')}${sumCol('costo','G')}${sumCol('gan','H')}<td class="tot" colspan="2">Comisión por entregar: ${L.filter(x=>x.total>0.005&&!x.pag).reduce((a,x)=>a+x.total,0).toFixed(2)}</td></tr>`;
+  // Editoriales: etiqueta en A:F, valor en G, nota en H:J
+  const D=R.ed['Didáctica'], TB=R.ed['Tech Books'];
+  const lp=arr=>arr.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).map(p=>F(p.fecha)+': '+(parseFloat(p.valor)||0).toFixed(2)).join(' · ');
+  let ed=`<tr><td colspan="10"></td></tr><tr><td colspan="10" class="grp">LAS EDITORIALES — los ${S('costo').toFixed(2)} de la columna EDITORIAL se pagan aparte, a cada editorial (no por colegio)</td></tr>`;fila+=2;
+  const edRow=(txt,celda,nota,bold)=>{fila++;return `<tr><td colspan="6" ${c} style="${XLS_TXT};text-align:right;${bold?'font-weight:bold':''}">${txt}</td>${celda}<td colspan="3" ${c} style="${XLS_TXT};font-size:9pt;color:#555555">${nota||''}</td></tr>`;};
+  const deudas=[];
+  const bloque=(tit,x,etFact,notaFact,notaDeuda)=>{
+    if(!x)return;
+    ed+=`<tr><td colspan="10" class="sub-t">${tit}</td></tr>`;fila++;
+    ed+=edRow(etFact,num(x.facturado),notaFact);const fF=fila;
+    let fN=null;if(x.notas>0.005){ed+=edRow('− Devoluciones (notas de crédito)',num(x.notas,';color:#7c3aed'),x.ncs.length+' nota(s) de crédito');fN=fila;}
+    ed+=edRow('− Abonos',num(x.pagado,';color:#16a34a'),lp(x.pagos));const fA=fila;
+    ed+=edRow('= LE DEBO A '+tit,fx('=G'+fF+(fN?'-G'+fN:'')+'-G'+fA,x.facturado-x.notas-x.pagado,';color:#dc2626;font-weight:bold'),notaDeuda,1);deudas.push('G'+fila);
+  };
+  if(D){
+    const esD=n=>grupoEditorial(n)==='Didáctica';
+    const fac=DB.regs.filter(r=>esCompraEditorial(r)&&esD(r.proveedor));
+    const val=x=>parseFloat(x.total)||0, antes=x=>String(x.fecha||'')<=E.corte;
+    const facD=fac.filter(x=>!antes(x));
+    const cuadra=Math.abs(fac.filter(antes).reduce((a,x)=>a+val(x),0)-E.facturas)<0.01;
+    bloque('DIDÁCTICA',D,'Facturas de Didáctica',(cuadra?'✔ igual a su estado de cuenta: ':'⚠ revisar: ')+E.facturas.toFixed(2)+' al '+F(E.corte)+(facD.length?' + '+facD.length+' factura(s) que llegaron después: '+facD.reduce((a,x)=>a+val(x),0).toFixed(2):''),
+      D.porDevolver>0.005?'de eso: '+Math.max(0,D.debe-D.porDevolver).toFixed(2)+' por libros que ya vendí (sí o sí pago) + '+D.porDevolver.toFixed(2)+' por libros que todavía tengo (si los devuelvo, no los pago)':'');
+  }
+  bloque('TECH BOOKS (Marco)',TB,'Libros de Tech Books que vendí','a Tech Books se le paga solo lo vendido','');
+  if(deudas.length>1){fila++;ed+=`<tr><td colspan="6" class="tot" style="text-align:right">TOTAL A LAS DOS EDITORIALES</td>${fx('='+deudas.join('+'),Math.max(0,R.debeEd),'','tot')}<td colspan="3" class="tot"></td></tr>`;}
+  const html=`<table>
+    <tr><td colspan="10" class="tit">${escH(DM_EMPRESA.nombre)} — MIS LIBROS: VENDÍ, COMISIÓN, EDITORIAL Y GANANCIA</td></tr>
+    <tr><td colspan="10" class="sub">Al ${xlsFecha(today())} · solo libros (sin internet, luz ni otros gastos)</td></tr>
+    <tr><td colspan="10"></td></tr>
+    <tr><th class="th">COLEGIO</th><th class="th">1 VENDÍ (precio de venta)</th><th class="th">2 − COMISIÓN (para el colegio)</th><th class="th">3 = ME TOCA RECIBIR (1−2)</th><th class="th">YA ME PAGÓ</th><th class="th">ME FALTA COBRAR</th><th class="th">4 − EDITORIAL (costo libros vendidos)</th><th class="th">5 = GANO (3−4)</th><th class="th">¿ME RESULTA?</th><th class="th">COMISIÓN ¿entregada?</th></tr>
+    ${filas}${totRow}${ed}
+  </table>`;
+  const archivo='Comisiones y ganancia '+today()+'.xls';
+  bajarXLS(html,archivo);
+  toast('Excel descargado: '+archivo,'ok');
+}
 function renderComisionesColegios(){
   const box=document.getElementById('com-col-lista');if(!box)return;
   // Botón grande de imprimir arriba y abajo de la tabla (Mónica no veía el de la esquina).
-  const btn=`<div style="text-align:right;margin:6px 0"><button class="btn btn-p" style="font-size:14px;padding:8px 16px" onclick="imprimirComisionesColegios()">🖨️ IMPRIMIR ESTA TABLA</button></div>`;
+  const btn=`<div style="text-align:right;margin:6px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" style="font-size:14px;padding:8px 16px;background:#1d6f42;color:#fff" onclick="exportarComisionesXLS()">📊 DESCARGAR EXCEL</button><button class="btn btn-p" style="font-size:14px;padding:8px 16px" onclick="imprimirComisionesColegios()">🖨️ IMPRIMIR ESTA TABLA</button></div>`;
   try{box.innerHTML=btn+tablaComisionesHTML(false)+btn;}catch(e){console.warn('comisiones colegios',e);box.innerHTML='';}
 }
 function toggleComisionPagada(nombre){
