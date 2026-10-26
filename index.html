@@ -5810,6 +5810,9 @@ function guardarRetiroGuia(id){
 // Descarga un .xls de verdad (no CSV) para que Excel abra las columnas
 // separadas siempre, sin depender de la configuración regional de la PC.
 function bajarXLS(html,nombre){
+  // Celdas de dinero sin x:num: se lo pongo, para que Excel/WPS las lea como
+  // número aunque la PC use coma decimal.
+  html=html.replace(/<td([^>]*mso-number-format:'0\.00'[^>]*)>(-?\d+(?:\.\d+)?)<\/td>/g,(m,a,v)=>/x:num/.test(a)?m:'<td'+a+' x:num="'+v+'">'+v+'</td>');
   const doc=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
   <head><meta charset="utf-8">
   <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
@@ -5837,7 +5840,9 @@ function bajarXLS(html,nombre){
 // clase CSS: Excel ignora la segunda clase de un class="a b" y entonces convierte
 // los n° de factura largos a notación científica (1,001E+12).
 const XLS_TXT="mso-number-format:'\\@'";                        // texto tal cual
-const XLS_NUM="mso-number-format:'0\\.00';text-align:right";    // 1234.50
+// '0.00' SIN barra: el punto es el decimal y cada programa lo muestra con su
+// separador (27,00 o 27.00). Con '0\.00' el WPS de Mónica mostraba "027".
+const XLS_NUM="mso-number-format:'0.00';text-align:right";      // 1234.50
 const XLS_ENT="mso-number-format:'0';text-align:center";        // entero
 // Fecha en formato ecuatoriano, como texto (si no, Excel la muestra 3/4/2026 al revés)
 function xlsFecha(f){
