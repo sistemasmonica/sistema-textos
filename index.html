@@ -10520,49 +10520,54 @@ function exportarComoEditorialXLS(nombre,parte){
   // x:num manda el número a Excel sin depender de si la PC usa coma o punto
   // decimal (sin eso "27.00" queda como texto y la fórmula da #¡VALOR!).
   // Con fórmulas de Excel: si Mónica cambia DEVUELTOS, se recalculan solos
-  // CANTIDAD FINAL (B−C), VALOR TOTAL (D×G), subtotales, total y saldo.
+  // CANTIDAD FINAL (B−C), VALOR TOTAL, subtotales, total y saldo.
   // fila = número de fila en Excel (1: título, 2: colegio, 3: vacía, 4: encabezado).
-  // Columnas: A texto · B inicial · C devueltos · D final · E PVP · F % · G precio final · H valor.
+  // Columnas: A texto · B inicial · C devueltos · D final · E PVP · F % · [G precio final] · valor.
+  // PRECIO FINAL solo sale si algún libro tiene descuento: si no, es igual al
+  // PVP y Mónica lo veía repetido.
+  const pctDe=l=>lineaComisiona(l)?pctLinea(d,l):0;
+  const conDesc=grupos.some(g=>g.lineas.some(l=>pctDe(l)>0));
+  const N=conDesc?8:7, V=conDesc?'H':'G', P=conDesc?'G':'E';
   const fx=(f,v,st)=>`<td ${c} style="${st}" x:num="${v}" x:fmla="${f}">${v}</td>`;
   let filas='',granTotal=0,fila=4;const celdasSub=[];
   grupos.forEach(g=>{
     let sValor=0;
-    filas+=`<tr><td colspan="8" class="grp">${escH(g.nombre)}</td></tr>`;fila++;
+    filas+=`<tr><td colspan="${N}" class="grp">${escH(g.nombre)}</td></tr>`;fila++;
     const desde=fila+1;
     g.lineas.forEach(l=>{
       fila++;
       const vend=l.cant-l.dev;
-      const pct=lineaComisiona(l)?pctLinea(d,l):0;
+      const pct=pctDe(l);
       const pFinal=l.pvp-(pct?Math.floor(l.pvp*pct/100*100)/100:0);
       const valor=vend*pFinal; sValor+=valor;
       filas+=`<tr><td ${c} style="${XLS_TXT}">${escH(l.libro)}</td>
         <td ${c} style="${XLS_ENT}" x:num="${l.cant}">${l.cant}</td><td ${c} style="${XLS_ENT};background:#fff8e1" x:num="${l.dev}">${l.dev}</td>${fx('=B'+fila+'-C'+fila,vend,XLS_ENT)}
         <td ${c} style="${XLS_NUM}" x:num="${l.pvp}">${l.pvp.toFixed(2)}</td><td ${c} style="text-align:center">${pct?pct+'%':'—'}</td>
-        <td ${c} style="${XLS_NUM}" x:num="${pFinal.toFixed(2)}">${pFinal.toFixed(2)}</td>${fx('=D'+fila+'*G'+fila,valor.toFixed(2),XLS_NUM)}</tr>`;
+        ${conDesc?`<td ${c} style="${XLS_NUM}" x:num="${pFinal.toFixed(2)}">${pFinal.toFixed(2)}</td>`:''}${fx('=D'+fila+'*'+P+fila,valor.toFixed(2),XLS_NUM)}</tr>`;
     });
-    granTotal+=sValor;fila++;celdasSub.push('H'+fila);
-    filas+=`<tr><td colspan="7" class="sub-t" style="text-align:right">Subtotal — ${escH(g.nombre)}</td><td class="sub-t" style="${XLS_NUM}" x:num="${sValor.toFixed(2)}" x:fmla="=SUM(H${desde}:H${fila-1})">${sValor.toFixed(2)}</td></tr>`;
+    granTotal+=sValor;fila++;celdasSub.push(V+fila);
+    filas+=`<tr><td colspan="${N-1}" class="sub-t" style="text-align:right">Subtotal — ${escH(g.nombre)}</td><td class="sub-t" style="${XLS_NUM}" x:num="${sValor.toFixed(2)}" x:fmla="=SUM(${V}${desde}:${V}${fila-1})">${sValor.toFixed(2)}</td></tr>`;
   });
   const fTotal='='+celdasSub.join('+');
   const html=`<table>
-    <tr><td colspan="8" class="tit">${escH(DM_EMPRESA.nombre)} — ESTADO DE CUENTA${escH(sufijo.toUpperCase())}</td></tr>
-    <tr><td colspan="8" class="sub">Colegio: ${escH(nombre)} · Emitido: ${xlsFecha(today())} · Escribe en DEVUELTOS (amarillo) y se recalcula solo</td></tr>
-    <tr><td colspan="8"></td></tr>
-    <tr><th class="th">TEXTO</th><th class="th">CANTIDAD INICIAL</th><th class="th">DEVUELTOS</th><th class="th">CANTIDAD FINAL</th><th class="th">PVP</th><th class="th">% DESCUENTO</th><th class="th">PRECIO FINAL</th><th class="th">VALOR TOTAL</th></tr>
+    <tr><td colspan="${N}" class="tit">${escH(DM_EMPRESA.nombre)} — ESTADO DE CUENTA${escH(sufijo.toUpperCase())}</td></tr>
+    <tr><td colspan="${N}" class="sub">Colegio: ${escH(nombre)} · Emitido: ${xlsFecha(today())} · Escribe en DEVUELTOS (amarillo) y se recalcula solo</td></tr>
+    <tr><td colspan="${N}"></td></tr>
+    <tr><th class="th">TEXTO</th><th class="th">CANTIDAD INICIAL</th><th class="th">DEVUELTOS</th><th class="th">CANTIDAD FINAL</th><th class="th">PVP</th><th class="th">% DESCUENTO</th>${conDesc?'<th class="th">PRECIO FINAL</th>':''}<th class="th">VALOR TOTAL</th></tr>
     ${filas}
     ${(()=>{
       const ab=parte==='todo'?abonosColegio(nombre):[];
       fila++;
-      if(!ab.length) return `<tr><td colspan="7" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}" x:num="${granTotal.toFixed(2)}" x:fmla="${fTotal}">${granTotal.toFixed(2)}</td></tr>`;
+      if(!ab.length) return `<tr><td colspan="${N-1}" class="tot" style="text-align:right">VALOR A CANCELARSE (USD)</td><td class="tot" style="${XLS_NUM}" x:num="${granTotal.toFixed(2)}" x:fmla="${fTotal}">${granTotal.toFixed(2)}</td></tr>`;
       const filaTot=fila;
       const tAb=ab.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);const saldo=granTotal-tAb;
       fila+=2;const abDesde=fila+1;fila+=ab.length;const abHasta=fila;fila++;const filaAb=fila;
-      return `<tr><td colspan="7" class="sub-t" style="text-align:right">TOTAL (USD)</td><td class="sub-t" style="${XLS_NUM}" x:num="${granTotal.toFixed(2)}" x:fmla="${fTotal}">${granTotal.toFixed(2)}</td></tr>
-      <tr><td colspan="8"></td></tr>
-      <tr><td colspan="8" class="grp">ABONOS RECIBIDOS</td></tr>
-      ${ab.map(p=>`<tr><td colspan="6" ${c} style="${XLS_TXT}">${xlsFecha(p.fecha)} — ${escH(p.forma||'')}</td><td ${c}></td><td ${c} style="${XLS_NUM}" x:num="${(parseFloat(p.valor)||0).toFixed(2)}">${(parseFloat(p.valor)||0).toFixed(2)}</td></tr>`).join('')}
-      <tr><td colspan="7" class="sub-t" style="text-align:right">TOTAL ABONADO</td><td class="sub-t" style="${XLS_NUM}" x:num="${tAb.toFixed(2)}" x:fmla="=SUM(H${abDesde}:H${abHasta})">${tAb.toFixed(2)}</td></tr>
-      <tr><td colspan="7" class="tot" style="text-align:right">SALDO A CANCELAR (USD) — si sale negativo, es saldo a favor del colegio</td><td class="tot" style="${XLS_NUM}" x:num="${saldo.toFixed(2)}" x:fmla="=H${filaTot}-H${filaAb}">${saldo.toFixed(2)}</td></tr>`;
+      return `<tr><td colspan="${N-1}" class="sub-t" style="text-align:right">TOTAL (USD)</td><td class="sub-t" style="${XLS_NUM}" x:num="${granTotal.toFixed(2)}" x:fmla="${fTotal}">${granTotal.toFixed(2)}</td></tr>
+      <tr><td colspan="${N}"></td></tr>
+      <tr><td colspan="${N}" class="grp">ABONOS RECIBIDOS</td></tr>
+      ${ab.map(p=>`<tr><td colspan="${N-2}" ${c} style="${XLS_TXT}">${xlsFecha(p.fecha)} — ${escH(p.forma||'')}</td><td ${c}></td><td ${c} style="${XLS_NUM}" x:num="${(parseFloat(p.valor)||0).toFixed(2)}">${(parseFloat(p.valor)||0).toFixed(2)}</td></tr>`).join('')}
+      <tr><td colspan="${N-1}" class="sub-t" style="text-align:right">TOTAL ABONADO</td><td class="sub-t" style="${XLS_NUM}" x:num="${tAb.toFixed(2)}" x:fmla="=SUM(${V}${abDesde}:${V}${abHasta})">${tAb.toFixed(2)}</td></tr>
+      <tr><td colspan="${N-1}" class="tot" style="text-align:right">SALDO A CANCELAR (USD) — si sale negativo, es saldo a favor del colegio</td><td class="tot" style="${XLS_NUM}" x:num="${saldo.toFixed(2)}" x:fmla="=${V}${filaTot}-${V}${filaAb}">${saldo.toFixed(2)}</td></tr>`;
     })()}
   </table>`;
   const archivo='Estado de cuenta '+nombre.replace(/[\/:*?"<>|]/g,'')+(PARTES_EDITORIAL[parte]?' '+PARTES_EDITORIAL[parte]:'')+' '+today()+'.xls';
