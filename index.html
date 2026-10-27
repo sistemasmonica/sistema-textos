@@ -12506,9 +12506,14 @@ function resumenNegocio(){
     if(!x.facturado&&!x.notas&&!x.pagado)delete ed[n];
   });
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
+  const comOtras=e=>(DB.comisiones||[]).filter(c=>(c.estado==='pagado')===e).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+  const comOtrasPag=comOtras(true),comOtrasPend=comOtras(false);
   return {vendido,cobrado,aCobrar,comPorEntregar,comAparte,porCobrar:aCobrar-cobrado,ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
-    caja:cobrado+cobradoOtros-tot('pagado'),porDevolver:tot('porDevolver')};
+    // Comisiones aparte ya pagadas (librerías, capacitaciones): salieron de la caja.
+    // Las cruzadas con un depósito están también como cobro "Compensación", así que se anulan.
+    comOtrasPag,comOtrasPend,
+    caja:cobrado+cobradoOtros-tot('pagado')-comOtrasPag,porDevolver:tot('porDevolver')};
 }
 // Filas chicas con el detalle de cada nota de crédito / pago, debajo del total,
 // para poder comprobar de dónde sale cada número (pedido de Mónica y su esposo).
@@ -12568,8 +12573,9 @@ function resumenNegocioHTML(R){
       ${f1('(+) Me falta cobrar',R.porCobrar)}
       ${f1('(−) Le debo hoy a las editoriales',R.debeEd)}
       ${R.porDevolver?f1('(+) Lo que baja la deuda al devolver los libros que sobran',R.porDevolver):''}
+      ${R.comOtrasPend>0.005?f1('(−) Otras comisiones por pagar (librerías, capacitaciones)',R.comOtrasPend):''}
       ${R.comAparte>0.005?f1('(−) Comisiones que les doy yo a los colegios'+(R.comPorEntregar>0.005?' (por entregar: '+fmt(R.comPorEntregar)+')':''),R.comAparte):''}
-      ${(()=>{const q=R.caja+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte;return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
+      ${(()=>{const q=R.caja+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
     </table>
   </div>`;
 }
