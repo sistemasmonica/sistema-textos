@@ -722,6 +722,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-s btn-sm" onclick="exportStockCSV()"><i class="ti ti-download"></i> Exportar Excel</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirInventario()"><i class="ti ti-printer"></i> Imprimir</button>
         <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="imprimirConteo()" title="Lista para contar los libros: sin precios ni valores"><i class="ti ti-clipboard-list"></i> Hoja de conteo (sin precios)</button>
+        <button class="btn btn-sm" style="background:#0f766e;color:#fff" onclick="imprimirHojaMovimientos()" title="Hoja en blanco para anotar a mano cada libro que se saca, se pasa a otro colegio, se vende o se regala">🗒️ Hoja de movimientos (para anotar a mano)</button>
       </div>
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -7352,6 +7353,33 @@ function imprimirInventario(){
 
 // Hoja para hacer inventario físico: mismo listado del Reporte de stock,
 // SIN precios ni valores. Solo lee datos, no cambia nada.
+// Hoja EN PAPEL para el esposo de Mónica: no usa el sistema, pero sí anota en
+// hojas. Cada vez que saca, pasa a otro colegio, vende a un papá o regala un
+// libro, escribe una línea; Mónica la pasa al sistema después (26-oct-2026).
+function imprimirHojaMovimientos(){
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  const cols=colegiosList().map(c=>escH(c.nombre)).join(' · ');
+  const vacias=Array.from({length:16},()=>'<tr class="v"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+  win.document.write(`<html><head><title>Hoja de movimientos de libros</title>
+  <style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:12px;padding:8px;color:#111}
+  table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#e5e7eb;border:1px solid #555;padding:6px 4px;font-size:11px}
+  td{border:1px solid #555;padding:4px 6px}tr.v td{height:26px}tr.ej td{color:#777;font-style:italic;font-size:11px}
+  .tip{border:1px dashed #555;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:12px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Hoja de movimientos de libros','Fecha de inicio: ____________')}
+  <div class="tip">✍️ <b>Anotar SIEMPRE</b> que un libro sale de bodega o de un colegio: si se pasa a otro colegio, se vende a un papá o mamá, o se regala. <b>Una línea por libro.</b></div>
+  <table>
+    <tr><th style="width:9%">FECHA</th><th style="width:27%">LIBRO<br><span style="font-weight:400">(nombre y grado)</span></th><th style="width:6%">CANT.</th><th style="width:16%">¿DE DÓNDE LO SAQUÉ?<br><span style="font-weight:400">(bodega o colegio)</span></th><th style="width:18%">¿A DÓNDE FUE?<br><span style="font-weight:400">(otro colegio / papá-mamá / regalo)</span></th><th style="width:9%">¿COBRÉ?<br>$</th><th>NOTA</th></tr>
+    <tr class="ej"><td>27/10</td><td>Ejemplo: Imagina y Aprende 3 años</td><td style="text-align:center">2</td><td>Saulo</td><td>SJM Kids</td><td></td><td>faltaban allá</td></tr>
+    <tr class="ej"><td>27/10</td><td>Ejemplo: Matemática EGB 8</td><td style="text-align:center">1</td><td>Bodega</td><td>Papá de Comenios</td><td>$28.50</td><td>efectivo</td></tr>
+    ${vacias}
+  </table>
+  <div style="margin-top:8px;font-size:10px;color:#444"><b>Colegios:</b> ${cols}</div>
+  <div style="margin-top:14px;font-size:11px">Pasado al sistema por: ______________________ &nbsp; Fecha: ____________</div>
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
 function imprimirConteo(){
   const prods=DB.productos.filter(p=>p.editorial!=='Hist.').filter(_repEditOk);
   if(!prods.length){alert('No hay productos para imprimir.');return;}
