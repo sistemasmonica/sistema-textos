@@ -1064,7 +1064,11 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <button class="nt on" id="edit-tab-deuda" onclick="editTab('deuda',this)"><i class="ti ti-credit-card"></i> Deuda Editorial</button>
     <button class="nt" id="edit-tab-cuadre" onclick="editTab('cuadre',this)"><i class="ti ti-scale"></i> Facturas vs Mercadería</button>
     <button class="nt" id="edit-tab-nc" onclick="editTab('nc',this)"><i class="ti ti-file-minus"></i> Notas de Crédito</button>
+    <button class="nt" id="edit-tab-col" onclick="editTab('col',this)"><i class="ti ti-school"></i> Por colegio (Didáctica / Tech Books)</button>
   </div>
+
+  <!-- LO QUE LE TOCA A CADA EDITORIAL, COLEGIO POR COLEGIO -->
+  <div id="edit-pn-col" style="display:none"></div>
 
   <!-- CUADRE: FACTURA DE LA EDITORIAL vs. MERCADERÍA QUE INGRESÓ -->
   <div id="edit-pn-cuadre" style="display:none">
@@ -9375,7 +9379,7 @@ function estadoCierreColegio(nombre){
   // Solo si anotaste pagos a la editorial DENTRO de este colegio se mira su saldo;
   // si no, la editorial se paga toda junta y no frena el cierre del colegio.
   const cobrar=saldoCobroColegio(nombre,d), edit=(d.pagosEdit||[]).length?T.saldoEdit:0;
-  const r={cobrar,edit,tv:T.tv,fecha:d.cerrado||''};
+  const r={cobrar,edit,tv:T.tv,com:T.totalColegio,desc:T.descontada,fecha:d.cerrado||''};
   if(d.cerrado) r.est='cerrado';
   else if(!T.cant&&!T.tv) r.est='sin';
   else if(cobrar>TOL_COBRO||edit>TOL_COBRO) r.est='falta';
@@ -9451,7 +9455,9 @@ function imprimirColegiosPorCerrar(){
     if(!que.length) que.push('Todo al día — solo falta marcarlo cerrado');
     return `<tr><td style="text-align:center;width:28px">☐</td><td><b>${escH(x.nombre)}</b></td><td>${que.join(' + ')}</td>
       <td style="text-align:right">${fmt(x.tv)}</td>
-      <td style="text-align:right;${fc?'color:#c0392b;font-weight:bold':''}">${fc?fmt(x.cobrar):'—'}</td>
+      <td style="text-align:right;color:#e65100">${x.com>0.005?'−'+fmt(x.com):'—'}</td>
+      <td style="text-align:right;font-weight:bold">${fmt(x.tv-(x.com||0))}</td>
+      <td style="text-align:right;${fc?'color:#c0392b;font-weight:bold':''}">${fc?fmt(x.cobrar):'—'}${fc&&x.com>0.005&&!x.desc?'<div style="font-size:9px;color:#666;font-weight:normal">paga PVP completo; tú le das la comisión</div>':''}</td>
       <td style="text-align:right;${fe?'color:#c0392b;font-weight:bold':''}">${fe?fmt(x.edit):'—'}</td></tr>`;
   };
   const filasPend=pend.map(fila).join('');
@@ -9476,8 +9482,8 @@ function imprimirColegiosPorCerrar(){
   ${bancoHTML}
   ${(()=>{try{const R=resumenNegocio();return '<div style="border:1px solid #f5c6cb;background:#fdecea;border-radius:6px;padding:8px 14px;margin:6px 0;font-size:13px"><b>Le debo a las editoriales (todas juntas): '+fmt(Math.max(0,R.debeEd))+'</b> · Me falta cobrar a los colegios: <b>'+fmt(R.porCobrar)+'</b></div>';}catch(e){return '';}})()}
   <h3>⏳ FALTAN CERRAR (${pend.length})</h3>
-  ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
-  ${filasPend}<tr class="tot"><td colspan="4" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
+  ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>− COMISIÓN $</th><th>= VENDIDO MENOS COMISIÓN $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
+  ${filasPend}<tr class="tot"><td colspan="6" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
   ${cerr.length?`<h3>✅ YA CERRADOS (${cerr.length})</h3><table><tr><th style="text-align:left">COLEGIO</th><th>VENDIDO $</th><th>CERRADO EL</th></tr>
   ${cerr.map(x=>`<tr><td>${escH(x.nombre)}</td><td style="text-align:right">${fmt(x.tv)}</td><td style="text-align:center">${escH(String(x.fecha).split('-').reverse().join('/'))}</td></tr>`).join('')}</table>`:''}
   ${sinV.length?`<h3>⚪ SIN VENTAS ESTE AÑO (${sinV.length})</h3><p>${sinV.map(x=>escH(x.nombre)).join(' · ')}</p>`:''}
@@ -11824,9 +11830,95 @@ function editTab(id,el){
   document.getElementById('edit-pn-deuda').style.display=id==='deuda'?'':'none';
   document.getElementById('edit-pn-cuadre').style.display=id==='cuadre'?'':'none';
   document.getElementById('edit-pn-nc').style.display=id==='nc'?'':'none';
+  document.getElementById('edit-pn-col').style.display=id==='col'?'':'none';
   if(id==='deuda')renderDeudaEditorial();
   else if(id==='cuadre')renderCuadreMercaderia();
+  else if(id==='col')renderEditorialPorColegio();
   else renderNotasCredito();
+}
+
+// ── LO QUE LE TOCA A CADA EDITORIAL, COLEGIO POR COLEGIO ────────────────────
+// (Mónica 27-oct) Costo de lo vendido (cant − dev) × costo, por colegio y
+// separado: Tech Books (Wonder, Limitless, Robótica: esLineaTechBooks, igual que
+// el Resumen) y Didáctica (el resto; Creaciones va dentro de Didáctica como en
+// el Resumen, pero en su propia columna). A Tech Books se le paga por lo
+// vendido; a Didáctica se le debe todo lo facturado (deuda real en el Resumen).
+function editorialPorColegio(){
+  const filas=[];
+  Object.keys(DB.colData||{}).sort((a,b)=>a.localeCompare(b,'es')).forEach(nom=>{
+    const d=DB.colData[nom];if(!d||!Array.isArray(d.lineas))return;
+    const f={nombre:nom,did:0,crea:0,wonder:0,limitless:0,robotica:0};
+    d.lineas.forEach(l=>{
+      const v=(parseFloat(l.cant)||0)-(parseFloat(l.dev)||0),c=v*(parseFloat(l.costo)||0);
+      if(!c)return;
+      const t=String(l.libro||'');
+      if(esLineaTechBooks(l)){
+        if(/WONDER/i.test(t))f.wonder+=c;else if(/LIMIT/i.test(t))f.limitless+=c;else f.robotica+=c;
+      }else if(/CREACIONES/i.test(t))f.crea+=c;
+      else f.did+=c;
+    });
+    f.tb=f.wonder+f.limitless+f.robotica;f.dTot=f.did+f.crea;
+    if(f.tb>0.005||f.dTot>0.005)filas.push(f);
+  });
+  const pagos={'Didáctica':[],'Tech Books':[]};
+  (DB.pagos||[]).filter(p=>p.tipo==='pago').forEach(p=>{const g=editorialDePago(p);if(pagos[g])pagos[g].push(p);});
+  return {filas,pagos};
+}
+function editorialPorColegioHTML(){
+  const {filas,pagos}=editorialPorColegio();
+  const S=(a,k)=>a.reduce((s,x)=>s+(x[k]||0),0);
+  const sumP=l=>l.reduce((s,p)=>s+(parseFloat(p.valor)||0),0);
+  const m=v=>v>0.005?fmt(v):'—';
+  const td='padding:5px 8px;border:1px solid #ddd;text-align:right;font-family:monospace';
+  const tdN='padding:5px 8px;border:1px solid #ddd;font-weight:600';
+  const th='padding:6px 8px;border:1px solid #ccc;font-size:11px';
+  const pagosHTML=(lista,col)=>lista.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).map(p=>`<tr><td colspan="${col}" style="padding:4px 8px;border:1px solid #ddd;text-align:right;font-size:11px;color:#555">(−) Pagado ${escH(String(p.fecha||'').split('-').reverse().join('/'))} · ${escH(p.nota||p.nombre||'')}</td><td style="${td};color:#166534">−${fmt(parseFloat(p.valor)||0)}</td></tr>`).join('');
+  const tb=filas.filter(f=>f.tb>0.005).sort((a,b)=>b.tb-a.tb);
+  const tTB=S(tb,'tb'),pTB=sumP(pagos['Tech Books']);
+  const di=filas.filter(f=>f.dTot>0.005).sort((a,b)=>b.dTot-a.dTot);
+  const tD=S(di,'dTot'),pD=sumP(pagos['Didáctica']);
+  return `
+  <div style="font-size:12px;color:#666;margin-bottom:10px">Lo que le toca a cada editorial por los libros <b>vendidos</b> (cantidad − devoluciones) × costo, colegio por colegio. Sale solo de <b>Colegios → Control de ventas</b>; los pagos salen de <b>Pagos</b>.</div>
+  <div class="card" style="padding:12px 14px;margin-bottom:14px;border:2px solid #1565c0">
+    <div class="card-t" style="color:#1565c0;margin-bottom:8px">🔤 TECH BOOKS (Wonder, Limitless, Robótica)</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#e3f2fd"><th style="${th};text-align:left">COLEGIO</th><th style="${th}">WONDER</th><th style="${th}">LIMITLESS</th><th style="${th}">ROBÓTICA</th><th style="${th}">TOTAL TECH BOOKS</th></tr></thead>
+      <tbody>${tb.map(f=>`<tr><td style="${tdN}">${escH(f.nombre)}</td><td style="${td}">${m(f.wonder)}</td><td style="${td}">${m(f.limitless)}</td><td style="${td}">${m(f.robotica)}</td><td style="${td};font-weight:700">${fmt(f.tb)}</td></tr>`).join('')||'<tr><td colspan="5" style="padding:8px;text-align:center;color:#888">Sin libros de Tech Books vendidos</td></tr>'}</tbody>
+      <tfoot>
+        <tr style="background:#e3f2fd;font-weight:700"><td style="${tdN}">TOTAL VENDIDO</td><td style="${td}">${m(S(tb,'wonder'))}</td><td style="${td}">${m(S(tb,'limitless'))}</td><td style="${td}">${m(S(tb,'robotica'))}</td><td style="${td}">${fmt(tTB)}</td></tr>
+        ${pagosHTML(pagos['Tech Books'],4)}
+        <tr style="background:#fdecea;font-weight:800;font-size:14px"><td colspan="4" style="padding:7px 8px;border:1px solid #ddd;text-align:right;color:#b71c1c">FALTA PAGAR A TECH BOOKS</td><td style="${td};color:#b71c1c">${fmt(tTB-pTB)}</td></tr>
+      </tfoot>
+    </table></div>
+  </div>
+  <div class="card" style="padding:12px 14px;border:2px solid #2e7d32">
+    <div class="card-t" style="color:#2e7d32;margin-bottom:8px">📘 DIDÁCTICA (español, English Explorers y Creaciones)</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#e8f5e9"><th style="${th};text-align:left">COLEGIO</th><th style="${th}">DIDÁCTICA</th><th style="${th}">CREACIONES</th><th style="${th}">TOTAL</th></tr></thead>
+      <tbody>${di.map(f=>`<tr><td style="${tdN}">${escH(f.nombre)}</td><td style="${td}">${m(f.did)}</td><td style="${td}">${m(f.crea)}</td><td style="${td};font-weight:700">${fmt(f.dTot)}</td></tr>`).join('')}</tbody>
+      <tfoot>
+        <tr style="background:#e8f5e9;font-weight:700"><td style="${tdN}">TOTAL VENDIDO</td><td style="${td}">${fmt(S(di,'did'))}</td><td style="${td}">${fmt(S(di,'crea'))}</td><td style="${td}">${fmt(tD)}</td></tr>
+        ${pagosHTML(pagos['Didáctica'],3)}
+        <tr style="background:#fff8e1;font-weight:800"><td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">FALTA POR LO VENDIDO</td><td style="${td}">${fmt(tD-pD)}</td></tr>
+      </tfoot>
+    </table></div>
+    <div style="font-size:11px;color:#92400e;background:#fffbeb;border-radius:6px;padding:7px 10px;margin-top:8px">Ojo: Didáctica te cobra <b>todo lo que te facturó</b>, también los libros que están en bodega o en guías y aún no devuelves. La deuda real con Didáctica está en <b>Inicio → Resumen del negocio</b>, y baja cuando devuelves libros y te hacen nota de crédito.</div>
+  </div>`;
+}
+function renderEditorialPorColegio(){
+  const box=document.getElementById('edit-pn-col');if(!box)return;
+  box.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn btn-s btn-sm" onclick="imprimirEditorialPorColegio()"><i class="ti ti-printer"></i> Imprimir</button></div>`+editorialPorColegioHTML();
+}
+function imprimirEditorialPorColegio(){
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  win.document.write(`<html><head><title>Editoriales por colegio</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}.card{margin-bottom:16px}.card-t{font-weight:700;font-size:14px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Lo que le toca a cada editorial','Por colegio · al '+new Date().toLocaleDateString('es-EC'))}
+  ${editorialPorColegioHTML()}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
 }
 
 // ── CUADRE: FACTURA DE COMPRA vs. ENTRADA DE MERCADERÍA ─────────────────────
