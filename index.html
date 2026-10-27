@@ -1874,7 +1874,7 @@ async function iniciarNube(){
   let rol=null;
   if(NUBE_CLAVE){
     try{rol=await nubeRpc('txe_verificar',{});}
-    catch(e){setSyncStatus('err',e.message);return;} // sin internet: sigue con lo de esta computadora
+    catch(e){setSyncStatus('err',e.message);avisoSinInternet(true);return;} // sin internet: sigue con lo de esta computadora
     if(!rol){localStorage.removeItem('txe_nube_clave');sessionStorage.removeItem('txe_nube_clave');NUBE_CLAVE='';}
   }
   if(!rol)rol=await pedirClaveNube();
@@ -1939,6 +1939,25 @@ function setSyncStatus(s,detalle){
 
 let syncCompleted=false;
 
+// Letrero rojo fijo arriba mientras haya cambios que no llegaron a la nube.
+function avisoSinInternet(on){
+  let el=document.getElementById('aviso-sin-internet');
+  if(!on){if(el)el.remove();return;}
+  if(el)return;
+  el=document.createElement('div');el.id='aviso-sin-internet';
+  el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;font:700 14px Arial,sans-serif;padding:8px 14px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.3)';
+  el.innerHTML='⚠️ SIN INTERNET: tus cambios se están guardando SOLO en esta computadora. Se suben solos a la nube cuando vuelva el internet. <u>No uses el sistema en otro aparato</u> hasta que este letrero desaparezca.';
+  document.body.appendChild(el);
+}
+// Al volver el internet (o cada minuto si sigue sin nube) se reconecta y sube.
+let _reintentando=false;
+function reintentarNube(){
+  if(NUBE_OK||!NUBE_CLAVE||!navigator.onLine||_reintentando)return;
+  _reintentando=true;Promise.resolve(iniciarNube()).finally(()=>{_reintentando=false;});
+}
+window.addEventListener('online',()=>setTimeout(reintentarNube,1500));
+setInterval(reintentarNube,60000);
+
 async function guardarProductosNube(prods){
   if(!prods?.length||!NUBE_OK||MODO_LECTURA)return;
   try{
@@ -1955,6 +1974,7 @@ let _miRev,_saveCorriendo=false,_savePendiente=null,_conflicto=false;
 async function leerRevNube(){const r=await nubeLeer('app_data','txe_rev');return r?.value?.rev??null;}
 function avisoConflictoNube(){
   if(_conflicto)return;_conflicto=true;
+  localStorage.setItem('txe_sin_subir','1');
   alert('⚠️ Se hicieron cambios en el sistema desde OTRO aparato (celular u otra computadora).\n\nPara no borrar esos cambios, el sistema se va a recargar con lo último.\n\nSi tu último cambio no aparece, vuelve a hacerlo.');
   location.reload();
 }
@@ -2003,8 +2023,9 @@ async function _subirANube(data){
     const nuevaRev=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
     await nubeGuardar('app_data','txe_rev',{rev:nuevaRev,at:ts});
     _miRev=nuevaRev;
+    localStorage.setItem('txe_base_rev',nuevaRev);localStorage.removeItem('txe_sin_subir');avisoSinInternet(false);
     setSyncStatus('ok');
-  }catch(e){avisoNubeNoGuardo(e.message||String(e));console.warn('Cloud save error:',e);}
+  }catch(e){localStorage.setItem('txe_sin_subir','1');avisoNubeNoGuardo(e.message||String(e));console.warn('Cloud save error:',e);}
 }
 // Si un cambio no llega a la nube, al recargar se pierde (se trae lo de la
 // nube). Por eso se avisa en grande, no solo con el letrerito de arriba.
@@ -2081,7 +2102,22 @@ async function syncFromCloud(){
     let main=null,mainErr=null;
     try{main=await nubeLeer('app_data','txe_main');}catch(e){mainErr=e;}
     if(!mainErr&&revLeida!==undefined)_miRev=revLeida;
-    if(!mainErr&&main?.value){
+    // CAMBIOS HECHOS SIN INTERNET (26-oct-2026: se perdieron devoluciones y 2
+    // cobros porque al volver el internet se trajo la nube encima). Si la nube
+    // sigue igual que la última vez que esta computadora habló con ella, lo de
+    // la computadora es lo más nuevo: se queda y se sube. Si la nube también
+    // cambió (otro aparato), lo de la computadora se baja a un archivo antes.
+    let usarLocal=false;
+    if(!mainErr&&main?.value&&localStorage.getItem('txe_sin_subir')==='1'&&localStorage.getItem('txe_v4')){
+      const base=localStorage.getItem('txe_base_rev');
+      if(base&&revLeida===base)usarLocal=true;
+      else{
+        try{backupSilencioso('CAMBIOS_SIN_SUBIR_');}catch(e){}
+        localStorage.removeItem('txe_sin_subir');
+        setTimeout(()=>alert('⚠️ En esta computadora había cambios que NO llegaron a la nube (sin internet), y mientras tanto también se guardaron cambios desde otro aparato.\n\nPara no perder nada, tus cambios de esta computadora se guardaron en un archivo en DESCARGAS que empieza con "CAMBIOS_SIN_SUBIR".\n\nAvísale a Claude para juntarlos.'),500);
+      }
+    }
+    if(!mainErr&&main?.value&&!usarLocal){
       const v=main.value;
       if(v.regs?.length>0)DB.regs=v.regs;
       if(v.banco?.length>0)DB.banco=v.banco;
@@ -2118,6 +2154,12 @@ async function syncFromCloud(){
     const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,preciosCol:DB.preciosCol,notasCredito:DB.notasCredito,comisiones:DB.comisiones,deudas:DB.deudas,respaldosVendedor:DB.respaldosVendedor,pagos:DB.pagos,historial:DB.historial,reglasBanco:DB.reglasBanco,conteo:DB.conteo};
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
     syncCompleted=true;
+    if(!mainErr&&revLeida!=null&&!usarLocal)localStorage.setItem('txe_base_rev',revLeida);
+    if(usarLocal){
+      save(); // sube lo hecho sin internet
+      setTimeout(()=>toast('✅ Se subieron a la nube los cambios que hiciste sin internet','ok'),800);
+      logHistorial('Cambios sin internet subidos','Al volver la conexión se subió lo guardado en esta computadora');
+    }
     if(!mainErr&&main?.value)copiaDiariaNube(main.value);
     updateCount();renderDash();
     // Re-renderizar paneles si están activos en este momento
@@ -2257,6 +2299,7 @@ function save(){
       respaldosVendedor:DB.respaldosVendedor,pagos:DB.pagos,historial:DB.historial,reglasBanco:DB.reglasBanco,conteo:DB.conteo
     };
     localStorage.setItem('txe_v4',JSON.stringify(toSave));
+    if(!MODO_LECTURA&&(!NUBE_OK||!syncCompleted)){localStorage.setItem('txe_sin_subir','1');avisoSinInternet(true);}
     saveToCloud({...toSave,productos:DB.productos});
     // Backup automático cada 15 operaciones
     _opCount++;
@@ -2264,7 +2307,7 @@ function save(){
   }catch(e){toast('Error guardando datos','err')}
 }
 
-function backupSilencioso(){
+function backupSilencioso(prefijo){
   try{
     const fecha=today();
     const hora=new Date().toTimeString().split(' ')[0].replace(/:/g,'-');
@@ -2275,7 +2318,7 @@ function backupSilencioso(){
       respaldosVendedor:DB.respaldosVendedor||[],pagos:DB.pagos||[],historial:DB.historial||[],reglasBanco:DB.reglasBanco||{},conteo:DB.conteo||{}};
     const a=document.createElement('a');
     a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(toSave));
-    a.download='backup_textos_'+fecha+'_'+hora+'.json';
+    a.download=(prefijo||'backup_textos_')+fecha+'_'+hora+'.json';
     a.click();
   }catch(e){}
 }
