@@ -2197,6 +2197,7 @@ async function syncFromCloud(){
     try{reparacionOct2026d();}catch(e){console.warn('Reparación oct-2026 (4):',e);}
     try{reparacionOct2026e();}catch(e){console.warn('Reparación oct-2026 (5):',e);}
     try{reparacionOct2026f();}catch(e){console.warn('Reparación oct-2026 (6):',e);}
+    try{reparacionOct2026g();}catch(e){console.warn('Reparación oct-2026 (7):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -12415,6 +12416,33 @@ function reparacionOct2026f(){
     hecho.push('comisión librería $126');
   }
   logHistorial(MARCA,hecho.join(' + ')||'Ya estaba');
+  save();
+  try{renderPagos();renderComisiones();}catch(e){}
+}
+// 26-oct-2026: Librería Calderón (SAULO + SJM KIDS) vendió $3,248 y depositó
+// $3,174.75; los $73.25 restantes = su comisión $70 + $3.25 de fundas, cruzados
+// con lo que debía. El "cobro" de $73.25 pasa a Compensación y se anota la
+// comisión de librería repartida por lo vendido en cada colegio. Una sola vez.
+function reparacionOct2026g(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 26-oct (5): comisión librería Calderón $73.25 (Saulo + SJM Kids)';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const sau=colegiosList().find(c=>/SAULO/i.test(c.nombre)),sjm=colegiosList().find(c=>/SJM/i.test(c.nombre));
+  if(!sau||!sjm){logHistorial(MARCA,'No se encontró SAULO o SJM KIDS');save();return;}
+  const hecho=[];
+  const p=(DB.pagos||[]).find(x=>x.id==='1793050964902_l163xj');
+  if(p&&p.forma!=='Compensación'){p.forma='Compensación';p.nota='Librería Calderón: no fue depósito. Se cruzó con lo que la librería debía: comisión $70.00 + fundas $3.25';hecho.push('cobro $73.25 → compensación');}
+  DB.comisiones=DB.comisiones||[];
+  if(!DB.comisiones.some(c=>c.tipo==='libreria'&&/CALDER/i.test(c.beneficiario||''))){
+    const tS=totalesColegio(DB.colData[sau.nombre]).tv,tJ=totalesColegio(DB.colData[sjm.nombre]).tv;
+    const mS=tS+tJ>0?Math.round(73.25*tS/(tS+tJ)*100)/100:36.63,mJ=Math.round((73.25-mS)*100)/100;
+    const nota=n=>'Comisión $70.00 + fundas $3.25 = $73.25 (cruzados con el depósito), parte de '+n+' según lo vendido';
+    DB.comisiones.push(
+      {id:uid(),fecha:'2026-10-26',beneficiario:'Librería Calderón',tipo:'libreria',numFactura:'',monto:mS,estado:'pagado',colegio:sau.nombre,nota:nota(sau.nombre)},
+      {id:uid(),fecha:'2026-10-26',beneficiario:'Librería Calderón',tipo:'libreria',numFactura:'',monto:mJ,estado:'pagado',colegio:sjm.nombre,nota:nota(sjm.nombre)});
+    hecho.push('comisión librería '+sau.nombre+' $'+mS.toFixed(2)+' + '+sjm.nombre+' $'+mJ.toFixed(2));
+  }
+  logHistorial(MARCA,hecho.join(' · ')||'Ya estaba');
   save();
   try{renderPagos();renderComisiones();}catch(e){}
 }
