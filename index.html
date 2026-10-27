@@ -9731,7 +9731,7 @@ function renderControl(){
       </div>
       <div style="background:#fff;border:1px solid #bbb;border-radius:6px;padding:8px 10px;text-align:center">
         <div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px">Falta que te pague el colegio</div>
-        ${(()=>{const sc=saldoCobroColegio(nombre,d);return `<div style="font-family:monospace;font-size:17px;font-weight:700;color:${sc>TOL_COBRO?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">$${sc.toFixed(2)}</div><div style="font-size:9px;color:#777;margin-top:2px">según los cobros de Pagos</div>`;})()}
+        ${(()=>{const sc=saldoCobroColegio(nombre,d);return `<div style="font-family:monospace;font-size:17px;font-weight:700;color:${sc>TOL_COBRO?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">${txtSaldoCobro(sc)}</div><div style="font-size:9px;color:#777;margin-top:2px" id="ctrl-top-saldo-nota">${Math.abs(sc)>=0.005&&Math.abs(sc)<=TOL_COBRO?'dif. de centavos: $'+sc.toFixed(2)+' · ':''}según los cobros de Pagos</div>`;})()}
       </div>
     </div>
 
@@ -10093,7 +10093,7 @@ function recalcControl(nombre){
   if(topBox){topBox.style.background=ganancia>=0?'#e8f5e9':'#fdecea';topBox.style.borderColor=ganancia>=0?'#66bb6a':'#e57373';
     const lbl=topBox.querySelector('div');if(lbl)lbl.style.color=ganancia>=0?'#1b5e20':'#b71c1c';}
   const topSaldo=document.getElementById('ctrl-top-saldo');
-  if(topSaldo){const sc=saldoCobroColegio(nombre,d);topSaldo.textContent='$'+sc.toFixed(2);topSaldo.style.color=sc>TOL_COBRO?'var(--r1)':'var(--g1)';}
+  if(topSaldo){const sc=saldoCobroColegio(nombre,d);topSaldo.textContent=txtSaldoCobro(sc);const nt=document.getElementById('ctrl-top-saldo-nota');if(nt)nt.textContent=(Math.abs(sc)>=0.005&&Math.abs(sc)<=TOL_COBRO?'dif. de centavos: $'+sc.toFixed(2)+' · ':'')+'según los cobros de Pagos';topSaldo.style.color=sc>TOL_COBRO?'var(--r1)':'var(--g1)';}
   // TE QUEDA/LIBRO, TE QUEDA TOTAL, subtotales por editorial y el desglose de
   // arriba no tienen id — se redibuja toda la tabla para que usen el % y PVP
   // de cada fila, conservando el campo donde estaba escribiendo y el scroll.
@@ -10428,6 +10428,11 @@ function parteEditorialSel(){ return document.getElementById('ctrl-parte-ed')?.v
 // Abonos del colegio = cobros registrados en Pagos cuyo nombre coincide con el
 // colegio (mismo criterio que "Por Cobrar": nombre exacto o _coincideColegio).
 // Lo que falta que pague el colegio = tu ingreso − cobros de Pagos (igual que Por Cobrar).
+// Texto de "Falta que te pague": diferencias de centavos (hasta TOL_COBRO) = al día.
+function txtSaldoCobro(sc){
+  if(Math.abs(sc)<=TOL_COBRO)return '$0.00 ✅ al día';
+  return sc>0?'$'+sc.toFixed(2):'pagó $'+(-sc).toFixed(2)+' de más';
+}
 function saldoCobroColegio(nombre,d){
   const ab=abonosColegio(nombre).reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
   return totalesColegio(d).aCobrar-ab;
