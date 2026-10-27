@@ -1844,7 +1844,10 @@ function pedirClaveNube(){
       <div style="font-size:34px;text-align:center">🔒</div>
       <h2 style="margin:6px 0 4px;text-align:center;font-size:19px">Textos Escolares</h2>
       <p style="margin:0 0 16px;text-align:center;color:#64748b;font-size:13px">Escribe tu clave para entrar</p>
-      <input id="login-clave" type="password" autocomplete="current-password" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:11px;font-size:16px;border:1px solid #cbd5e1;border-radius:8px">
+      <div style="position:relative">
+        <input id="login-clave" type="password" autocomplete="current-password" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:11px 46px 11px 11px;font-size:16px;border:1px solid #cbd5e1;border-radius:8px">
+        <button type="button" id="login-ojo" title="Ver / ocultar la clave" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:20px;cursor:pointer;padding:6px;line-height:1">👁️</button>
+      </div>
       <label style="display:flex;gap:6px;align-items:center;margin:10px 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" id="login-recordar" checked> Recordar en esta computadora</label>
       <div id="login-msg" style="min-height:18px;color:#dc2626;font-size:13px;margin:6px 0"></div>
       <button id="login-btn" style="width:100%;padding:11px;font-size:15px;font-weight:700;background:#1a6b3c;color:#fff;border:none;border-radius:8px;cursor:pointer">Entrar</button>
@@ -1866,6 +1869,8 @@ function pedirClaveNube(){
     };
     btn.onclick=intentar;
     inp.onkeydown=e=>{if(e.key==='Enter')intentar();};
+    const ojo=ov.querySelector('#login-ojo');
+    ojo.onclick=()=>{const ver=inp.type==='password';inp.type=ver?'text':'password';ojo.textContent=ver?'🙈':'👁️';inp.focus();};
   });
 }
 
@@ -5458,6 +5463,10 @@ function saldosPorCobrarColegios(){
 // para ver de un vistazo cuáles ya pagaron completo. Diferencias de hasta $1
 // (redondeos de centavos) cuentan como pagado completo.
 const TOL_COBRO=1;
+// Último estado de cuenta que mandó Didáctica (papel). Al llegar uno nuevo,
+// cambiar solo estos números y la fecha de corte. (Va aquí arriba porque el
+// Resumen se dibuja al abrir el sistema, antes de llegar más abajo.)
+const ESTADO_CUENTA_DIDACTICA={corte:'2026-10-06',facturas:54443,anticipos:7000,saldo:47443};
 let _filtroPorCobrar='deben';
 function filtroPorCobrar(f){_filtroPorCobrar=f;renderPorCobrar();}
 function estadoCobroColegio(f){
@@ -5660,6 +5669,65 @@ function imprimirEstadoCuenta(nombre){
     else if(b){ alert('No se pudo guardar — abre el Estado de cuenta de nuevo desde el sistema e inténtalo otra vez.'); }
   }
   <\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// Guías de VENTA (no muestras) de un colegio, la más nueva primero.
+function guiasVentaColegio(nombre){
+  const cols=Object.keys(DB.colData||{});
+  return (DB.guias||[]).filter(g=>!esGuiaMuestra(g)&&_colegioDeGuia(g,cols)===nombre&&(g.lineas||[]).some(l=>l.cantidad>0))
+    .sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))||String(b.numero).localeCompare(String(a.numero)));
+}
+// Detalle de UN pedido (una guía) del colegio, para cobrar un pedido adicional
+// por separado (Mónica 27-oct: Latinoamericano ya había pagado todo y luego pidió
+// la GR-059). El precio es el del Control de ventas del colegio (PVP − comisión
+// si se la descuenta), no el del catálogo; si el libro no está en el Control,
+// usa el precio que tenga la guía.
+function imprimirDetallePedido(nombre){
+  initColData();
+  const d=DB.colData[nombre];
+  if(!d) return toast('No encontré datos de ese colegio','err');
+  const id=document.getElementById('ctrl-pedido')?.value;
+  const g=(DB.guias||[]).find(x=>x.id===id);
+  if(!g) return toast('Elige primero la guía del pedido','err');
+  const T=totalesColegio(d);
+  let tCant=0,tBruto=0,tCom=0;
+  const filas=(g.lineas||[]).filter(l=>l.cantidad>0).map(l=>{
+    const c=(d.lineas||[]).find(x=>x.prodId&&x.prodId===l.prodId);
+    const pvp=c&&c.pvp?c.pvp:(parseFloat(l.precioVenta)||0);
+    const pct=c&&T.descontada&&lineaComisiona(c)?pctLinea(d,c):0;
+    const sub=l.cantidad*pvp, com=sub*pct/100;
+    tCant+=l.cantidad;tBruto+=sub;tCom+=com;
+    return `<tr><td style="text-align:center">${l.cantidad}</td><td>${escH(c?c.libro:l.nombre)}</td><td style="text-align:right">$${pvp.toFixed(2)}</td><td style="text-align:right;font-family:monospace">$${sub.toFixed(2)}</td></tr>`;
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  win.document.write(`<html><head><title>Pedido ${escH(g.numero)} — ${escH(nombre)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;padding:15px;color:#222}
+    table{width:100%;border-collapse:collapse;margin-top:6px}
+    th{background:#1565c0;color:#fff;padding:6px;font-size:11px}
+    td{padding:5px 6px;border-bottom:1px solid #eee}
+    tr:nth-child(even){background:#f8f9fa}
+    .tot{background:#e3f2fd;font-weight:bold;font-size:13px}
+    .datos{margin:4px 0 10px;line-height:1.7}
+    .btn-print{background:#1a6b3c;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:10px}
+    @media print{.btn-print{display:none!important}}
+    ${dmPrintCSS()}
+  </style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  ${dmPrintHeader('Detalle de pedido', escH(nombre))}
+  <div class="datos"><b>Nota de entrega:</b> ${escH(g.numero)} &nbsp;·&nbsp; <b>Fecha de entrega:</b> ${escH(g.fecha||'')}</div>
+  <table>
+    <tr><th>Cant.</th><th style="text-align:left">Texto</th><th style="text-align:right">P. Unit.</th><th style="text-align:right">Total</th></tr>
+    ${filas}
+    ${tCom>0.005?`<tr class="tot"><td style="text-align:center">${tCant}</td><td colspan="2" style="text-align:right">SUBTOTAL</td><td style="text-align:right">$${tBruto.toFixed(2)}</td></tr>
+    <tr><td></td><td colspan="2" style="text-align:right">(−) Comisión del colegio</td><td style="text-align:right">−$${tCom.toFixed(2)}</td></tr>`:''}
+    <tr class="tot"><td style="text-align:center">${tCom>0.005?'':tCant}</td><td colspan="2" style="text-align:right">TOTAL A PAGAR</td><td style="text-align:right">$${(tBruto-tCom).toFixed(2)}</td></tr>
+  </table>
+  <p style="margin-top:14px;color:#555;font-size:11px">Este detalle corresponde únicamente al pedido entregado con la nota ${escH(g.numero)}.</p>
+  ${dmPrintFooter()}
   </body></html>`);
   win.document.close();
 }
@@ -9761,7 +9829,8 @@ function renderControl(){
       </div>
       <div style="background:#fff;border:1px solid #bbb;border-radius:6px;padding:8px 10px;text-align:center">
         <div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px">Falta que te pague el colegio</div>
-        ${(()=>{const sc=saldoCobroColegio(nombre,d);return `<div style="font-family:monospace;font-size:17px;font-weight:700;color:${sc>TOL_COBRO?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">${txtSaldoCobro(sc)}</div><div style="font-size:9px;color:#777;margin-top:2px" id="ctrl-top-saldo-nota">${Math.abs(sc)>=0.005&&Math.abs(sc)<=TOL_COBRO?'dif. de centavos: $'+sc.toFixed(2)+' · ':''}según los cobros de Pagos</div>`;})()}
+        ${(()=>{const sc=saldoCobroColegio(nombre,d);return `<div style="font-family:monospace;font-size:17px;font-weight:700;color:${sc>TOL_COBRO?'var(--r1)':'var(--g1)'};margin-top:3px" id="ctrl-top-saldo">${txtSaldoCobro(sc)}</div><div style="font-size:9px;color:#777;margin-top:2px" id="ctrl-top-saldo-nota">${notaSaldoCobro(sc,d)}</div>`;})()}
+        ${casillaComisionDescontadaHTML(nombre,d)}
       </div>
     </div>
 
@@ -10051,6 +10120,12 @@ function renderControl(){
       <option value="es" ${window._parteEd==='es'?'selected':''}>📘 Solo Didáctica</option>
       <option value="en" ${window._parteEd==='en'?'selected':''}>🔤 Solo Tech Books</option>
     </select>
+    ${(()=>{const gv=guiasVentaColegio(nombre);return gv.length?`<span style="display:inline-flex;gap:4px;align-items:center;border:2px solid #0d47a1;border-radius:6px;padding:2px 4px">
+      <select id="ctrl-pedido" title="Guía del pedido" style="padding:5px 6px;border:none;font-size:12px;font-weight:600;color:#0d47a1">
+        ${gv.map(g=>`<option value="${g.id}">${escH(g.numero)} · ${escH(g.fecha||'')} · ${(g.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0)} u.</option>`).join('')}
+      </select>
+      <button class="btn btn-s btn-sm" style="background:#0d47a1;color:#fff" onclick="imprimirDetallePedido('${nombre}')" title="Detalle SOLO de los libros de esa guía, con los precios de este colegio (para cobrar un pedido adicional aparte)"><i class="ti ti-file-plus"></i> Detalle de este pedido</button>
+    </span>`:'';})()}
     <button class="btn btn-s" style="background:#b45309;color:#fff" onclick="recuperarDevDeRespaldo('${nombre}')" title="Si se perdieron las devoluciones de este colegio: elige un archivo de respaldo (backup_textos_....json de Descargas) y se copian SOLO las devoluciones de este colegio. Te muestra la lista antes de cambiar nada."><i class="ti ti-arrow-back-up"></i> Recuperar devoluciones</button>
   </div>`;
 
@@ -10123,7 +10198,7 @@ function recalcControl(nombre){
   if(topBox){topBox.style.background=ganancia>=0?'#e8f5e9':'#fdecea';topBox.style.borderColor=ganancia>=0?'#66bb6a':'#e57373';
     const lbl=topBox.querySelector('div');if(lbl)lbl.style.color=ganancia>=0?'#1b5e20':'#b71c1c';}
   const topSaldo=document.getElementById('ctrl-top-saldo');
-  if(topSaldo){const sc=saldoCobroColegio(nombre,d);topSaldo.textContent=txtSaldoCobro(sc);const nt=document.getElementById('ctrl-top-saldo-nota');if(nt)nt.textContent=(Math.abs(sc)>=0.005&&Math.abs(sc)<=TOL_COBRO?'dif. de centavos: $'+sc.toFixed(2)+' · ':'')+'según los cobros de Pagos';topSaldo.style.color=sc>TOL_COBRO?'var(--r1)':'var(--g1)';}
+  if(topSaldo){const sc=saldoCobroColegio(nombre,d);topSaldo.textContent=txtSaldoCobro(sc);const nt=document.getElementById('ctrl-top-saldo-nota');if(nt)nt.textContent=notaSaldoCobro(sc,d);topSaldo.style.color=sc>TOL_COBRO?'var(--r1)':'var(--g1)';}
   // TE QUEDA/LIBRO, TE QUEDA TOTAL, subtotales por editorial y el desglose de
   // arriba no tienen id — se redibuja toda la tabla para que usen el % y PVP
   // de cada fila, conservando el campo donde estaba escribiendo y el scroll.
@@ -10466,6 +10541,42 @@ function txtSaldoCobro(sc){
 function saldoCobroColegio(nombre,d){
   const ab=abonosColegio(nombre).reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
   return totalesColegio(d).aCobrar-ab;
+}
+function notaSaldoCobro(sc,d){
+  return (Math.abs(sc)>=0.005&&Math.abs(sc)<=TOL_COBRO?'dif. de centavos: $'+sc.toFixed(2)+' · ':'')
+    +(totalesColegio(d).descontada?'vendido − comisión − cobros de Pagos':'según los cobros de Pagos');
+}
+// Casilla en la tarjeta "Falta que te pague el colegio" (Mónica 27-oct, Dumas):
+// si el colegio vende y se queda con su comisión, lo que te debe es vendido −
+// comisión. No es automático para todos porque hay colegios que pagan el PVP
+// completo y a quienes tú les entregas la comisión aparte (ej. Comenios, SJM).
+// Marcada = d.comisionPagada {modo:'descontada'} (lo mismo que "Se la descontó"
+// en Comisiones).
+function casillaComisionDescontadaHTML(nombre,d){
+  const T=totalesColegio(d);
+  if(T.totalColegio<0.005) return '';
+  if(d.comisionPagada&&!T.descontada)
+    return `<div style="font-size:10px;color:#1b5e20;margin-top:5px">Comisión ${fmt(T.totalColegio)} ya entregada al colegio</div>`;
+  const pct=parseFloat(d.comisionPct)||0;
+  return `<label style="display:flex;gap:5px;align-items:flex-start;justify-content:center;font-size:10px;color:#333;margin-top:6px;cursor:pointer;text-align:left;border-top:1px dashed #ccc;padding-top:5px">
+    <input type="checkbox" ${T.descontada?'checked':''} onchange="marcarComisionDescontada('${escH(nombre).replace(/'/g,"\\'")}',this.checked)" style="margin-top:1px">
+    <span>El colegio se descuenta la comisión${pct?' ('+pct+'%)':''}: <b>−${fmt(T.totalColegio)}</b></span>
+  </label>`;
+}
+function marcarComisionDescontada(nombre,si){
+  initColData();
+  const d=DB.colData[nombre];if(!d)return;
+  const T=totalesColegio(d);
+  if(si){
+    d.comisionPagada={fecha:today(),monto:Math.round(T.totalColegio*100)/100,modo:'descontada'};
+    logHistorial('Comisión colegio descontada por el colegio',nombre+' '+fmt(T.totalColegio));
+  }else{
+    delete d.comisionPagada;
+    logHistorial('Comisión colegio pendiente',nombre);
+  }
+  save();renderControl();
+  try{renderComisionesColegios();renderResumenNegocio();}catch(x){}
+  toast(si?'Falta que te pague: ahora sale con la comisión restada':'Falta que te pague: ahora sale con el PVP completo','ok');
 }
 // Cuadro en Control de ventas con los cobros de ESTE colegio que ya están en
 // Pagos (no se escribe nada aquí: se ingresan una sola vez en Pagos).
@@ -13073,9 +13184,6 @@ function veredictoComision(x){
   if(x.total>x.gan) return {txt:'🟠 Di más de lo que gané',col:'#c2410c'};
   return {txt:'🟢 Me resulta',col:'#16a34a'};
 }
-// Último estado de cuenta que mandó Didáctica (papel). Al llegar uno nuevo,
-// cambiar solo estos números y la fecha de corte.
-const ESTADO_CUENTA_DIDACTICA={corte:'2026-10-06',facturas:54443,anticipos:7000,saldo:47443};
 // UNA sola tabla horizontal, una fila por colegio, con todo en orden de
 // izquierda a derecha: vendí − comisión = me toca recibir (pagó / falta) −
 // editorial = gano. Abajo, en la misma tabla, cómo va la cuenta con la
