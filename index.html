@@ -12579,29 +12579,24 @@ function resumenNegocioHTML(R){
     </table>
   </div>`;
 }
+// Mónica y su esposo no entendían el resumen vertical (26-oct-2026: "más le
+// entiendo en la opción Comisiones"). En el Inicio se muestra la MISMA tabla
+// horizontal de Comisiones (colegios + editoriales), con su Excel e impresión.
 function renderResumenNegocio(){
   const el=document.getElementById('d-resumen-negocio');if(!el)return;
-  const R=resumenNegocio();
-  const pagosEd=Object.entries(R.ed).flatMap(([n,x])=>x.pagos.map(p=>({n,p}))).sort((a,b)=>String(a.p.fecha).localeCompare(String(b.p.fecha)));
-  el.innerHTML=`<div style="border:2px solid #1565c0;border-radius:10px;overflow:hidden;max-width:720px">
+  let t='';try{t=tablaComisionesHTML(false);}catch(e){console.warn('resumen',e);}
+  el.innerHTML=`<div style="border:2px solid #1565c0;border-radius:10px;overflow:hidden">
     <div style="background:#1565c0;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-      <div style="font-size:15px;font-weight:800">📊 RESUMEN DEL NEGOCIO 2026</div>
-      <button class="btn btn-s btn-sm" onclick="imprimirResumenNegocio()" style="background:#fff;color:#1565c0"><i class="ti ti-printer"></i> Imprimir</button>
-    </div>
-    ${resumenNegocioHTML(R)}
-    <details style="padding:8px 12px;font-size:11px;color:#555;border-top:1px solid #eee"><summary style="cursor:pointer">De dónde salen los números</summary>
-      <div style="margin-top:6px;line-height:1.5">
-        <b>Vendí</b>: Control de ventas de todos los colegios (entregados − devueltos) × precio, menos la comisión de cada colegio.<br>
-        <b>Me pagaron</b>: Pagos → <b>Cobros</b> de cada colegio (igual que Por Cobrar). Los cobros de clientes que no son colegio salen aparte en "Otros clientes" y solo suman en la plata del negocio.<br>
-        <b>Me facturaron</b>: facturas de la editorial (XML o Manual, categoría Textos escolares). <b>Notas de crédito</b>: Editorial → Notas de crédito.<br>
-        <b>Ya pagué</b>: Pagos → <b>Pagos</b> a nombre de la editorial (no cuentan los que dicen "préstamo"):
-        ${pagosEd.length?'<ul style="margin:4px 0 0 16px;padding:0">'+pagosEd.map(({n,p})=>`<li>${escH(String(p.fecha||'').split('-').reverse().join('/'))} — ${escH(n)} — $${(parseFloat(p.valor)||0).toFixed(2)} ${p.nota?'<span style="color:#888">('+escH(p.nota)+')</span>':''}</li>`).join('')+'</ul>':' (ninguno todavía)<br>'}
-        <b>Gano</b>: lo mismo que "TE QUEDA" de cada colegio, sumado.
+      <div style="font-size:15px;font-weight:800">📊 RESUMEN DEL NEGOCIO 2026 — por colegio y editoriales</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="exportarComisionesXLS()" style="background:#fff;color:#1d6f42">📊 Excel</button>
+        <button class="btn btn-s btn-sm" onclick="imprimirComisionesColegios()" style="background:#fff;color:#1565c0"><i class="ti ti-printer"></i> Imprimir</button>
       </div>
-    </details>
+    </div>
+    <div style="padding:8px">${t}</div>
   </div>`;
 }
-function imprimirResumenNegocio(){
+function imprimirResumenNegocio(){return imprimirComisionesColegios();
   const R=resumenNegocio();
   const win=window.open('','_blank');if(!win)return alert('El navegador bloqueó la ventana. Permita ventanas emergentes.');
   win.document.write(`<html><head><title>Resumen del negocio</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#222;max-width:720px;margin:auto}${dmPrintCSS()}.np{background:#1565c0;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;margin-bottom:12px}@media print{.np{display:none}}</style></head><body>
@@ -13236,7 +13231,7 @@ function toggleComisionPagada(nombre,modo){
     d.comisionPagada={fecha:today(),monto:Math.round(T.totalColegio*100)/100,...(desc?{modo:'descontada'}:{})};
     logHistorial(desc?'Comisión colegio descontada por el colegio':'Comisión colegio pagada',nombre+' '+fmt(T.totalColegio));
   }
-  save();renderComisionesColegios();
+  save();renderComisionesColegios();try{renderResumenNegocio();}catch(x){}
 }
 function imprimirComisionesColegios(){
   const win=window.open('','_blank');
