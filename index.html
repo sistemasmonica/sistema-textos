@@ -2194,6 +2194,7 @@ async function syncFromCloud(){
     try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
     try{reparacionOct2026b();}catch(e){console.warn('Reparación oct-2026 (2):',e);}
     try{reparacionOct2026c();}catch(e){console.warn('Reparación oct-2026 (3):',e);}
+    try{reparacionOct2026d();}catch(e){console.warn('Reparación oct-2026 (4):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -12329,6 +12330,34 @@ function reparacionOct2026c(){
     p.nombre=col.nombre;n++;t+=parseFloat(p.valor)||0;
   });
   logHistorial(MARCA,n+' cobro(s) por $'+t.toFixed(2)+' pasan a '+col.nombre);
+  save();
+  try{renderPagos();renderPorCobrar();renderComisiones();}catch(e){}
+}
+// 26-oct-2026: los 2 depósitos de Librería Calderón se guardaron sin internet y
+// se perdieron al volver la conexión (recuperados de la copia del navegador).
+// Su nota dice "SAULO 2128.00 Y SJM KIDS 1120.00": se vuelven a poner ya
+// separados por colegio. Una sola vez; no se duplican si ya se ingresaron a mano.
+function reparacionOct2026d(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 26-oct (2): cobros Librería Calderón recuperados';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const ya=(DB.pagos||[]).some(p=>p.tipo==='cobro'&&p.fecha==='2026-10-26'&&/CALDERON/i.test((p.nombre||'')+' '+(p.nota||'')));
+  const col=re=>colegiosList().find(c=>re.test(c.nombre));
+  const sau=col(/SAULO/i),sjm=col(/SJM/i);
+  if(ya||!sau||!sjm){logHistorial(MARCA,ya?'No hizo falta: ya estaban ingresados':'No se encontró SAULO o SJM KIDS');save();return;}
+  const base={fecha:'2026-10-26',tipo:'cobro',forma:'Transferencia'};
+  const orig='Librería Calderón — LIQUIDACION DE DOS COLEGIOS SAULO 2128.00 Y SJM KIDS 1120.00';
+  DB.pagos.push(
+    {...base,id:'1793051097134_uta669',nombre:sau.nombre,valor:2128,nota:orig+' · parte del depósito de $3174.75'},
+    {...base,id:'1793051097134_uta66b',nombre:sjm.nombre,valor:1046.75,nota:orig+' · parte del depósito de $3174.75'},
+    {...base,id:'1793050964902_l163xj',nombre:sjm.nombre,valor:73.25,nota:'Librería Calderón — PAGO DE VENTA DE LIBROS · depósito de $73.25'}
+  );
+  // Cantidades de la tarde (cuadraban exacto con la librería: SAULO 2128, SJM 1120).
+  // Solo si siguen como se volvieron a anotar a las 7 pm (no pisar otra corrección).
+  const fix=(c,re,de,a)=>{const l=(DB.colData[c.nombre]?.lineas||[]).find(x=>re.test(x.libro||''));
+    if(l&&l.cant===de.cant&&(l.dev||0)===de.dev){l.cant=a.cant;l.dev=a.dev;return 1;}return 0;};
+  const nFix=fix(sjm,/IMAGINA.*3 A/i,{cant:19,dev:0},{cant:18,dev:2})+fix(sjm,/IMAGINA.*4 A/i,{cant:19,dev:0},{cant:16,dev:0})+fix(sau,/IMAGINA.*3 A/i,{cant:15,dev:8},{cant:15,dev:7});
+  logHistorial(MARCA,'SAULO $2128.00 + SJM KIDS $1120.00 (depósitos de $3174.75 y $73.25)'+(nFix?' · '+nFix+' línea(s) vuelven a como estaban a las 4:45 pm':''));
   save();
   try{renderPagos();renderPorCobrar();renderComisiones();}catch(e){}
 }
