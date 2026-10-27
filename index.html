@@ -2196,6 +2196,7 @@ async function syncFromCloud(){
     try{reparacionOct2026c();}catch(e){console.warn('Reparación oct-2026 (3):',e);}
     try{reparacionOct2026d();}catch(e){console.warn('Reparación oct-2026 (4):',e);}
     try{reparacionOct2026e();}catch(e){console.warn('Reparación oct-2026 (5):',e);}
+    try{reparacionOct2026f();}catch(e){console.warn('Reparación oct-2026 (6):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -12391,6 +12392,32 @@ function reparacionOct2026e(){
   logHistorial(MARCA,marcados.length?marcados.join(' · '):'Ningún colegio');
   save();
 }
+// 26-oct-2026: comisión de la librería La Feria (Tumbaco) por COMENIOS:
+// 84 libros × $1.50 = $126. La librería debía $78 → se cruzó y Mónica le
+// transfirió $48 a Elizabeth. Queda: cobro $78 (compensación) + comisión de
+// librería $126 pagada. Una sola vez.
+function reparacionOct2026f(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 26-oct (4): comisión librería Tumbaco $126 (Comenios)';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const col=colegiosList().find(c=>/COMENIO/i.test(c.nombre));
+  if(!col){logHistorial(MARCA,'No se encontró COMENIOS');save();return;}
+  const hecho=[];
+  if(!(DB.pagos||[]).some(p=>p.tipo==='cobro'&&p.forma==='Compensación'&&_cobroEsDeColegio(p,col.nombre))){
+    DB.pagos.push({id:uid(),fecha:'2026-10-26',tipo:'cobro',nombre:col.nombre,valor:78,forma:'Compensación',
+      nota:'Saldo de la Librería La Feria (Tumbaco) cruzado con su comisión: 84 libros × $1.50 = $126 − $78 = $48 transferidos a Elizabeth'});
+    hecho.push('cobro $78 (compensación)');
+  }
+  DB.comisiones=DB.comisiones||[];
+  if(!DB.comisiones.some(c=>c.colegio===col.nombre&&c.tipo==='libreria')){
+    DB.comisiones.push({id:uid(),fecha:'2026-10-26',beneficiario:'Librería La Feria Tumbaco (Elizabeth)',tipo:'libreria',numFactura:'',
+      monto:126,estado:'pagado',colegio:col.nombre,nota:'84 libros vendidos × $1.50 — '+col.nombre+'. $48 por transferencia + $78 cruzados con lo que la librería debía'});
+    hecho.push('comisión librería $126');
+  }
+  logHistorial(MARCA,hecho.join(' + ')||'Ya estaba');
+  save();
+  try{renderPagos();renderComisiones();}catch(e){}
+}
 // Libros que se le pagan a Tech Books: los de inglés y los de Robótica
 // (Robótica la provee Marcos de Tech Books aunque el catálogo diga "DM BOOKS").
 function esLineaTechBooks(l){
@@ -13010,7 +13037,9 @@ function filasComisiones(){
     const tv=r2(T.tv),total=r2(T.totalColegio),neto=r2(tv-total),costo=r2(T.costo),cobrado=r2(P.cobrado);
     const pct=total<=0.005?'':(pcts.length===1&&pcts[0]>0?pcts[0]+'%':(pcts.filter(p=>p>0).length?'varios %':'capacitación'));
     const aCobrar=T.descontada?neto:tv;
-    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,gan:r2(neto-costo),pag:d.comisionPagada||null};
+    // Comisión que Mónica le paga a una librería por vender en este colegio (Comisiones → aparte, con colegio).
+    const lib=r2((DB.comisiones||[]).filter(x=>x.colegio===c.nombre).reduce((a,x)=>a+(parseFloat(x.monto)||0),0));
+    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,lib,gan:r2(neto-costo-lib),pag:d.comisionPagada||null};
   }).filter(x=>x&&(x.tv>0||x.cobrado>0)).sort((a,b)=>b.tv-a.tv);
   return L;
 }
@@ -13040,7 +13069,7 @@ function tablaComisionesHTML(print){
     ${td(fmt(x.cobrado),'#16a34a')}
     ${td(x.falta>1?fmt(x.falta):(x.falta<-1?'pagó de más '+fmt(-x.falta):'✅ pagado'),x.falta>1?'#dc2626':'#16a34a',x.falta>1)}
     ${td('− '+fmt(x.costo),'#1d4ed8')}
-    ${td(fmt(x.gan),x.gan>=0?'#16a34a':'#dc2626',1)}
+    ${td(fmt(x.gan)+(x.lib>0.005?sub('ya restada librería '+fmt(x.lib)):''),x.gan>=0?'#16a34a':'#dc2626',1)}
     <td style="padding:6px 7px;text-align:center;font-size:12px;font-weight:600;color:${v.col}">${corto[v.txt]||v.txt}</td>
     <td style="padding:6px 7px;text-align:center;font-size:12px">${estado(x)}</td></tr>`;};
   // Cuenta con la editorial (en la columna EDITORIAL de la misma tabla).
@@ -13111,7 +13140,7 @@ function exportarComisionesXLS(){
   // Filas de Excel: 1 título, 2 fecha, 3 vacía, 4 encabezado, 5.. colegios
   let fila=4;const desde=5;
   const filas=L.map(x=>{fila++;const v=veredictoComision(x);
-    return `<tr><td ${c} style="${XLS_TXT};font-weight:bold">${escH(x.nombre)}</td>${num(x.tv)}${num(x.total,';color:#b45309')}${fx('=B'+fila+'-C'+fila,x.neto,';color:#0369a1;font-weight:bold')}${num(x.cobrado,';color:#16a34a')}${fx((x.descontada?'=D':'=B')+fila+'-E'+fila,x.falta,';color:#dc2626')}${num(x.costo,';color:#1d4ed8')}${fx('=D'+fila+'-G'+fila,x.gan,';color:#16a34a;font-weight:bold')}<td ${c} style="text-align:center">${corto[v.txt]||v.txt}</td><td ${c} style="text-align:center">${x.total<=0.005?'—':(x.pag?'Entregada '+F(x.pag.fecha):'Por entregar')}</td></tr>`;}).join('');
+    return `<tr><td ${c} style="${XLS_TXT};font-weight:bold">${escH(x.nombre)}</td>${num(x.tv)}${num(x.total,';color:#b45309')}${fx('=B'+fila+'-C'+fila,x.neto,';color:#0369a1;font-weight:bold')}${num(x.cobrado,';color:#16a34a')}${fx((x.descontada?'=D':'=B')+fila+'-E'+fila,x.falta,';color:#dc2626')}${num(x.costo,';color:#1d4ed8')}${fx('=D'+fila+'-G'+fila+(x.lib>0.005?'-'+x.lib:''),x.gan,';color:#16a34a;font-weight:bold')}<td ${c} style="text-align:center">${corto[v.txt]||v.txt}</td><td ${c} style="text-align:center">${x.total<=0.005?'—':(x.pag?'Entregada '+F(x.pag.fecha):'Por entregar')}</td></tr>`;}).join('');
   const hasta=fila;fila++;const filaTot=fila;
   const S=k=>L.reduce((a,x)=>a+x[k],0);
   const sumCol=(k,col,extra)=>fx('=SUM('+col+desde+':'+col+hasta+')',S(k),extra,'tot');
