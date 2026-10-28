@@ -3697,13 +3697,31 @@ function kardexDatos(prodId){
   // Solo si el libro se creó con existencia (stockInicial) se muestra esa fila;
   // si arrancó en 0, el kárdex empieza directo con la primera compra.
   const filas=cant?[{fecha:p.creadoEn?String(p.creadoEn).slice(0,10):'',det:'Existencia cargada al crear el libro',ec:cant,eu:cu,et:tot,sc:cant,su:cu,st:tot}]:[];
-  const movs=DB.movInv.map((m,i)=>({m,i})).filter(x=>x.m.prodId===prodId)
+  // Retiros de guías (botón ↩): guardarRetiroGuia() achica la salida original,
+  // así que aquí se muestra la salida completa en su fecha y el retiro como fila
+  // propia en el día que se hizo, para que todo vaya en secuencia (Mónica, 2026-10-27).
+  // El saldo final no cambia: lo que se suma a la salida vuelve en la fila del retiro.
+  let movs=DB.movInv.filter(m=>m.prodId===prodId).map(m=>({...m}));
+  (DB.guias||[]).forEach(g=>(g.retiros||[]).forEach(r=>{
+    const n=(r.lineas||[]).filter(l=>l.prodId===prodId).reduce((a,l)=>a+(parseFloat(l.cantidad)||0),0);
+    if(!n)return;
+    const sal=movs.find(m=>m.tipo==='salida'&&m.ref===g.numero);
+    if(sal)sal.cantidad=(parseFloat(sal.cantidad)||0)+n;
+    else movs.push({tipo:'salida',prodId,cantidad:n,fecha:g.fecha,ref:g.numero,cliente:g.cliente});
+    movs.push({tipo:'entrada',origen:'retiroGuia',prodId,cantidad:n,fecha:r.fecha||g.fecha,
+      det:`Retiro de ${g.cliente} (guía ${g.numero}) → ${r.destino==='BODEGA'?'vuelve a bodega':r.destino+(r.guiaNueva?' ('+r.guiaNueva+')':'')}`});
+  }));
+  movs=movs.map((m,i)=>({m,i}))
     .sort((a,b)=>String(a.m.fecha||'').localeCompare(String(b.m.fecha||''))||a.i-b.i).map(x=>x.m);
   let tE=cant,tEv=tot,tS=0,tSv=0;
   movs.forEach(m=>{
     const q=parseFloat(m.cantidad)||0;
     const f={fecha:m.fecha||'',det:kardexDetalle(m)};
-    if(m.tipo==='entrada'){
+    if(m.origen==='retiroGuia'){
+      // vuelve a bodega al costo promedio del momento (no cambia el costo unitario)
+      f.det=m.det;f.ec=q;f.eu=cu;f.et=q*cu;tE+=q;tEv+=q*cu;
+      tot+=q*cu;cant+=q;
+    }else if(m.tipo==='entrada'){
       const u=parseFloat(m.precioCosto)||cu;
       f.ec=q;f.eu=u;f.et=q*u;tE+=q;tEv+=q*u;
       tot+=q*u;cant+=q;cu=cant>0?tot/cant:u;
