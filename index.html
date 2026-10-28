@@ -13484,25 +13484,41 @@ function tablaComisionesHTML(print){
   ${(()=>{
     // Lo que gané y si me alcanza (Mónica 27-oct): mismas cifras que Liquidación
     // (resumenGanancia) y que Resumen ④ AL FINAL, para que no salgan distintas.
-    const G=resumenGanancia(), banco=leerBancoCierre(), base=banco===null?R.caja:banco;
+    const G=resumenGanancia(), banco=leerBancoCierre();
     const otros=Math.round((S('tv')-S('total')-S('costo')-G.neta)*100)/100;
-    const q=base+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;
     return tit('💰 CUÁNTO GANÉ Y SI ME ALCANZA','#dcfce7')
       +edRow('Vendí a los colegios',S('tv'),'#111','columna 1')
       +edRow('− Comisión para los colegios',S('total'),'#b45309','columna 2'+(comPend>0.005?' (todavía por entregar: '+fmt(comPend)+')':''))
       +edRow('− Lo que cuestan esos libros a la editorial',S('costo'),'#1d4ed8','columna 4: esto es lo que les pago por lo vendido (Didáctica + Tech Books)')
       +(otros>0.005?edRow('− Comisiones a librerías y otros gastos del negocio',otros,'#b45309','librerías, capacitaciones, internet…'):'')
       +edRow('= LO QUE GANÉ CON LOS LIBROS',G.neta,G.neta>=0?'#16a34a':'#dc2626','igual que Liquidación · de lo vendido ya me pagaron '+fmt(S('cobrado'))+' y me falta cobrar '+fmt(R.porCobrar),1)
-      +tit('🏦 ¿ME ALCANZA LA PLATA? — cuando cobre todo, devuelva lo que sobra y pague todo','#dcfce7')
-      +(banco===null
-        ?edRow('Plata que ya tengo (cobré − pagué)',R.caja,'#111','⚠️ para que sea real, escriba cuánto hay en el banco en Colegios → Banco Pichincha')
-        :edRow('Plata que de verdad hay en el banco',banco,'#111',R.caja-banco>0.005?'de lo cobrado − pagado ('+fmt(R.caja)+') ya salieron de la cuenta '+fmt(R.caja-banco)+': gastos, retiros, préstamo…':'lo que escribió en Colegios → Banco Pichincha'))
-      +edRow('+ Me falta cobrar a los colegios',R.porCobrar,'#16a34a','')
-      +edRow('− Le debo a las dos editoriales',R.debeEd,'#dc2626','')
-      +(R.porDevolver>0.005?edRow('+ Lo que baja la deuda al devolver los libros que no vendí',R.porDevolver,'#7c3aed','según las facturas de la editorial'):'')
-      +(R.comAparte>0.005?edRow('− Comisiones que les doy yo a los colegios',R.comAparte,'#b45309','los que pagan el PVP completo'):'')
-      +(R.comOtrasPend>0.005?edRow('− Otras comisiones por pagar',R.comOtrasPend,'#b45309','librerías, capacitaciones'):'')
-      +`<tr style="border-top:3px double #334155;background:${q>=0?'#dcfce7':'#fee2e2'}"><td colspan="6" style="padding:8px 7px;text-align:right;font-weight:800;font-size:13px">= ME QUEDA<div style="font-size:12px;font-weight:700;color:${q>=0?'#166534':'#991b1b'}">${q>=0?'✅ Sí me alcanza: me sobran '+fmt(q):'❌ No me alcanza: me faltan '+fmt(-q)}</div></td>${td(fmt(q),q>=0?'#16a34a':'#dc2626',1,'font-size:15px;')}<td colspan="3"></td></tr>`;})()}
+      +alcanzaHTML();
+    // ¿Me alcanza? en dos columnas (Mónica 27-oct: la lista con + y − la confundía):
+    // TENGO Y ME VAN A PAGAR | TENGO QUE PAGAR (editoriales ya sin los libros que devuelvo).
+    function alcanzaHTML(){
+      const it=(t,v,nota)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #e2e8f0"><div><div style="font-size:13px;font-weight:600">${t}</div>${nota?'<div style="font-size:11px;color:#64748b">'+nota+'</div>':''}</div><div style="${mono}font-size:14px;font-weight:700;white-space:nowrap">${fmt(v)}</div></div>`;
+      const tengo=[banco===null?['Plata que tengo',R.caja,'⚠️ escriba lo que hay en el banco en Colegios → Banco Pichincha']:['Plata en el banco',banco,'']];
+      tengo.push(['Me falta cobrar a los colegios',R.porCobrar,'']);
+      const pagar=Object.entries(R.ed).map(([g,x])=>[g,Math.max(0,(x.debe||0)-(x.porDevolver||0)),x.porDevolver>0.005?'ya sin los libros que le devuelvo ('+fmt(x.porDevolver)+')':''])
+        .filter(x=>x[1]>0.005).map(([g,v,n])=>['A '+(g==='Tech Books'?'Tech Books (Marco)':g),v,n]);
+      if(R.comAparte>0.005)pagar.push(['Comisiones a los colegios',R.comAparte,'']);
+      if(R.comOtrasPend>0.005)pagar.push(['Otras comisiones',R.comOtrasPend,'librerías, capacitaciones']);
+      const tT=tengo.reduce((a,x)=>a+x[1],0), tP=pagar.reduce((a,x)=>a+x[1],0), q=tT-tP;
+      const caja=(tit,col,bg,L,tot)=>`<div style="flex:1;min-width:260px;border:2px solid ${col};border-radius:10px;background:${bg};padding:10px 14px">
+        <div style="font-weight:800;font-size:14px;color:${col};margin-bottom:4px">${tit}</div>${L.map(x=>it(...x)).join('')}
+        <div style="display:flex;justify-content:space-between;padding-top:8px;font-weight:800;font-size:15px;color:${col}"><span>TOTAL</span><span style="${mono}">${fmt(tot)}</span></div></div>`;
+      return tit('🏦 ¿ME ALCANZA LA PLATA?','#dcfce7')
+        +`<tr><td colspan="10" style="padding:12px 7px"><div style="position:sticky;left:7px;width:900px;max-width:calc(100vw - 70px)">
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            ${caja('✅ TENGO Y ME VAN A PAGAR','#15803d','#f0fdf4',tengo,tT)}
+            ${caja('📤 TENGO QUE PAGAR','#b91c1c','#fef2f2',pagar,tP)}
+          </div>
+          <div style="margin-top:12px;border-radius:10px;padding:12px 16px;text-align:center;background:${q>=0?'#dcfce7':'#fee2e2'};border:2px solid ${q>=0?'#15803d':'#b91c1c'}">
+            <div style="font-size:13px;color:#334155">${fmt(tT)} − ${fmt(tP)} =</div>
+            <div style="font-size:22px;font-weight:800;color:${q>=0?'#15803d':'#b91c1c'}">${q>=0?'✅ ME SOBRAN '+fmt(q):'❌ ME FALTAN '+fmt(-q)}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">cuando cobre todo, devuelva a Didáctica los libros que no vendí y pague todo</div>
+          </div></div></td></tr>`;
+    }})()}
   </tbody></table></div>
   <details style="margin-top:6px" ${print?'open':''}><summary style="font-size:12px;cursor:pointer">Ver las ${fac.length} facturas de Didáctica para marcar con su estado de cuenta</summary>
   <div style="font-size:11px;line-height:1.7;margin-top:4px">${fac.map(r=>`<span style="display:inline-block;min-width:140px;${antes(r)?'':'color:#7c3aed;font-weight:700'}">${escH(String(r.numFact||'').split('-').pop().replace(/^0+/,''))} · ${fmt(val(r))}</span>`).join('')}</div>
