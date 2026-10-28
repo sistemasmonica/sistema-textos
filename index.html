@@ -12706,6 +12706,24 @@ function grupoEditorial(txt){
   if(/TECH\s*BOOKS/i.test(txt))return 'Tech Books';
   return null;
 }
+// Libros de Didáctica que no se vendieron y se le pueden devolver (bajan la
+// deuda con nota de crédito): lo que hay en bodega (ahí ya entraron las
+// devoluciones de los colegios) + las muestras que siguen en los colegios.
+function paraDevolverDidactica(){
+  const esTB=(nombre,prodId)=>esLineaTechBooks({libro:nombre,prodId});
+  const costo=id=>parseFloat(DB.productos.find(p=>p.id===id)?.precioCosto)||0;
+  const bodega={u:0,v:0},muestras={u:0,v:0};
+  DB.productos.filter(p=>p.editorial!=='Hist.'&&!esTB(p.nombre,p.id)).forEach(p=>{
+    const s=stockActual(p.id);if(s>0){bodega.u+=s;bodega.v+=s*(parseFloat(p.precioCosto)||0);}
+  });
+  DB.guias.filter(esGuiaMuestra).forEach(g=>(g.lineas||[]).forEach(l=>{
+    const n=l.cantidad||0;if(n<=0||esTB(l.libro||l.nombre||'',l.prodId))return;
+    muestras.u+=n;muestras.v+=n*costo(l.prodId);
+  }));
+  let devCol=0;
+  Object.values(DB.colData||{}).forEach(d=>(d.lineas||[]).forEach(l=>{if(!esLineaTechBooks(l))devCol+=parseFloat(l.dev)||0;}));
+  return {bodega,muestras,u:bodega.u+muestras.u,v:bodega.v+muestras.v,devCol};
+}
 function resumenNegocio(){
   let vendido=0,ganancia=0,aCobrar=0,comPorEntregar=0,comAparte=0;
   const costoVend={'Didáctica':0,'Tech Books':0};
@@ -13389,6 +13407,20 @@ function tablaComisionesHTML(print){
   ${edRow('− Devoluciones a Didáctica',D.notas,'#7c3aed',D.ncs.length+' nota(s) de crédito')}
   ${edRow('− Abonos a Didáctica',D.pagado,'#16a34a',lp(D.pagos)+(pagA.length<D.pagos.length?' (su estado de cuenta del '+F(E.corte)+' solo trae '+fmt(sum(pagA))+')':''))}
   ${edRow('= LE DEBO A DIDÁCTICA',Math.max(0,D.debe),'#dc2626',D.porDevolver>0.005?'de eso: <b>'+fmt(Math.max(0,D.debe-D.porDevolver))+'</b> por libros que ya vendí (sí o sí pago) + <b>'+fmt(D.porDevolver)+'</b> por libros que todavía tengo (si los devuelvo, no los pago)':'',1)}
+  ${(()=>{const P=paraDevolverDidactica();if(P.u<=0)return '';
+    const u=n=>n+' libro'+(n===1?'':'s'), dif=D.porDevolver-P.v;
+    const r=(txt,n,v,col,nota,big)=>`<tr style="border-top:${big?'2px solid #7c3aed':'1px solid #e9d5ff'};background:${big?'#ede9fe':'#faf5ff'}">
+      <td colspan="5" style="padding:6px 7px;text-align:right"><span style="font-weight:${big?800:600};font-size:${big?13:12}px">${txt}</span>${nota?'<div style="font-size:11px;color:#475569;margin-top:2px">'+nota+'</div>':''}</td>
+      ${td(n,'#111',big)}${td(fmt(v),col,1,big?'font-size:14px;':'')}<td colspan="3"></td></tr>`;
+    return tit('📦 LO QUE TENGO PARA DEVOLVER A DIDÁCTICA — libros que NO se vendieron','#ede9fe')
+      +r('En mi bodega',u(P.bodega.u),P.bodega.v,'#7c3aed','aquí ya entraron los '+P.devCol+' libros que me devolvieron los colegios')
+      +r('+ Muestras que siguen en los colegios',u(P.muestras.u),P.muestras.v,'#7c3aed','hay que retirarlas para poder devolverlas')
+      +r('= PARA DEVOLVER A DIDÁCTICA',u(P.u),P.v,'#7c3aed','al costo de la editorial: esto me lo descuentan con nota de crédito cuando lo devuelva',1)
+      // Nunca baja de lo que ya se vendió: si en bodega+muestras hay más que lo
+      // facturado sin vender, la diferencia no está en las facturas de Didáctica.
+      +r('SI DEVUELVO TODO, LE DEBO A DIDÁCTICA','',Math.max(0,D.debe-Math.min(P.v,D.porDevolver)),'#dc2626','lo que sí o sí pago por los libros que ya vendí'
+        +(dif>1?'<br>⚠️ Según las facturas deberían quedar '+fmt(D.porDevolver)+' en libros sin vender; faltan '+fmt(dif)+' (libros perdidos, regalados o conteo por revisar)'
+          :(dif<-1?'<br>De los '+fmt(P.v)+', '+fmt(-dif)+' no están en las facturas de Didáctica (muestras que regaló la editorial o conteo por revisar): devolverlos no baja la deuda':'')),1);})()}
   ${TB?tit('🔤 TECH BOOKS (Marco)','#ede9fe'):''}
   ${TB?edRow('Libros de Tech Books que vendí',TB.facturado,'#111','a Tech Books se le paga solo lo vendido'):''}
   ${TB?edRow('− Abonos a Tech Books',TB.pagado,'#16a34a',lp(TB.pagos)):''}
