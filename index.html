@@ -9499,6 +9499,13 @@ function leerBancoCierre(){
   const v=parseFloat(tb);
   return isFinite(v)?v:null;
 }
+function guardarBancoCierre(v){
+  v=String(v||'').trim();
+  try{localStorage.setItem('txe_cierre_banco',v);}catch(e){}
+  const ib=document.getElementById('col-cierre-banco');if(ib)ib.value=v;
+  renderComisiones();
+  toast('Banco guardado: '+(v||'vacío'),'ok');
+}
 function imprimirColegiosPorCerrar(){
   initColData();
   const orden={falta:0,listo:1,sin:2,cerrado:3};
@@ -13496,8 +13503,10 @@ function tablaComisionesHTML(print){
     // ¿Me alcanza? en dos columnas (Mónica 27-oct: la lista con + y − la confundía):
     // TENGO Y ME VAN A PAGAR | TENGO QUE PAGAR (editoriales ya sin los libros que devuelvo).
     function alcanzaHTML(){
-      const it=(t,v,nota)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #e2e8f0"><div><div style="font-size:13px;font-weight:600">${t}</div>${nota?'<div style="font-size:11px;color:#64748b">'+nota+'</div>':''}</div><div style="${mono}font-size:14px;font-weight:700;white-space:nowrap">${fmt(v)}</div></div>`;
-      const tengo=[banco===null?['Plata que tengo',R.caja,'⚠️ escriba lo que hay en el banco en Colegios → Banco Pichincha']:['Plata en el banco',banco,'']];
+      const it=(t,v,nota,campo)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #e2e8f0"><div><div style="font-size:13px;font-weight:600">${t}</div>${nota?'<div style="font-size:11px;color:#64748b">'+nota+'</div>':''}</div><div style="${mono}font-size:14px;font-weight:700;white-space:nowrap">${campo||fmt(v)}</div></div>`;
+      // Casilla para escribir aquí mismo la plata del banco (la misma de Colegios → Banco Pichincha).
+      const campoBanco=print?'':`$<input type="text" inputmode="decimal" value="${banco===null?'':banco}" placeholder="escriba" style="width:110px;padding:5px 7px;font-size:14px;font-weight:700;text-align:right;border:2px solid #15803d;border-radius:6px" onchange="guardarBancoCierre(this.value)">`;
+      const tengo=[banco===null?['Plata en el banco',0,'⚠️ escriba cuánto hay hoy en el banco y aplaste Enter',campoBanco]:['Plata en el banco',banco,print?'':'si cambia, escriba lo de hoy y aplaste Enter',campoBanco]];
       tengo.push(['Me falta cobrar a los colegios',R.porCobrar,'']);
       const pagar=Object.entries(R.ed).map(([g,x])=>[g,Math.max(0,(x.debe||0)-(x.porDevolver||0)),x.porDevolver>0.005?'ya sin los libros que le devuelvo ('+fmt(x.porDevolver)+')':''])
         .filter(x=>x[1]>0.005).map(([g,v,n])=>['A '+(g==='Tech Books'?'Tech Books (Marco)':g),v,n]);
