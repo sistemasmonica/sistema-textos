@@ -29,6 +29,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .nt{flex:1;min-width:72px;padding:7px 5px;text-align:center;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;border:none;background:transparent;color:var(--mu);white-space:nowrap;transition:all .15s}
 .nt.on{background:var(--g1);color:#fff}
 .nt:hover:not(.on){background:var(--lt)}
+/* Menú principal: lo repetido va en "Más (contadora)"; la pestaña abierta siempre se ve */
+#nav-main:not(.ver-mas)>.nt.extra:not(.on){display:none}
+#nav-main>.nt.extra{background:#f8fafc}
+#nav-main>.nt.extra.on{background:var(--g1)}
+#nav-main>.nt-mas{flex:0 0 auto;padding:7px 10px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;border:1px dashed var(--bd);background:#fff;color:#475569;white-space:nowrap}
 .pn{display:none}.pn.on{display:block}
 .sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
 .sc-grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
@@ -172,31 +177,34 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 </div>
 
 <!-- NAV -->
-<div class="nav">
-  <button class="nt on" onclick="tab('dash',this)"><i class="ti ti-dashboard"></i> Inicio</button>
-  <button class="nt" onclick="tab('xml',this)" id="btn-xml"><i class="ti ti-file-code"></i> <b style="color:#16a34a">1</b> XML+IA <span id="badge-correo" style="display:none;background:#e53935;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700"></span></button>
-  <button class="nt" onclick="tab('man',this)"><i class="ti ti-pencil"></i> <b style="color:#16a34a">1</b> Manual</button>
-  <button class="nt" onclick="tab('inv',this)"><i class="ti ti-package"></i> <b style="color:#16a34a">2</b> Inventario</button>
-  <button class="nt" onclick="tab('colegios',this)"><i class="ti ti-school"></i> <b style="color:#16a34a">3</b> Colegios</button>
-  <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> <b style="color:#16a34a">4</b> Pagos</button>
-  <button class="nt" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> <b style="color:#16a34a">5</b> Por Cobrar</button>
-  <button class="nt" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> <b style="color:#16a34a">6</b> Editorial</button>
-  <button class="nt" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> <b style="color:#16a34a">7</b> Banco</button>
-  <button class="nt" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
-  <button class="nt" onclick="tab('balance',this)"><i class="ti ti-scale"></i> Balance</button>
-  <button class="nt" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
-  <button class="nt" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
-  <button class="nt" onclick="tab('decl',this)"><i class="ti ti-file-certificate"></i> Declaraciones</button>
-  <button class="nt" onclick="tab('mov',this)"><i class="ti ti-list"></i> Movimientos</button>
-  <button class="nt" onclick="tab('venta',this)"><i class="ti ti-currency-dollar"></i> Ventas</button>
-  <button class="nt" onclick="tab('comisiones',this)"><i class="ti ti-percentage"></i> Comisiones</button>
-  <button class="nt" onclick="tab('deudas',this)"><i class="ti ti-credit-card-off"></i> Deudas</button>
-  <button class="nt" onclick="tab('historial',this)"><i class="ti ti-history"></i> Historial</button>
-  <button class="nt" onclick="tab('ayuda',this)"><i class="ti ti-help"></i> Ayuda</button>
+<!-- Mónica 27-oct: "hay tantas opciones de lo mismo que me confundo" → a la vista
+     solo Mi cuenta + lo del día a día; lo repetido queda en "Más (contadora)". -->
+<div class="nav" id="nav-main">
+  <button class="nt on" onclick="tab('comisiones',this)" id="btn-micuenta" style="font-size:12px"><i class="ti ti-pig-money"></i> 💰 Mi cuenta</button>
+  <button class="nt" onclick="tab('colegios',this)"><i class="ti ti-school"></i> Colegios</button>
+  <button class="nt" onclick="tab('inv',this)"><i class="ti ti-package"></i> Inventario</button>
+  <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> Pagos</button>
+  <button class="nt" onclick="tab('xml',this)" id="btn-xml"><i class="ti ti-file-code"></i> Facturas XML+IA <span id="badge-correo" style="display:none;background:#e53935;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700"></span></button>
+  <button class="nt" onclick="tab('man',this)"><i class="ti ti-pencil"></i> Factura manual</button>
+  <button class="nt-mas" id="btn-mas" onclick="toggleMenuMas()" title="Pantallas para la contadora o para revisar: muestran las mismas cifras de Mi cuenta de otra forma">➕ Más (contadora)</button>
+  <button class="nt extra" onclick="tab('dash',this)"><i class="ti ti-dashboard"></i> Inicio</button>
+  <button class="nt extra" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> Por Cobrar</button>
+  <button class="nt extra" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> Editorial</button>
+  <button class="nt extra" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> Banco</button>
+  <button class="nt extra" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
+  <button class="nt extra" onclick="tab('balance',this)"><i class="ti ti-scale"></i> Balance</button>
+  <button class="nt extra" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
+  <button class="nt extra" onclick="tab('cons',this)"><i class="ti ti-chart-pie"></i> Consolidado</button>
+  <button class="nt extra" onclick="tab('decl',this)"><i class="ti ti-file-certificate"></i> Declaraciones</button>
+  <button class="nt extra" onclick="tab('mov',this)"><i class="ti ti-list"></i> Movimientos</button>
+  <button class="nt extra" onclick="tab('venta',this)"><i class="ti ti-currency-dollar"></i> Ventas</button>
+  <button class="nt extra" onclick="tab('deudas',this)"><i class="ti ti-credit-card-off"></i> Deudas</button>
+  <button class="nt extra" onclick="tab('historial',this)"><i class="ti ti-history"></i> Historial</button>
+  <button class="nt extra" onclick="tab('ayuda',this)"><i class="ti ti-help"></i> Ayuda</button>
 </div>
 
 <!-- ===================== INICIO ===================== -->
-<div id="pn-dash" class="pn on">
+<div id="pn-dash" class="pn">
   <div style="text-align:right;font-size:11px;color:var(--mu);margin-bottom:6px" id="d-actualizado">Datos actualizados: —</div>
   <div id="d-resumen-negocio" style="margin-bottom:12px"></div>
   <div id="d-resumen-ganancia" style="margin-bottom:12px"></div>
@@ -810,7 +818,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   <div class="sh">
     <h2>Todos los movimientos</h2>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-p btn-sm" onclick="tab('xml',document.querySelectorAll('.nav>.nt')[1])"><i class="ti ti-file-upload"></i> Importar XML</button>
+      <button class="btn btn-p btn-sm" onclick="tab('xml',document.getElementById('btn-xml'))"><i class="ti ti-file-upload"></i> Importar XML</button>
       <button class="btn btn-s btn-sm" onclick="exportCSV()"><i class="ti ti-download"></i> CSV</button>
     </div>
   </div>
@@ -1203,10 +1211,10 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
 </div>
 
 <!-- PANEL: COMISIONES -->
-<div id="pn-comisiones" class="pn">
+<div id="pn-comisiones" class="pn on">
   <div class="card" style="border:2px solid #f59e0b">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-      <div class="card-t" style="margin:0;color:#b45309"><i class="ti ti-list-check"></i> Comisiones que debo pagar a los colegios</div>
+      <div class="card-t" style="margin:0;color:#b45309"><i class="ti ti-list-check"></i> 💰 Mi cuenta — colegios, editoriales, cuánto gané y si me alcanza</div>
       <button class="btn btn-s btn-sm" onclick="imprimirComisionesColegios()"><i class="ti ti-printer"></i> Imprimir</button>
     </div>
     <div id="com-col-lista"></div>
@@ -1936,6 +1944,7 @@ function aplicarModoLectura(){
   const btnBackup=document.getElementById('btn-backup');if(btnBackup)btnBackup.style.display='none';
   const lblRestaurar=document.getElementById('lbl-restaurar');if(lblRestaurar)lblRestaurar.style.display='none';
   const btnCopias=document.getElementById('btn-copias');if(btnCopias)btnCopias.style.display='none';
+  setTimeout(()=>document.getElementById('nav-main')?.classList.add('ver-mas'),0); // la contadora ve todas las pantallas
 }
 
 function setSyncStatus(s,detalle){
@@ -8172,6 +8181,14 @@ function irATab(id){
   const btn=[...document.querySelectorAll('.nav > .nt')].find(b=>(b.getAttribute('onclick')||'').includes(`tab('${id}'`));
   if(btn)tab(id,btn);
 }
+// "➕ Más (contadora)": muestra u oculta las pantallas repetidas del menú (se recuerda por aparato).
+function toggleMenuMas(forzar){
+  const nav=document.getElementById('nav-main'),b=document.getElementById('btn-mas');if(!nav)return;
+  const ver=forzar===undefined?!nav.classList.contains('ver-mas'):!!forzar;
+  nav.classList.toggle('ver-mas',ver);
+  if(b)b.textContent=ver?'➖ Menos':'➕ Más (contadora)';
+  try{localStorage.setItem('txe_menu_mas',ver?'1':'0');}catch(e){}
+}
 
 function irAInvTab(id){
   irATab('inv');
@@ -11858,6 +11875,8 @@ try{
   document.getElementById('banco-mi-nombre').value=localStorage.getItem('txe_mi_nombre_banco')||'';
   updateCount();
   renderDash();
+  try{toggleMenuMas(localStorage.getItem('txe_menu_mas')==='1');}catch(e){}
+  try{renderComisiones();}catch(e){console.warn('mi cuenta',e);}
   agregarLineaEntrada();
   aplicarModoLectura();
   iniciarNube();
