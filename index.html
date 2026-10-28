@@ -9437,6 +9437,18 @@ function toggleCierreColegio(){
   refrescarCierreColSel();
   toast(d.cerrado?'"'+nombre+'" marcado como cerrado':'"'+nombre+'" reabierto','ok');
 }
+// Plata real en el banco que Mónica escribe en Colegios → "Banco Pichincha $"
+// (se guarda en esta computadora). null si no escribió nada. 5.000 / 5,000 =
+// cinco mil; solo es decimal si al final hay 1-2 cifras (5000.50).
+function leerBancoCierre(){
+  let rb='';try{rb=localStorage.getItem('txe_cierre_banco')||'';}catch(e){}
+  const ib=document.getElementById('col-cierre-banco');if(ib&&ib.value)rb=ib.value;
+  let tb=String(rb).replace(/[^0-9.,]/g,'');
+  if(!tb)return null;
+  tb=/[.,][0-9]{1,2}$/.test(tb)?tb.replace(/[.,](?=.*[.,])/g,'').replace(',','.'):tb.replace(/[.,]/g,'');
+  const v=parseFloat(tb);
+  return isFinite(v)?v:null;
+}
 function imprimirColegiosPorCerrar(){
   initColData();
   const orden={falta:0,listo:1,sin:2,cerrado:3};
@@ -12764,6 +12776,7 @@ function resumenNegocioHTML(R){
   const D=R.ed['Didáctica']||{facturado:0,notas:0,pagado:0,debe:0},T=R.ed['Tech Books']||{facturado:0,notas:0,pagado:0,debe:0,sinFacturas:false};
   const cab=`<tr style="background:#f1f5f9;font-size:11px;font-weight:700;color:#334155"><td style="${tdL}"></td><td style="${td};font-family:inherit">📘 DIDÁCTICA</td><td style="${td};font-family:inherit">🔤 TECH BOOKS</td><td style="${td};font-family:inherit">TOTAL</td></tr>`;
   const f3=(t,a,b,o={})=>`<tr style="${o.b?'font-weight:800;':''}${o.bg?'background:'+o.bg:''}"><td style="${tdL}">${t}</td><td style="${td};${o.color?'color:'+o.color(a):''}">${m(a)}</td><td style="${td};${o.color?'color:'+o.color(b):''}">${m(b)}</td><td style="${td};font-weight:700;${o.color?'color:'+o.color(a+b):''}">${m(a+b)}</td></tr>`;
+  const bancoReal=leerBancoCierre();
   const f1=(t,v,o={})=>`<tr style="${o.b?'font-weight:800;':''}${o.bg?'background:'+o.bg:''}"><td style="${tdL}">${t}</td><td style="${td};font-size:${o.big?'17px':'14px'};${o.color?'color:'+o.color:''}">${m(v)}</td></tr>`;
   const rojo=v=>v>1?'#c0392b':'#1b5e20', verde=v=>v>=0?'#1b5e20':'#c0392b';
   const gD=(R.ventaEd['Didáctica']||0)-(R.costoVend['Didáctica']||0), gT=(R.ventaEd['Tech Books']||0)-(R.costoVend['Tech Books']||0);
@@ -12803,13 +12816,15 @@ function resumenNegocioHTML(R){
     </table>
     ${tit('④ AL FINAL')}
     <table style="width:100%;border-collapse:collapse">
-      ${f1('💵 Plata que ya tengo (cobré − pagué)',R.caja)}
+      ${bancoReal===null?f1('💵 Plata que ya tengo (cobré − pagué)',R.caja)
+        :f1('🏦 Plata que de verdad hay en el banco <span style="font-size:10px;color:#999">(lo que escribiste en Colegios → Banco Pichincha)</span>',bancoReal)
+        +(R.caja-bancoReal>0.005?`<tr><td style="${tdL};font-size:11px;color:#777">(de lo cobrado − pagado, ${fmt(R.caja)}, ya salieron de la cuenta ${fmt(R.caja-bancoReal)}: gastos, retiros, préstamo…)</td><td></td></tr>`:'')}
       ${f1('(+) Me falta cobrar',R.porCobrar)}
       ${f1('(−) Le debo hoy a las editoriales',R.debeEd)}
       ${R.porDevolver?f1('(+) Lo que baja la deuda al devolver los libros que sobran',R.porDevolver):''}
       ${R.comOtrasPend>0.005?f1('(−) Otras comisiones por pagar (librerías, capacitaciones)',R.comOtrasPend):''}
       ${R.comAparte>0.005?f1('(−) Comisiones que les doy yo a los colegios'+(R.comPorEntregar>0.005?' (por entregar: '+fmt(R.comPorEntregar)+')':''),R.comAparte):''}
-      ${(()=>{const q=R.caja+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
+      ${(()=>{const q=(bancoReal===null?R.caja:bancoReal)+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
     </table>
   </div>`;
 }
