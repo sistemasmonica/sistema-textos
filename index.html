@@ -13332,7 +13332,10 @@ function filasComisiones(){
     const aCobrar=T.descontada?neto:tv;
     // Comisión que Mónica le paga a una librería por vender en este colegio (Comisiones → aparte, con colegio).
     const lib=r2((DB.comisiones||[]).filter(x=>x.colegio===c.nombre).reduce((a,x)=>a+(parseFloat(x.monto)||0),0));
-    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,lib,gan:r2(neto-costo-lib),pag:d.comisionPagada||null};
+    // Devoluciones del colegio: ya están restadas de VENDÍ y de EDITORIAL; se muestran para que se vea.
+    const devCosto=r2((d.lineas||[]).reduce((a,l)=>a+(l.dev||0)*(l.costo||0),0));
+    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,lib,gan:r2(neto-costo-lib),pag:d.comisionPagada||null,
+      dev:T.dev,devPvp:r2(T.tvBruto-T.tv),entregado:r2(T.tvBruto),devCosto};
   }).filter(x=>x&&(x.tv>0||x.cobrado>0)).sort((a,b)=>b.tv-a.tv);
   return L;
 }
@@ -13356,12 +13359,12 @@ function tablaComisionesHTML(print){
   const fila=x=>{const v=veredictoComision(x);
     return `<tr style="border-top:1px solid #e2e8f0">
     <td style="padding:6px 7px;font-weight:700">${escH(x.nombre)}</td>
-    ${td(fmt(x.tv))}
+    ${td(fmt(x.tv)+(x.dev>0?sub('entregué '+fmt(x.entregado))+`<div style="font-size:10px;color:#7c3aed;font-weight:600">↩ devolvió ${x.dev} libros − ${fmt(x.devPvp)}</div>`:''))}
     ${td((x.total>0.005?'− '+fmt(x.total):'—')+(x.pct?sub(x.pct):''),'#b45309',0)}
     ${td(fmt(x.neto),'#0369a1',1)}
     ${td(fmt(x.cobrado),'#16a34a')}
     ${td(x.falta>1?fmt(x.falta):(x.falta<-1?'pagó de más '+fmt(-x.falta):'✅ pagado'),x.falta>1?'#dc2626':'#16a34a',x.falta>1)}
-    ${td('− '+fmt(x.costo),'#1d4ed8')}
+    ${td('− '+fmt(x.costo)+(x.dev>0?`<div style="font-size:10px;color:#7c3aed;font-weight:600">sin los ${x.dev} devueltos (${fmt(x.devCosto)})</div>`:''),'#1d4ed8')}
     ${td(fmt(x.gan)+(x.lib>0.005?sub('ya restada librería '+fmt(x.lib)):''),x.gan>=0?'#16a34a':'#dc2626',1)}
     <td style="padding:6px 7px;text-align:center;font-size:12px;font-weight:600;color:${v.col}">${corto[v.txt]||v.txt}</td>
     <td style="padding:6px 7px;text-align:center;font-size:12px">${estado(x)}</td></tr>`;};
@@ -13399,7 +13402,7 @@ function tablaComisionesHTML(print){
   <tbody>${L.map(fila).join('')}
   <tr style="border-top:2px solid #334155;background:#f1f5f9;font-weight:800">
    <td style="padding:8px 7px">TOTAL</td>
-   ${td(fmt(S('tv')),'',1,'font-size:13px;')}${td('− '+fmt(S('total')),'#b45309',1,'font-size:13px;')}${td(fmt(S('neto')),'#0369a1',1,'font-size:13px;')}${td(fmt(S('cobrado')),'#16a34a',1,'font-size:13px;')}${td(fmt(Math.max(0,S('falta'))),'#dc2626',1,'font-size:13px;')}${td('− '+fmt(S('costo')),'#1d4ed8',1,'font-size:13px;')}${td(fmt(S('gan')),'#16a34a',1,'font-size:14px;')}
+   ${td(fmt(S('tv'))+(S('dev')>0?`<div style="font-size:10px;color:#7c3aed">↩ devolvieron ${S('dev')} libros − ${fmt(S('devPvp'))}</div>`:''),'',1,'font-size:13px;')}${td('− '+fmt(S('total')),'#b45309',1,'font-size:13px;')}${td(fmt(S('neto')),'#0369a1',1,'font-size:13px;')}${td(fmt(S('cobrado')),'#16a34a',1,'font-size:13px;')}${td(fmt(Math.max(0,S('falta'))),'#dc2626',1,'font-size:13px;')}${td('− '+fmt(S('costo')),'#1d4ed8',1,'font-size:13px;')}${td(fmt(S('gan')),'#16a34a',1,'font-size:14px;')}
    <td colspan="2" style="padding:8px 7px;text-align:center;font-size:12px;color:#b45309">comisión por entregar: ${fmt(comPend)}</td></tr>
   <tr><td colspan="10" style="padding:8px 7px 4px;font-weight:800;font-size:13px;background:#e2e8f0">📚 LAS EDITORIALES — los ${fmt(S('costo'))} de la columna 4 se pagan aparte, a cada editorial (no por colegio):</td></tr>
   ${tit('📘 DIDÁCTICA','#dbeafe')}
