@@ -11852,9 +11852,12 @@ function editorialPorColegio(){
       const v=(parseFloat(l.cant)||0)-(parseFloat(l.dev)||0),c=v*(parseFloat(l.costo)||0);
       if(!c)return;
       const t=String(l.libro||'');
+      // Creaciones: por el nombre o por la editorial del Catálogo (hay "IMAGINA Y
+      // APRENDE 5 AÑOS" sin la palabra CREACIONES en el nombre)
+      const pr=l.prodId?DB.productos.find(x=>x.id===l.prodId):null;
       if(esLineaTechBooks(l)){
         if(/WONDER/i.test(t))f.wonder+=c;else if(/LIMIT/i.test(t))f.limitless+=c;else f.robotica+=c;
-      }else if(/CREACIONES/i.test(t))f.crea+=c;
+      }else if(/CREACIONES/i.test(t+' '+(pr?.editorial||'')))f.crea+=c;
       else f.did+=c;
     });
     f.tb=f.wonder+f.limitless+f.robotica;f.dTot=f.did+f.crea;
