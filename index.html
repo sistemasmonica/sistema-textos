@@ -754,6 +754,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
   </div>
 
   <!-- CONTEO FÍSICO -->
+  <style>#inv-conteo.sin-sis .cs{display:none}</style>
   <div id="inv-conteo" class="inv-pn" style="display:none">
     <div class="sh"><h2>📝 Conteo físico</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -762,8 +763,14 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <button class="btn btn-s btn-sm" onclick="exportConteoXLS()"><i class="ti ti-download"></i> Excel</button>
         <button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6" onclick="copiarConteoMateria()" title="Pone en otras materias las mismas cantidades que contaste en una, grado por grado"><i class="ti ti-copy"></i> Copiar conteo a otras materias</button>
         <button class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700" onclick="ajustarStockAlConteo()" title="Deja el inventario del sistema igual a lo que contaste (solo los libros con número)"><i class="ti ti-check"></i> ✅ Ajustar el stock a este conteo</button>
-        <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="borrarConteo()"><i class="ti ti-eraser"></i> Empezar conteo nuevo</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="borrarConteo()" title="El conteo que tienes ahora queda guardado (lo puedes volver a abrir) y empiezas uno en blanco"><i class="ti ti-folder-plus"></i> 📁 Guardar este y empezar conteo nuevo</button>
       </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;margin-bottom:10px">
+      <b style="color:#5b21b6">📂 Conteo que estás viendo:</b>
+      <select id="conteo-sel" onchange="abrirConteoGuardado(this.value)" title="Cada conteo queda guardado aparte: elige uno para verlo, imprimirlo o seguir anotando" style="font-weight:700;min-width:240px;border:2px solid #7c3aed;color:#5b21b6"></select>
+      <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="renombrarConteo()"><i class="ti ti-pencil"></i> Cambiar nombre</button>
+      <button class="btn btn-sm" style="background:#b45309;color:#fff;font-weight:700;margin-left:auto" onclick="verDevolucionesColegios()" title="Suma de lo que anotaste en la columna DEV del Control de ventas de cada colegio (aparte del conteo de bodega)"><i class="ti ti-arrow-back-up"></i> 🏫 Devoluciones de los colegios</button>
     </div>
     <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e3a8a;margin-bottom:10px">
       <b>Si te van dictando:</b> busca el libro, escribe en la casilla <b style="color:#047857">verde</b> las unidades que te dicen y presiona <b>Enter</b> — <b>se suman</b> a lo que ya llevabas (ej. te dicen 6 y luego 2 más → queda 8, sin sumar tú). La casilla <b style="color:#b45309">amarilla</b> es el total; si escribes ahí, reemplaza. Se guarda solo, puedes cerrar y seguir otro día.
@@ -771,9 +778,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="sc"><div class="sc-lbl">Contados</div><div class="sc-val cp" id="conteo-prog">0</div></div>
-      <div class="sc"><div class="sc-lbl">No cuadran</div><div class="sc-val" style="color:#c2410c" id="conteo-ndif">0</div></div>
-      <div class="sc"><div class="sc-lbl">Libros que faltan</div><div class="sc-val" style="color:#dc2626" id="conteo-faltan">0</div></div>
-      <div class="sc"><div class="sc-lbl">Libros que sobran</div><div class="sc-val" style="color:#c2410c" id="conteo-sobran">0</div></div>
+      <div class="sc cs"><div class="sc-lbl">No cuadran</div><div class="sc-val" style="color:#c2410c" id="conteo-ndif">0</div></div>
+      <div class="sc cs"><div class="sc-lbl">Libros que faltan</div><div class="sc-val" style="color:#dc2626" id="conteo-faltan">0</div></div>
+      <div class="sc cs"><div class="sc-lbl">Libros que sobran</div><div class="sc-val" style="color:#c2410c" id="conteo-sobran">0</div></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
       <input id="conteo-q" type="text" placeholder="🔍 Buscar libro, código o editorial..." oninput="renderConteo()" onkeydown="conteoBuscarTecla(event)" style="flex:1;min-width:200px">
@@ -782,6 +789,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
         <option value="didactica">Solo Didáctica (español)</option>
         <option value="tech">Solo Tech Books (inglés)</option>
       </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#5b21b6;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:4px 10px;cursor:pointer" title="Para anotar tranquila sin ver lo que dice el sistema"><input type="checkbox" id="conteo-sinsis" onchange="conteoSinSistema(this.checked)"> 🙈 Ocultar Sistema y Diferencia</label>
       <select id="conteo-fil" onchange="renderConteo()">
         <option value="todos">Todos</option>
         <option value="sin">Solo los que faltan contar</option>
@@ -791,7 +799,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>#</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th style="text-align:center">Stock sistema</th><th>➕ Sumar unidades</th><th>Total contado</th><th>Diferencia</th><th>Observación</th></tr></thead>
+        <thead><tr><th>#</th><th>Producto</th><th>Tipo</th><th>Editorial</th><th class="cs" style="text-align:center">Stock sistema</th><th>➕ Sumar unidades</th><th>Total contado</th><th class="cs">Diferencia</th><th>Observación</th></tr></thead>
         <tbody id="tb-conteo"></tbody>
       </table>
     </div>
@@ -3491,7 +3499,7 @@ function _fusionarDatos(src,tgt){
   (DB.guias||[]).forEach(g=>{(g.lineas||[]).forEach(re);(g.retiros||[]).forEach(r=>(r.lineas||[]).forEach(re));});
   (DB.notasCredito||[]).forEach(n=>(n.lineas||[]).forEach(re));
   (DB.respaldosVendedor||[]).forEach(r=>(r.lineas||[]).forEach(re));
-  const it=DB.conteo?.items;
+  [DB.conteo?.items,...(DB.conteo?.guardados||[]).map(g=>g.items)].forEach(it=>{
   if(it&&it[srcId]){
     if(it[tgtId]){
       const a=it[tgtId],b=it[srcId];
@@ -3501,6 +3509,7 @@ function _fusionarDatos(src,tgt){
     } else it[tgtId]=it[srcId];
     delete it[srcId];
   }
+  });
   // aprender el/los nombre(s) de src como alias de tgt
   const aliasSet=new Set([...(tgt.alias||[]),src.nombre,...(src.alias||[])].map(s=>String(s||'').trim()).filter(Boolean));
   // no guardar como alias el nombre que ya es igual al de tgt
@@ -7585,13 +7594,23 @@ function _conteoGuardar(){
   clearTimeout(_conteoTimer);
   _conteoTimer=setTimeout(()=>{const n=_opCount;save();_opCount=n;},1200);
 }
+// Ocultar las columnas Stock sistema y Diferencia (se recuerda en esta compu)
+function conteoSinSistema(v){
+  try{localStorage.setItem('txe_conteo_sinsis',v?'1':'');}catch(e){}
+  document.getElementById('inv-conteo')?.classList.toggle('sin-sis',!!v);
+}
 function renderConteo(){
   const tb=document.getElementById('tb-conteo');if(!tb)return;
+  let sinSis=false;try{sinSis=localStorage.getItem('txe_conteo_sinsis')==='1';}catch(e){}
+  const chk=document.getElementById('conteo-sinsis');if(chk)chk.checked=sinSis;
+  document.getElementById('inv-conteo').classList.toggle('sin-sis',sinSis);
   DB.conteo=DB.conteo||{};
   const q=(document.getElementById('conteo-q')?.value||'').trim().toUpperCase();
   const fil=document.getElementById('conteo-fil')?.value||'todos';
   const TIPO={venta:'📗 Venta',solucionario:'📘 Solucionario',muestra:'📙 Muestra'};
   const lista=_conteoLista();
+  const devC={};DB.movInv.filter(esDevColegio).forEach(m=>{devC[m.prodId]=(devC[m.prodId]||0)+m.cantidad;});
+  renderConteoSel();
   const vis=lista.filter(e=>{
     if(q&&!((e.p.nombre||'')+' '+(e.p.codigo||'')+' '+(e.p.editorial||'')).toUpperCase().includes(q))return false;
     const {c}=_conteoItem(e.p.id);
@@ -7607,19 +7626,19 @@ function renderConteo(){
       <td>${escH(e.p.nombre)}${e.p.codigo?`<div style="font-size:10px;color:var(--mu);font-family:monospace">${escH(e.p.codigo)}</div>`:''}</td>
       <td style="font-size:11px">${TIPO[e.cls]||''}</td>
       <td style="font-size:11px">${escH(e.p.editorial||'—')}</td>
-      <td style="text-align:center;font-weight:700">${e.st}</td>
+      <td class="cs" style="text-align:center;font-weight:700">${e.st}${devC[e.p.id]?`<div style="font-size:10px;font-weight:400;color:#b45309" title="Libros que anotaste como devueltos en el Control de ventas de los colegios: el sistema ya los cuenta en tu bodega">(${devC[e.p.id]} de colegios)</div>`:''}</td>
       <td><input type="number" min="0" inputmode="numeric" class="conteo-add" placeholder="+" onkeydown="conteoSumarTecla(event,this)" title="Escribe cuántas unidades te dictan y presiona Enter: se SUMAN a lo que ya llevas" style="width:70px;text-align:center;font-size:15px;font-weight:700;padding:5px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px"></td>
       <td><input type="number" min="0" inputmode="numeric" class="conteo-in" value="${c==null?'':c}" oninput="conteoCambio(this)" onkeydown="conteoTecla(event,this)" style="width:80px;text-align:center;font-size:15px;font-weight:700;padding:5px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px">
         <div class="conteo-hist" style="font-size:10px;color:#64748b;white-space:nowrap;margin-top:2px">${_conteoHistHTML(e.p.id,h)}</div></td>
-      <td class="conteo-dif" style="white-space:nowrap">${_conteoDifHTML(e.st,c)}</td>
+      <td class="conteo-dif cs" style="white-space:nowrap">${_conteoDifHTML(e.st,c)}</td>
       <td><input type="text" value="${escH(obs)}" oninput="conteoObs(this)" placeholder="(opcional)" style="width:100%;min-width:120px;font-size:12px;padding:4px"></td>
     </tr>`;
   }).join('')||'<tr><td colspan="9"><div class="empty">No hay productos con ese filtro</div></td></tr>';
   if(vis.length)tb.innerHTML+=`<tr id="conteo-totrow" style="background:#f1f5f9;font-weight:700">
       <td></td><td colspan="3" style="text-align:right">TOTAL (${vis.length} libros):</td>
-      <td style="text-align:center" class="t-st"></td><td></td>
+      <td style="text-align:center" class="t-st cs"></td><td></td>
       <td style="text-align:center;font-size:15px;color:#6d28d9" class="t-c"></td>
-      <td class="t-d" style="white-space:nowrap"></td><td></td></tr>`;
+      <td class="t-d cs" style="white-space:nowrap"></td><td></td></tr>`;
   _conteoResumen(lista);
 }
 // Fila TOTAL de la tabla: suma lo que se está viendo (respeta filtros y búsqueda)
@@ -7646,7 +7665,7 @@ function _conteoResumen(lista){
   set('conteo-sobran',sobran);
   _conteoTotalFila();
   const ini=document.getElementById('conteo-inicio');
-  if(ini)ini.textContent=DB.conteo?.inicio?('Conteo empezado el '+new Date(DB.conteo.inicio).toLocaleString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+'.'):'Todavía no has anotado nada.';
+  if(ini)ini.textContent='📂 '+_conteoNombreActual()+' — '+(DB.conteo?.inicio?('Conteo empezado el '+new Date(DB.conteo.inicio).toLocaleString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+'.'):'todavía no has anotado nada.');
 }
 function _conteoSet(id,campo,val){
   DB.conteo=DB.conteo||{};
@@ -7786,14 +7805,127 @@ function ajustarStockAlConteo(){
   try{renderStockReport();renderCatalogo();}catch(e){}
   alert(`✅ Listo. El inventario quedó igual a tu conteo.\n\n${cambios.length} libro(s) ajustados: +${um} y −${un} unidades.`);
 }
-function borrarConteo(){
-  const n=Object.keys(DB.conteo?.items||{}).length;
-  if(!n)return toast('No hay nada anotado todavía','ok');
-  if(!confirm(`Se van a borrar los ${n} número(s) que anotaste en este conteo, para empezar uno nuevo.\n\nTu inventario NO cambia (este conteo nunca lo toca).\n\n¿Borrar?`))return;
-  DB.conteo={};
-  logHistorial('Conteo físico borrado',n+' producto(s) anotados');
+// Conteos guardados: DB.conteo.guardados=[{id,nombre,inicio,guardado,items,ajustado}].
+// El que se está viendo es siempre DB.conteo (nombre/inicio/items/ajustado),
+// así Valor a devolver, Imprimir, Excel y Ajustar sirven para cualquiera.
+// DB.conteo.precios (precios escritos a mano) es uno solo para todos.
+function _conteoFecha(iso){return iso?new Date(iso).toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'}):'';}
+function _conteoNombreActual(){
+  const c=DB.conteo||{};
+  return c.nombre||(c.inicio?'Conteo del '+_conteoFecha(c.inicio):'Conteo nuevo (en blanco)');
+}
+function _conteoArchivarActual(nombre){
+  const c=DB.conteo||{};
+  const g=c.guardados||[];
+  if(Object.keys(c.items||{}).length)
+    g.push({id:uid(),nombre:nombre||_conteoNombreActual(),inicio:c.inicio,guardado:new Date().toISOString(),items:c.items,ajustado:c.ajustado});
+  DB.conteo={guardados:g,precios:c.precios||{}};
+}
+function renderConteoSel(){
+  const sel=document.getElementById('conteo-sel');if(!sel)return;
+  const g=[...(DB.conteo?.guardados||[])].sort((a,b)=>String(b.inicio||'').localeCompare(String(a.inicio||'')));
+  const n=it=>Object.keys(it||{}).length;
+  sel.innerHTML=`<option value="">✏️ ${escH(_conteoNombreActual())} (${n(DB.conteo?.items)} libros)</option>`+
+    g.map(x=>`<option value="${x.id}">📁 ${escH(x.nombre)} (${n(x.items)} libros)${x.ajustado?' · stock ajustado':''}</option>`).join('');
+  sel.value='';
+}
+function abrirConteoGuardado(id){
+  if(!id)return;
+  const x=(DB.conteo?.guardados||[]).find(y=>y.id===id);if(!x)return renderConteo();
+  clearTimeout(_conteoTimer);
+  _conteoArchivarActual();
+  DB.conteo.guardados=DB.conteo.guardados.filter(y=>y.id!==id);
+  Object.assign(DB.conteo,{nombre:x.nombre,inicio:x.inicio,items:x.items||{},ajustado:x.ajustado});
+  save();renderConteo();
+  toast('📂 Abierto: '+x.nombre,'ok');
+}
+function renombrarConteo(){
+  if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
+  const v=prompt('Nombre para este conteo (ej. Devolución a Didáctica 28/10):',_conteoNombreActual());
+  if(v==null||!v.trim())return;
+  DB.conteo=DB.conteo||{};DB.conteo.nombre=v.trim();
+  if(!DB.conteo.inicio)DB.conteo.inicio=new Date().toISOString();
   clearTimeout(_conteoTimer);save();renderConteo();
-  toast('Conteo borrado — puedes empezar de nuevo','ok');
+}
+function borrarConteo(){
+  if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
+  const n=Object.keys(DB.conteo?.items||{}).length;
+  if(!n)return toast('Este conteo todavía está en blanco — ya puedes anotar','ok');
+  const viejo=prompt(`El conteo que tienes ahora (${n} libros) NO se borra: queda guardado y lo puedes volver a abrir arriba, en "📂 Conteo que estás viendo".\n\n¿Con qué nombre lo guardo?`,_conteoNombreActual());
+  if(viejo==null)return;
+  const nuevo=prompt('Nombre del conteo NUEVO (ej. Devolución a Didáctica 28/10):','Conteo del '+_conteoFecha(new Date().toISOString()));
+  if(nuevo==null)return;
+  clearTimeout(_conteoTimer);
+  _conteoArchivarActual(viejo.trim());
+  if(nuevo.trim())DB.conteo.nombre=nuevo.trim();
+  DB.conteo.inicio=new Date().toISOString();
+  logHistorial('Conteo físico guardado y empezado uno nuevo','"'+(viejo.trim()||'sin nombre')+'" ('+n+' libros) → nuevo "'+(nuevo.trim()||'sin nombre')+'"');
+  save();renderConteo();
+  toast('✔ Conteo anterior guardado — este está en blanco','ok');
+}
+// Lo que se anotó en la columna DEV del Control de ventas de cada colegio,
+// sumado por libro y por colegio (respeta el selector de editorial del conteo).
+function verDevolucionesColegios(){
+  const ed=_conteoEditSel();
+  const porLibro={},porCol=[];
+  Object.keys(DB.colData||{}).sort((a,b)=>a.localeCompare(b,'es')).forEach(col=>{
+    const ls=(DB.colData[col]?.lineas||[]).filter(l=>(parseFloat(l.dev)||0)>0)
+      .filter(l=>ed==='todas'||(ed==='tech')===esLineaTechBooks(l));
+    if(!ls.length)return;
+    const filas=ls.map(l=>{
+      const p=l.prodId?DB.productos.find(x=>x.id===l.prodId):null;
+      const nom=p?.nombre||l.libro||'—';
+      const neto=parseFloat(l.costo)||(p?precioEditorialRef(p).neto:0)||0;
+      const u=parseFloat(l.dev)||0;
+      const k=p?.id||nom;
+      const x=porLibro[k]||(porLibro[k]={nom,u:0,v:0});x.u+=u;x.v+=u*neto;
+      return {nom,u,neto,v:u*neto};
+    });
+    porCol.push({col,filas,u:filas.reduce((a,f)=>a+f.u,0),v:filas.reduce((a,f)=>a+f.v,0)});
+  });
+  if(!porCol.length){alert('No hay devoluciones anotadas en el Control de ventas de los colegios'+(ed!=='todas'?' para esta editorial':'')+'.');return;}
+  const m=x=>'$'+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const libros=Object.values(porLibro).sort((a,b)=>a.nom.localeCompare(b.nom,'es'));
+  const U=libros.reduce((a,x)=>a+x.u,0),V=libros.reduce((a,x)=>a+x.v,0);
+  const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const edNom=_conteoEditNombre();
+  const win=window.open('','_blank');
+  win.document.write(`<html><head><title>Devoluciones de los colegios</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;padding:15px;color:#222}
+    h1{margin:0;font-size:18px;color:#b45309;text-transform:uppercase}h2{font-size:14px;color:#b45309;margin:18px 0 4px}
+    p{margin:2px 0;font-size:11px;color:#555}
+    .cards{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}
+    .card{border-radius:8px;padding:10px 14px;min-width:180px;background:#fff7ed;border:1px solid #fdba74}
+    .card b{display:block;font-size:22px;font-family:monospace;color:#b45309}
+    table{width:100%;border-collapse:collapse;margin-top:6px}
+    th{background:#b45309;color:#fff;padding:5px 6px;font-size:10px;text-align:left}
+    td{padding:4px 5px;border-bottom:1px solid #ddd;font-size:10px}
+    td.n{text-align:right;font-family:monospace}td.c{text-align:center;font-weight:700}
+    .tot td{background:#ffedd5;font-weight:700;font-size:11px}.col td{background:#f1f5f9;font-weight:700}
+    .btn{background:#b45309;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;margin-right:8px}
+    .aviso{margin:10px 0;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;font-size:12px}
+    body.sin .din{display:none}
+    @media print{.btn,.aviso{display:none}body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}}
+  </style></head><body>
+  <button class="btn" onclick="window.print()">🖨 Imprimir</button>
+  <button class="btn" style="background:#15803d" onclick="document.body.classList.toggle('sin')">💲 Mostrar / quitar los valores</button>
+  <h1 style="margin-top:10px">Devoluciones de los colegios${edNom?' · '+escH(edNom):''}</h1>
+  <p>Fecha: ${fecha} &nbsp;|&nbsp; Según la columna DEV del Control de ventas de cada colegio</p>
+  <div class="aviso">ℹ️ Esto es <b>aparte</b> de tu conteo de bodega. Ojo: el sistema ya suma estos libros a tu stock de bodega (en el conteo salen como "(N de colegios)" debajo del Stock sistema).</div>
+  <div class="cards"><div class="card">Libros devueltos por colegios<b>${U}</b>${libros.length} libros distintos · ${porCol.length} colegios</div>
+    <div class="card din">💰 Valor (precio neto editorial)<b>${m(V)}</b>lo que la editorial descontaría</div></div>
+  <h2>1. Total por libro (todos los colegios juntos)</h2>
+  <table><thead><tr><th>#</th><th>Libro</th><th style="text-align:center">Devueltos</th><th class="din" style="text-align:right">Valor neto</th></tr></thead><tbody>
+  ${libros.map((x,i)=>`<tr><td style="color:#888;text-align:center">${i+1}</td><td>${escH(x.nom)}</td><td class="c">${x.u}</td><td class="n din">${m(x.v)}</td></tr>`).join('')}
+  <tr class="tot"><td colspan="2" style="text-align:right">TOTAL:</td><td class="c">${U}</td><td class="n din">${m(V)}</td></tr></tbody></table>
+  <h2>2. Detalle por colegio</h2>
+  <table><thead><tr><th>Colegio / libro</th><th style="text-align:center">Devueltos</th><th class="din" style="text-align:right">Precio neto</th><th class="din" style="text-align:right">Valor neto</th></tr></thead><tbody>
+  ${porCol.map(c=>`<tr class="col"><td>🏫 ${escH(c.col)}</td><td class="c">${c.u}</td><td class="din"></td><td class="n din">${m(c.v)}</td></tr>`+
+    c.filas.map(f=>`<tr><td style="padding-left:22px">${escH(f.nom)}</td><td class="c">${f.u}</td><td class="n din">${f.neto?m(f.neto):'—'}</td><td class="n din">${f.v?m(f.v):'—'}</td></tr>`).join('')).join('')}
+  <tr class="tot"><td style="text-align:right">TOTAL:</td><td class="c">${U}</td><td class="din"></td><td class="n din">${m(V)}</td></tr></tbody></table>
+  <\/body><\/html>`);
+  win.document.close();
 }
 function _conteoFilasExport(){
   return _conteoLista().map(e=>{const {c,obs,h}=_conteoItem(e.p.id);return {e,c,obs,h,d:c==null?null:c-e.st};});
@@ -7886,7 +8018,7 @@ function valorConteo(){
   <h1 class="ent" style="margin-top:10px">Devolución de libros${edEnt?' — '+escH(edEnt):''}</h1>
   <p class="ent">Fecha: ${fecha}</p>
   <h1 class="ctl" style="margin-top:10px">DM Books — Valor a devolver a la editorial${_conteoEditNombre()?' '+escH(_conteoEditNombre()):''}</h1>
-  <p class="ctl">Fecha: ${fecha} &nbsp;|&nbsp; Según precios netos de la editorial</p>
+  <p class="ctl">Fecha: ${fecha} &nbsp;|&nbsp; 📂 ${escH(_conteoNombreActual())} &nbsp;|&nbsp; Según precios netos de la editorial</p>
   ${nEdit?`<div class="aviso">✏️ <b>${nEdit} libro(s) no tienen precio en el sistema.</b> Escribe el precio neto en las casillas amarillas y el total se calcula solo. El sistema se acuerda de lo que escribas para la próxima vez. (Las casillas amarillas no salen al imprimir.)</div>`:''}
   <div class="cards ctl">
     <div class="card" style="background:#f0fdf4;border:1px solid #86efac">💰 Total a devolver (precio neto editorial)<b style="color:#15803d" id="totA">$0.00</b>lo que la editorial te descuenta</div>
@@ -7958,7 +8090,7 @@ function imprimirResultadoConteo(){
     @media print{body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}}
   </style></head><body>
   <h1>DM Books — Resultado del conteo de inventario${_conteoEditNombre()?' · '+escH(_conteoEditNombre()):''}${soloDif?' (solo diferencias)':''}</h1>
-  <p>Fecha: ${fecha} &nbsp;|&nbsp; Productos contados: <b>${contados}</b></p>
+  <p>Fecha: ${fecha} &nbsp;|&nbsp; 📂 ${escH(_conteoNombreActual())} &nbsp;|&nbsp; Productos contados: <b>${contados}</b></p>
   <table><thead><tr><th>#</th><th>Código</th><th>Producto</th><th>Editorial</th><th style="text-align:center">Sistema</th><th style="text-align:center">Contado</th><th style="text-align:center">Diferencia</th><th>Observación</th></tr></thead>
   <tbody>${html}</tbody></table>
   <div class="firmas"><div>Contado por</div><div>Revisado por</div></div>
