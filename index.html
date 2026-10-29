@@ -13766,9 +13766,9 @@ function cierreComisionesHTML(print){
     ${print?'':'<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="imprimirCierreComisiones()"><i class="ti ti-printer"></i> Imprimir este cuadro</button>'}</div>
     <div style="font-size:11px;color:#64748b;margin:4px 0 8px">Un colegio está pagado cuando ya entró todo lo vendido (aunque lo haya pagado una librería). La comisión del colegio es aparte: se la entregas tú.</div>`;
   out+=h(`🟠 1. YA PAGARON — FALTA ENTREGAR LA COMISIÓN AL COLEGIO (${debeCom.length})`,'#b45309');
-  out+=debeCom.length?tabla('#b45309',['Colegio','Vendido','Pagó','Comisión del colegio','Comisión librería','',''],
-    debeCom.map(x=>`<tr><td style="${td};font-weight:700">${escH(x.nombre)}</td>${r(fmt(x.tv))}<td style="${td}">✅ ${fmt(x.cobrado)} ${quien(x)}</td>${r('<b style="color:#b45309">'+fmt(x.total)+'</b>'+(x.pct?' <span style="font-size:10px;color:#64748b">'+x.pct+'</span>':''))}${r(x.lib>0.005?'✅ '+fmt(x.lib)+' pagada':'—')}<td style="${td}">${comTxt(x)}</td><td style="${td};text-align:center">${btnEnt(x)}</td></tr>`).join(''),
-    `<tr style="background:#fff7ed;font-weight:700"><td style="${td}" colspan="3">TOTAL COMISIONES QUE FALTA ENTREGAR</td>${r(fmt(tCom))}<td colspan="3" style="${td}"></td></tr>`)
+  out+=debeCom.length?tabla('#b45309',['Colegio','Vendido','Pagó','Comisión del colegio (%)','',''],
+    debeCom.map(x=>`<tr><td style="${td};font-weight:700">${escH(x.nombre)}</td>${r(fmt(x.tv))}<td style="${td}">✅ ${fmt(x.cobrado)} ${quien(x)}</td>${r('<b style="color:#b45309">'+fmt(x.total)+'</b>'+(x.pct?' <span style="font-size:10px;color:#64748b">'+x.pct+'</span>':''))}<td style="${td}">${comTxt(x)}</td><td style="${td};text-align:center">${btnEnt(x)}</td></tr>`).join(''),
+    `<tr style="background:#fff7ed;font-weight:700"><td style="${td}" colspan="3">TOTAL COMISIONES QUE FALTA ENTREGAR A LOS COLEGIOS</td>${r(fmt(tCom))}<td colspan="2" style="${td}"></td></tr>`)
     :'<p style="color:#16a34a;margin:4px 0 12px">✅ No le debes comisión a ningún colegio que ya pagó.</p>';
   out+=h(`✅ 2. TODO LISTO — pagaron y la comisión ya está (${listos.length})`,'#16a34a');
   out+=listos.length?tabla('#16a34a',['Colegio','Vendido','Pagó','Comisión del colegio','Comisión','Marcado cerrado'],
