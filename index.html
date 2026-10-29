@@ -1227,6 +1227,9 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     </div>
     <div id="com-col-lista"></div>
   </div>
+  <div class="card" style="border:2px solid #7c3aed">
+    <div id="com-cierre"></div>
+  </div>
   <div class="card">
     <div class="card-t"><i class="ti ti-percentage"></i> Registrar comisión / capacitación</div>
     <div class="f3">
@@ -13727,6 +13730,67 @@ function renderComisionesColegios(){
   // Botón grande de imprimir arriba y abajo de la tabla (Mónica no veía el de la esquina).
   const btn=`<div style="text-align:right;margin:6px 0;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" style="font-size:14px;padding:8px 16px;background:#1d6f42;color:#fff" onclick="exportarComisionesXLS()">📊 DESCARGAR EXCEL</button><button class="btn btn-p" style="font-size:14px;padding:8px 16px" onclick="imprimirComisionesColegios()">🖨️ IMPRIMIR ESTA TABLA</button></div>`;
   try{box.innerHTML=btn+tablaComisionesHTML(false)+btn;}catch(e){console.warn('comisiones colegios',e);box.innerHTML='';}
+  const cc=document.getElementById('com-cierre');
+  if(cc){try{cc.innerHTML=cierreComisionesHTML(false);}catch(e){console.warn('cierre comisiones',e);cc.innerHTML='';}}
+}
+// Cuadro "¿Qué colegios ya cerré y a cuáles les debo la comisión?": separa los
+// que ya pagaron (directo o por una librería) pero todavía no reciben su
+// comisión, de los que están completos y de los que aún deben.
+function cierreComisionesHTML(print){
+  const F=d=>String(d||'').split('-').reverse().join('/');
+  const esc=n=>escH(n).replace(/'/g,"\\'");
+  const L=filasComisiones().map(x=>{
+    const libs=[...new Set((DB.comisiones||[]).filter(c=>c.colegio===x.nombre&&c.tipo==='libreria').map(c=>c.beneficiario))];
+    return {...x,e:estadoCierreColegio(x.nombre),libs,pagoTodo:x.falta<=1,conCom:x.total>0.005};
+  });
+  const debeCom=L.filter(x=>x.pagoTodo&&x.conCom&&!x.pag);
+  const listos=L.filter(x=>x.pagoTodo&&!(x.conCom&&!x.pag));
+  const faltan=L.filter(x=>!x.pagoTodo);
+  const quien=x=>x.libs.length?'por '+x.libs.map(escH).join(', '):'el colegio';
+  const comTxt=x=>{
+    if(!x.conCom) return '<span style="color:#64748b">sin comisión</span>';
+    if(x.pag) return '✅ '+(x.pag.modo==='descontada'?'se la descontó':'entregada')+' '+F(x.pag.fecha);
+    return '<b style="color:#b45309">⏳ falta entregar</b>';
+  };
+  const cerrTxt=x=>x.e.est==='cerrado'?'✅ cerrado '+F(x.e.fecha):'—';
+  const btnEnt=x=>print?'☐':`<button class="btn btn-p btn-sm" onclick="toggleComisionPagada('${esc(x.nombre)}')" title="Ya le entregué la comisión al colegio">✔ Entregué</button>`;
+  const th='padding:6px 7px;text-align:left;font-size:11px;color:#fff';
+  const td='padding:6px 7px;border-top:1px solid #e2e8f0';
+  const r=v=>`<td style="${td};text-align:right;white-space:nowrap">${v}</td>`;
+  const tabla=(color,cab,filas,tot)=>`<table style="width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 14px">
+    <tr>${cab.map(c=>`<th style="${th};background:${color}">${c}</th>`).join('')}</tr>${filas}${tot||''}</table>`;
+  const h=(txt,col)=>`<div style="font-size:14px;font-weight:700;color:${col};margin-top:8px">${txt}</div>`;
+  const tCom=debeCom.reduce((a,x)=>a+x.total,0);
+  let out=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div class="card-t" style="margin:0;color:#5b21b6">🏁 Colegios cerrados y comisiones — ¿a quién le debo todavía la comisión?</div>
+    ${print?'':'<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="imprimirCierreComisiones()"><i class="ti ti-printer"></i> Imprimir este cuadro</button>'}</div>
+    <div style="font-size:11px;color:#64748b;margin:4px 0 8px">Un colegio está pagado cuando ya entró todo lo vendido (aunque lo haya pagado una librería). La comisión del colegio es aparte: se la entregas tú.</div>`;
+  out+=h(`🟠 1. YA PAGARON — FALTA ENTREGAR LA COMISIÓN AL COLEGIO (${debeCom.length})`,'#b45309');
+  out+=debeCom.length?tabla('#b45309',['Colegio','Vendido','Pagó','Comisión del colegio','Comisión librería','',''],
+    debeCom.map(x=>`<tr><td style="${td};font-weight:700">${escH(x.nombre)}</td>${r(fmt(x.tv))}<td style="${td}">✅ ${fmt(x.cobrado)} ${quien(x)}</td>${r('<b style="color:#b45309">'+fmt(x.total)+'</b>'+(x.pct?' <span style="font-size:10px;color:#64748b">'+x.pct+'</span>':''))}${r(x.lib>0.005?'✅ '+fmt(x.lib)+' pagada':'—')}<td style="${td}">${comTxt(x)}</td><td style="${td};text-align:center">${btnEnt(x)}</td></tr>`).join(''),
+    `<tr style="background:#fff7ed;font-weight:700"><td style="${td}" colspan="3">TOTAL COMISIONES QUE FALTA ENTREGAR</td>${r(fmt(tCom))}<td colspan="3" style="${td}"></td></tr>`)
+    :'<p style="color:#16a34a;margin:4px 0 12px">✅ No le debes comisión a ningún colegio que ya pagó.</p>';
+  out+=h(`✅ 2. TODO LISTO — pagaron y la comisión ya está (${listos.length})`,'#16a34a');
+  out+=listos.length?tabla('#16a34a',['Colegio','Vendido','Pagó','Comisión del colegio','Comisión','Marcado cerrado'],
+    listos.map(x=>`<tr><td style="${td};font-weight:700">${escH(x.nombre)}</td>${r(fmt(x.tv))}<td style="${td}">✅ ${fmt(x.cobrado)} ${quien(x)}</td>${r(x.conCom?fmt(x.total):'—')}<td style="${td}">${comTxt(x)}</td><td style="${td}">${cerrTxt(x)}</td></tr>`).join(''))
+    :'<p style="color:#64748b;margin:4px 0 12px">Todavía ninguno.</p>';
+  out+=h(`⏳ 3. TODAVÍA FALTA QUE PAGUEN (${faltan.length})`,'#dc2626');
+  out+=faltan.length?tabla('#dc2626',['Colegio','Vendido','Ya pagó','Falta cobrar','Comisión del colegio','Comisión'],
+    faltan.map(x=>`<tr><td style="${td};font-weight:700">${escH(x.nombre)}</td>${r(fmt(x.tv))}${r(fmt(x.cobrado))}${r('<b style="color:#dc2626">'+fmt(x.falta)+'</b>')}${r(x.conCom?fmt(x.total):'—')}<td style="${td}">${comTxt(x)}</td></tr>`).join(''),
+    `<tr style="background:#fef2f2;font-weight:700"><td style="${td}" colspan="3">TOTAL FALTA COBRAR</td>${r(fmt(faltan.reduce((a,x)=>a+x.falta,0)))}<td colspan="2" style="${td}"></td></tr>`)
+    :'<p style="color:#16a34a;margin:4px 0 12px">✅ Todos pagaron.</p>';
+  return out;
+}
+function imprimirCierreComisiones(){
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  win.document.write(`<html><head><title>Colegios y comisiones</title>
+  <style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;padding:10px;font-size:11px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Colegios cerrados y comisiones','Al '+new Date().toLocaleDateString('es-EC'))}
+  ${cierreComisionesHTML(true)}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
 }
 function toggleComisionPagada(nombre,modo){
   initColData();
