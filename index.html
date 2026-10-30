@@ -759,6 +759,7 @@ hr.sep{border:none;border-top:1px solid var(--bd);margin:10px 0}
     <div class="sh"><h2>📝 Conteo físico</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-sm" style="background:#15803d;color:#fff" onclick="valorConteo()" title="Cuánto dinero es lo contado, con los precios de la editorial"><i class="ti ti-cash"></i> 💰 Valor a devolver</button>
+        <button class="btn btn-sm" style="background:#7c2d12;color:#fff;font-weight:700" onclick="entregarConteoAEditorial()" title="Este conteo son libros que YA le entregaste a la editorial: se resta de lo que le debes y salen de la bodega. Si agregas cartones, vuelve a apretar y se actualiza."><i class="ti ti-truck-return"></i> 📦 Ya se lo entregué a la editorial</button>
         <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirResultadoConteo()"><i class="ti ti-printer"></i> Imprimir resultado</button>
         <button class="btn btn-s btn-sm" onclick="exportConteoXLS()"><i class="ti ti-download"></i> Excel</button>
         <button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6" onclick="copiarConteoMateria()" title="Pone en otras materias las mismas cantidades que contaste en una, grado por grado"><i class="ti ti-copy"></i> Copiar conteo a otras materias</button>
@@ -7866,6 +7867,45 @@ function borrarConteo(){
   save();renderConteo();
   toast('✔ Conteo anterior guardado — este está en blanco','ok');
 }
+// Devolución física a la editorial hecha con un conteo (ej. "DEVOLUCION
+// DIDACTICA 28/10/26"): se anota como nota de crédito (resta la deuda y saca
+// los libros de la bodega). Queda unida al conteo (conteoRef): si después se
+// agregan cartones al mismo conteo, se vuelve a apretar y se ACTUALIZA, no se
+// duplica. Cuando llegue la nota de crédito real (XML), la reemplaza.
+function entregarConteoAEditorial(){
+  if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
+  const tech=_conteoEditSel()==='tech';
+  const filas=_conteoFilasExport().filter(f=>f.c!=null&&f.c>0&&_conteoEsTech(f.e.p)===tech);
+  if(!filas.length)return alert('En este conteo no hay libros de '+(tech?'Tech Books':'Didáctica')+' anotados.');
+  DB.conteo=DB.conteo||{};
+  if(!DB.conteo.inicio)DB.conteo.inicio=new Date().toISOString();
+  const manual=DB.conteo.precios||{};
+  const edNom=tech?'TECH BOOKS':'DIDACTICA-EDITORIAL S.A.S.';
+  const ref=DB.conteo.inicio+'|'+(tech?'tech':'didactica');
+  const lineas=filas.map(f=>{const p=f.e.p;
+    return {prodId:p.id,nombre:p.nombre,editorial:p.editorial||'',cantidad:f.c,precio:precioEditorialRef(p).neto||manual[p.id]||0};});
+  const u=lineas.reduce((a,l)=>a+l.cantidad,0);
+  const calc=Math.round(lineas.reduce((a,l)=>a+l.cantidad*l.precio,0)*100)/100;
+  DB.notasCredito=DB.notasCredito||[];
+  const ya=DB.notasCredito.find(n=>n.conteoRef===ref);
+  if(ya&&!ya.pendiente)return alert('Esta devolución ya tiene su nota de crédito de la editorial ('+ya.num+'). No se cambia.');
+  const v=prompt((ya?'Esta devolución YA estaba anotada por '+fmt(ya.total)+'.\nSe ACTUALIZA con lo que tiene ahora el conteo (no se suma dos veces).\n\n':'')+
+    'Devolución a '+(tech?'Tech Books':'Didáctica')+' — conteo "'+_conteoNombreActual()+'"\n'+
+    filas.length+' libros distintos, '+u+' unidades.\n\nValor según precios de la editorial: '+fmt(calc)+
+    '\n\nSi la editorial te firmó otro valor, escríbelo aquí. Aceptar = anotar este valor:',calc.toFixed(2));
+  if(v==null)return;
+  const total=leerMonto(v);
+  if(!(total>0))return toast('El valor debe ser mayor a 0','err');
+  const nc=ya||{id:uid(),editorial:edNom,num:'Devolución física (falta nota de crédito)',conteoRef:ref,pendiente:true,origen:'conteo'};
+  DB.movInv=DB.movInv.filter(m=>m.ref!=='NC-'+nc.id);
+  Object.assign(nc,{fecha:today(),total,lineas,nota:'Conteo "'+_conteoNombreActual()+'" — '+u+' u.'});
+  lineas.forEach(l=>DB.movInv.push({id:uid(),tipo:'salida',prodId:l.prodId,cantidad:l.cantidad,fecha:nc.fecha,ref:'NC-'+nc.id,cliente:'Devolución a '+edNom}));
+  if(!ya)DB.notasCredito.push(nc);
+  logHistorial(ya?'Devolución a la editorial actualizada':'Devolución a la editorial anotada',edNom+' — '+fmt(total)+' — '+u+' u. salieron de la bodega (conteo "'+_conteoNombreActual()+'")'+(ya?' — antes '+fmt(ya.total):''));
+  clearTimeout(_conteoTimer);save();
+  [renderConteo,renderNotasCredito,renderDeudaEditorial,renderDash,renderCatalogo,renderStockReport].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});
+  alert('✅ Listo. Devolución anotada: '+fmt(total)+' ('+u+' libros).\n\n• Ya se resta de lo que le debes a la editorial.\n• Los libros ya NO salen en "En mi bodega".\n\nSi mañana agregas más cartones a ESTE MISMO conteo, vuelve a apretar el botón y se actualiza.');
+}
 // Lo que se anotó en la columna DEV del Control de ventas de cada colegio,
 // sumado por libro y por colegio (respeta el selector de editorial del conteo).
 function verDevolucionesColegios(){
@@ -13412,6 +13452,20 @@ function registrarNCdesdeXML(d,sinPreguntar){
   if(d.num&&DB.notasCredito.some(n=>dg(n.num)===dg(d.num)&&grupoEditorial(n.editorial)===grupoEditorial(d.rs))){
     if(malReg){quitarMalReg();save();[renderDeudaEditorial,renderDash,renderStockReport].forEach(fn=>{try{typeof fn==="function"&&fn();}catch(e){}});}
     toast('La nota de crédito '+d.num+' ya estaba registrada','info');return false;
+  }
+  // Devolución física ya anotada desde un conteo: la nota real la reemplaza
+  // (los libros ya salieron de la bodega con el conteo), no se cuenta dos veces.
+  const fis=DB.notasCredito.filter(n=>n.pendiente&&grupoEditorial(n.editorial)===grupoEditorial(d.rs));
+  for(const f of fis){
+    if(!confirm('¿Esta nota de crédito '+(d.num||'')+' ($'+d.total.toFixed(2)+') es la de la DEVOLUCIÓN FÍSICA que ya anotaste?\n\n'+f.nota+' — '+fmt(f.total)+
+      '\n\nAceptar = la reemplaza (no se resta dos veces; los libros ya salieron con el conteo).\nCancelar = es otra nota distinta.'))continue;
+    quitarMalReg();
+    logHistorial('Devolución física cambiada por su nota de crédito',f.editorial+' — '+fmt(f.total)+' → N° '+(d.num||'')+' '+fmt(d.total||0));
+    Object.assign(f,{num:d.num||'',total:d.total||0,pendiente:false,nota:f.nota+' · nota de crédito XML'+(d.docModificado?' · corrige factura '+d.docModificado:'')});
+    save();
+    [renderNotasCredito,renderDeudaEditorial,renderDash,renderCatalogo,renderStockReport].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});
+    toast('Nota de crédito '+f.num+' registrada en lugar de la devolución física','ok');
+    return true;
   }
   const unidades=(d.detalles||[]).reduce((a,x)=>a+(parseInt(x.cant)||0),0);
   if(!sinPreguntar&&!confirm('Este archivo es una NOTA DE CRÉDITO (no una factura):\n\n'+d.rs+'\nN° '+(d.num||'s/n')+' — $'+d.total.toFixed(2)+
