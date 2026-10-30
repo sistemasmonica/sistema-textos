@@ -13664,20 +13664,11 @@ function tablaComisionesHTML(print){
   ${TB?edRow('= LE DEBO A TECH BOOKS',Math.max(0,TB.debe),'#dc2626','',1):''}
   ${TB?`<tr style="border-top:3px double #334155;background:#fee2e2"><td colspan="6" style="padding:8px 7px;text-align:right;font-weight:800;font-size:13px">TOTAL A LAS DOS EDITORIALES<div style="font-size:11px;font-weight:400;color:#475569">Didáctica ${fmt(Math.max(0,D.debe))} + Tech Books ${fmt(Math.max(0,TB.debe))}</div></td>${td(fmt(deboEd),'#dc2626',1,'font-size:14px;')}<td colspan="3"></td></tr>`:''}
   ${(()=>{
-    // Lo que gané y si me alcanza (Mónica 27-oct): mismas cifras que Liquidación
-    // (resumenGanancia) y que Resumen ④ AL FINAL, para que no salgan distintas.
-    const G=resumenGanancia(), banco=leerBancoCierre();
-    const otros=Math.round((S('tv')-S('total')-S('costo')-G.neta)*100)/100;
-    const ganoEd=Math.round((S('tv')-S('total')-Object.values(R.ed).reduce((a,x)=>a+x.facturado-x.notas,0)-Math.max(0,otros))*100)/100;
-    return tit('💰 CUÁNTO GANÉ Y SI ME ALCANZA','#dcfce7')
-      +edRow('Vendí a los colegios',S('tv'),'#111','columna 1')
-      +edRow('− Comisión para los colegios',S('total'),'#b45309','columna 2'+(comPend>0.005?' (todavía por entregar: '+fmt(comPend)+')':''))
-      // Lo que pago a cada editorial = su estado de cuenta − lo devuelto (Mónica
-      // 29-oct: no el costo de lo vendido, que depende de la bodega).
-      +Object.entries(R.ed).map(([g,x])=>edRow('− '+(g==='Tech Books'?'Tech Books (Marco)':g),x.facturado-x.notas,'#1d4ed8','')).join('')
-      +(otros>0.005?edRow('− Comisiones a librerías y otros gastos del negocio',otros,'#b45309','librerías, capacitaciones, internet…'):'')
-      +edRow('= LO QUE GANÉ CON LOS LIBROS',ganoEd,ganoEd>=0?'#16a34a':'#dc2626','de lo vendido ya me pagaron '+fmt(S('cobrado'))+' y me falta cobrar '+fmt(R.porCobrar),1)
-      +alcanzaHTML();
+    // Mónica 29-oct: la cuenta como la hace su esposo, nada más: plata del banco
+    // + lo que me deben − (estado de cuenta − abonos − devoluciones de cada
+    // editorial) − comisiones. Se quitó "Cuánto gané" (vendido − costos): confundía.
+    const banco=leerBancoCierre();
+    return alcanzaHTML();
     // ¿Me alcanza? en dos columnas (Mónica 27-oct: la lista con + y − la confundía):
     // TENGO Y ME VAN A PAGAR | TENGO QUE PAGAR (editoriales ya sin los libros que devuelvo).
     function alcanzaHTML(){
