@@ -13683,7 +13683,9 @@ function tablaComisionesHTML(print){
       const campoBanco=print?'':`$<input type="text" inputmode="decimal" value="${banco===null?'':banco}" placeholder="escriba" style="width:110px;padding:5px 7px;font-size:14px;font-weight:700;text-align:right;border:2px solid #15803d;border-radius:6px" onchange="guardarBancoCierre(this.value)">`;
       const tengo=[banco===null?['Plata en el banco',0,'⚠️ escriba cuánto hay hoy en el banco y aplaste Enter',campoBanco]:['Plata en el banco',banco,print?'':'si cambia, escriba lo de hoy y aplaste Enter',campoBanco]];
       tengo.push(['Me falta cobrar a los colegios',R.porCobrar,'']);
-      const pagar=Object.entries(R.ed).map(([g,x])=>[g,Math.max(0,(x.debe||0)-(x.porDevolver||0)),x.porDevolver>0.005?'ya sin los libros que le devuelvo ('+fmt(x.porDevolver)+')':''])
+      // Lo que de verdad le debo (facturas − devoluciones ya anotadas − abonos),
+      // sin restar libros que el sistema cree que hay en bodega (Mónica 29-oct).
+      const pagar=Object.entries(R.ed).map(([g,x])=>[g,Math.max(0,x.debe||0),x.notas>0.005?'ya restadas las devoluciones ('+fmt(x.notas)+')':''])
         .filter(x=>x[1]>0.005).map(([g,v,n])=>['A '+(g==='Tech Books'?'Tech Books (Marco)':g),v,n]);
       if(R.comAparte>0.005)pagar.push(['Comisiones a los colegios',R.comAparte,'']);
       if(R.comOtrasPend>0.005)pagar.push(['Otras comisiones',R.comOtrasPend,'librerías, capacitaciones']);
@@ -13700,7 +13702,7 @@ function tablaComisionesHTML(print){
           <div style="margin-top:12px;border-radius:10px;padding:12px 16px;text-align:center;background:${q>=0?'#dcfce7':'#fee2e2'};border:2px solid ${q>=0?'#15803d':'#b91c1c'}">
             <div style="font-size:13px;color:#334155">${fmt(tT)} − ${fmt(tP)} =</div>
             <div style="font-size:22px;font-weight:800;color:${q>=0?'#15803d':'#b91c1c'}">${q>=0?'✅ ME SOBRAN '+fmt(q):'❌ ME FALTAN '+fmt(-q)}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px">cuando cobre todo, devuelva a Didáctica los libros que no vendí y pague todo</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">cuando cobre todo y pague todo</div>
           </div></div></td></tr>`;
     }})()}
   </tbody></table></div>
