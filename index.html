@@ -13675,7 +13675,8 @@ function tablaComisionesHTML(print){
       // Lo que pago a cada editorial = su estado de cuenta − lo devuelto (Mónica
       // 29-oct: no el costo de lo vendido, que depende de la bodega).
       +Object.entries(R.ed).map(([g,x])=>edRow('− '+(g==='Tech Books'?'Tech Books (Marco)':g),x.facturado-x.notas,'#1d4ed8',
-        (x.notas>0.005?'facturas '+fmt(x.facturado)+' − devuelto '+fmt(x.notas)+' = '+fmt(x.facturado-x.notas)+' · ':'')+'ya le aboné '+fmt(x.pagado)+', le debo '+fmt(Math.max(0,x.debe)))).join('')
+        (x.notas>0.005?'facturas '+fmt(x.facturado)+' − devuelto '+fmt(x.notas)+' = <b>'+fmt(x.facturado-x.notas)+'</b> lo que me cuestan sus libros':'<b>'+fmt(x.facturado)+'</b> lo que me cuestan sus libros')
+        +'<br>de eso: <b>'+fmt(x.pagado)+'</b> ya se lo pagué (abonos) + <b>'+fmt(Math.max(0,x.debe))+'</b> todavía le debo')).join('')
       +(otros>0.005?edRow('− Comisiones a librerías y otros gastos del negocio',otros,'#b45309','librerías, capacitaciones, internet…'):'')
       +edRow('= LO QUE GANÉ CON LOS LIBROS',ganoEd,ganoEd>=0?'#16a34a':'#dc2626','de lo vendido ya me pagaron '+fmt(S('cobrado'))+' y me falta cobrar '+fmt(R.porCobrar),1)
       +alcanzaHTML();
