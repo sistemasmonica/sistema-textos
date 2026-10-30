@@ -13668,12 +13668,16 @@ function tablaComisionesHTML(print){
     // (resumenGanancia) y que Resumen ④ AL FINAL, para que no salgan distintas.
     const G=resumenGanancia(), banco=leerBancoCierre();
     const otros=Math.round((S('tv')-S('total')-S('costo')-G.neta)*100)/100;
+    const ganoEd=Math.round((S('tv')-S('total')-Object.values(R.ed).reduce((a,x)=>a+x.facturado-x.notas,0)-Math.max(0,otros))*100)/100;
     return tit('💰 CUÁNTO GANÉ Y SI ME ALCANZA','#dcfce7')
       +edRow('Vendí a los colegios',S('tv'),'#111','columna 1')
       +edRow('− Comisión para los colegios',S('total'),'#b45309','columna 2'+(comPend>0.005?' (todavía por entregar: '+fmt(comPend)+')':''))
-      +edRow('− Lo que cuestan esos libros a la editorial',S('costo'),'#1d4ed8','columna 4: esto es lo que les pago por lo vendido (Didáctica + Tech Books)')
+      // Lo que pago a cada editorial = su estado de cuenta − lo devuelto (Mónica
+      // 29-oct: no el costo de lo vendido, que depende de la bodega).
+      +Object.entries(R.ed).map(([g,x])=>edRow('− '+(g==='Tech Books'?'Tech Books (Marco)':g),x.facturado-x.notas,'#1d4ed8',
+        (x.notas>0.005?'facturas '+fmt(x.facturado)+' − devuelto '+fmt(x.notas)+' = '+fmt(x.facturado-x.notas)+' · ':'')+'ya le aboné '+fmt(x.pagado)+', le debo '+fmt(Math.max(0,x.debe)))).join('')
       +(otros>0.005?edRow('− Comisiones a librerías y otros gastos del negocio',otros,'#b45309','librerías, capacitaciones, internet…'):'')
-      +edRow('= LO QUE GANÉ CON LOS LIBROS',G.neta,G.neta>=0?'#16a34a':'#dc2626','igual que Liquidación · de lo vendido ya me pagaron '+fmt(S('cobrado'))+' y me falta cobrar '+fmt(R.porCobrar),1)
+      +edRow('= LO QUE GANÉ CON LOS LIBROS',ganoEd,ganoEd>=0?'#16a34a':'#dc2626','de lo vendido ya me pagaron '+fmt(S('cobrado'))+' y me falta cobrar '+fmt(R.porCobrar),1)
       +alcanzaHTML();
     // ¿Me alcanza? en dos columnas (Mónica 27-oct: la lista con + y − la confundía):
     // TENGO Y ME VAN A PAGAR | TENGO QUE PAGAR (editoriales ya sin los libros que devuelvo).
