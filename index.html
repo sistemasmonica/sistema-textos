@@ -13657,22 +13657,7 @@ function tablaComisionesHTML(print){
   ${edRow('Facturas de Didáctica',D.facturado,'#111',(cuadra?'✅ igual a su estado de cuenta: ':'⚠️ revisar: ')+fmt(E.facturas)+' al '+F(E.corte)+(facD.length?' + '+facD.length+' factura(s) que llegaron después: '+fmt(sum(facD)):''))}
   ${edRow('− Devoluciones a Didáctica',D.notas,'#7c3aed',D.ncs.length+' nota(s) de crédito')}
   ${edRow('− Abonos a Didáctica',D.pagado,'#16a34a',lp(D.pagos)+(pagA.length<D.pagos.length?' (su estado de cuenta del '+F(E.corte)+' solo trae '+fmt(sum(pagA))+')':''))}
-  ${edRow('= LE DEBO A DIDÁCTICA',Math.max(0,D.debe),'#dc2626',D.porDevolver>0.005?'de eso: <b>'+fmt(Math.max(0,D.debe-D.porDevolver))+'</b> por libros que ya vendí (sí o sí pago) + <b>'+fmt(D.porDevolver)+'</b> por libros que todavía tengo (si los devuelvo, no los pago)':'',1)}
-  ${(()=>{const P=paraDevolverDidactica();if(P.u<=0)return '';
-    const u=n=>n+' libro'+(n===1?'':'s');
-    const r=(txt,n,v,col,nota,big)=>`<tr style="border-top:${big?'2px solid #7c3aed':'1px solid #e9d5ff'};background:${big?'#ede9fe':'#faf5ff'}">
-      <td colspan="5" style="padding:6px 7px;text-align:right"><span style="font-weight:${big?800:600};font-size:${big?13:12}px">${txt}</span>${nota?'<div style="font-size:11px;color:#475569;margin-top:2px">'+nota+'</div>':''}</td>
-      ${td(n,'#111',big)}${td(fmt(v),col,1,big?'font-size:14px;':'')}<td colspan="3"></td></tr>`;
-    return tit('📦 LO QUE TENGO PARA DEVOLVER A DIDÁCTICA — libros que NO se vendieron','#ede9fe')
-      +r('En mi bodega',u(P.bodega.u),P.bodega.v,'#7c3aed','aquí ya entraron los '+P.devCol+' libros que me devolvieron los colegios')
-      // Lo real: lo que está en la bodega. Las muestras de los colegios van
-      // aparte (pedido de Mónica: el "si devuelvo todo" con muestras confundía).
-      // Nunca baja de lo que ya se vendió.
-      +r('SI DEVUELVO LO DE MI BODEGA, LE DEBO A DIDÁCTICA','',Math.max(0,D.debe-Math.min(P.bodega.v,D.porDevolver)),'#dc2626',
-        fmt(Math.max(0,D.debe))+' que le debo − '+fmt(Math.min(P.bodega.v,D.porDevolver))+' de los libros de mi bodega',1);
-      // Las muestras que siguen en los colegios no se muestran aquí todavía
-      // (pedido de Mónica 29-oct: se revisan después).
-    })()}
+  ${edRow('= LE DEBO A DIDÁCTICA',Math.max(0,D.debe),'#dc2626','',1)}
   ${TB?tit('🔤 TECH BOOKS (Marco)','#ede9fe'):''}
   ${TB?edRow('Libros de Tech Books que vendí',TB.facturado,'#111','a Tech Books se le paga solo lo vendido'):''}
   ${TB?edRow('− Abonos a Tech Books',TB.pagado,'#16a34a',lp(TB.pagos)):''}
