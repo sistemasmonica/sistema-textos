@@ -13011,7 +13011,8 @@ function resumenNegocio(){
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
   const comOtras=e=>(DB.comisiones||[]).filter(c=>(c.estado==='pagado')===e).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
   const comOtrasPag=comOtras(true),comOtrasPend=comOtras(false);
-  return {vendido,cobrado,aCobrar,comPorEntregar,comAparte,porCobrar:aCobrar-cobrado,ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
+  // porCobrar = suma de lo que le falta a cada colegio, redondeado fila por fila (30-oct: así Mi cuenta, Comisiones, Colegios y ¿me alcanza? dicen el mismo centavo).
+  return {vendido,cobrado,aCobrar,comPorEntregar,comAparte,porCobrar:(()=>{const s=filasComisiones().reduce((a,x)=>a+x.falta,0);return Math.round(Math.max(0,s)*100)/100;})(),ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
     // Comisiones aparte ya pagadas (librerías, capacitaciones): salieron de la caja.
     // Las cruzadas con un depósito están también como cobro "Compensación", así que se anulan.
@@ -13681,7 +13682,7 @@ function tablaComisionesHTML(print){
       // Casilla para escribir aquí mismo la plata del banco (la misma de Colegios → Banco Pichincha).
       const campoBanco=print?'':`$<input type="text" inputmode="decimal" value="${banco===null?'':banco}" placeholder="escriba" style="width:110px;padding:5px 7px;font-size:14px;font-weight:700;text-align:right;border:2px solid #15803d;border-radius:6px" onchange="guardarBancoCierre(this.value)">`;
       const tengo=[banco===null?['Plata en el banco',0,'⚠️ escriba cuánto hay hoy en el banco y aplaste Enter',campoBanco]:['Plata en el banco',banco,print?'':'si cambia, escriba lo de hoy y aplaste Enter',campoBanco]];
-      tengo.push(['Me falta cobrar a los colegios',R.porCobrar,'']);
+      tengo.push(['Me falta cobrar a los colegios',Math.max(0,S('falta')),'']);
       // Lo que de verdad le debo (facturas − devoluciones ya anotadas − abonos),
       // sin restar libros que el sistema cree que hay en bodega (Mónica 29-oct).
       const pagar=Object.entries(R.ed).map(([g,x])=>[g,Math.max(0,x.debe||0),x.notas>0.005?'ya restadas las devoluciones ('+fmt(x.notas)+')':''])
@@ -13803,7 +13804,7 @@ function renderMiCuentaPanel(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
       ${card('🧾','VENDIDO',fmt(S('tv')),'#fbbf24','a precio de venta, ya sin devoluciones')}
       ${card('✅','YA ME PAGARON',fmt(R.cobrado),'#4ade80','cobros de los colegios')}
-      ${card('⏳','ME FALTA COBRAR',fmt(R.porCobrar),'#fb923c','lo que todavía me deben')}
+      ${card('⏳','ME FALTA COBRAR',fmt(Math.max(0,S('falta'))),'#fb923c','lo que todavía me deben')}
       ${card('🏫','COLEGIOS',String(L.length),'#38bdf8',deben.length+' me deben · '+(L.length-deben.length)+' pagados'+(demas.length?' · '+demas.length+' pagó de más':''))}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">${tabs.map(tabBtn).join('')}</div>
@@ -13905,7 +13906,7 @@ function cierreComisionesHTML(print){
     return {...x,libs,pagoTodo,conCom,debeCom,ord};
   }).sort((a,b)=>a.ord-b.ord||b.tv-a.tv);
   const S=f=>L.reduce((a,x)=>a+f(x),0);
-  const tCob=S(x=>x.cobrado),tFalta=S(x=>x.pagoTodo?0:x.falta),tCom=S(x=>x.conCom?x.total:0);
+  const tCob=S(x=>x.cobrado),tFalta=Math.max(0,S(x=>x.falta)),tCom=S(x=>x.conCom?x.total:0);
   const tComYa=S(x=>x.conCom&&x.pag?x.total:0),tComFalta=S(x=>x.debeCom?x.total:0);
   const th=(t,bg)=>`<th style="padding:7px 6px;font-size:11px;color:#fff;background:${bg};text-align:center;white-space:nowrap">${t}</th>`;
   const td=(v,st)=>`<td style="padding:6px;border-top:1px solid #e2e8f0;text-align:right;white-space:nowrap;${st||''}">${v}</td>`;
