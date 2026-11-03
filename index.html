@@ -370,7 +370,7 @@ a{color:#7dd3fc}
   <div id="d-resumen-ganancia" style="margin-bottom:12px"></div>
   <div class="sc-grid">
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Ventas totales</div><div class="sc-val cb" id="sv">$0.00</div><div class="sc-sub" id="svn">0 ventas</div></div>
-    <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Compras negocio</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
+    <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Facturas de compra (SRI)</div><div class="sc-val cg" id="sn">$0.00</div><div class="sc-sub" id="snn">0 facturas</div></div>
     <div class="sc" style="cursor:pointer" onclick="irATab('rep')" title="Ver en Reportes"><div class="sc-lbl">Gastos personales</div><div class="sc-val ca" id="sp">$0.00</div><div class="sc-sub" id="spn">0 registros</div></div>
     <div class="sc" style="cursor:pointer;border:2px solid var(--g1);background:var(--g4)" onclick="irATab('liquidacion')" title="Ver en Liquidación"><div class="sc-lbl" style="font-weight:700">🏆 Utilidad estimada</div><div class="sc-val" id="su" style="font-size:26px">$0.00</div><div class="sc-sub">ganancia real de lo vendido</div></div>
   </div>
@@ -1221,12 +1221,12 @@ a{color:#7dd3fc}
   <div class="sc-grid" id="cons-cards"></div>
   <div class="two">
     <div class="card">
-      <div class="card-t cg"><i class="ti ti-school"></i> Ventas por colegio</div>
-      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total vendido</th></tr></thead><tbody id="cons-tb-col"></tbody></table></div>
+      <div class="card-t cg"><i class="ti ti-school"></i> Entregado a cada colegio (según guías)</div><div style="font-size:11px;color:var(--mu);margin:-6px 0 8px">Es lo que salió en guías, no lo vendido: lo vendido (ya sin devoluciones) está en Mi cuenta y Colegios. Un mismo colegio puede salir con dos nombres si las guías se escribieron distinto.</div>
+      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Colegio / Cliente</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Valor en guías</th></tr></thead><tbody id="cons-tb-col"></tbody></table></div>
     </div>
     <div class="card">
-      <div class="card-t cb"><i class="ti ti-calendar-month"></i> Ventas por mes</div>
-      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Mes</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Total</th></tr></thead><tbody id="cons-tb-mes"></tbody></table></div>
+      <div class="card-t cb"><i class="ti ti-calendar-month"></i> Entregado por mes (según guías)</div>
+      <div class="tbl-wrap" style="margin:0"><table><thead><tr><th>Mes</th><th style="text-align:center">Guías</th><th style="text-align:center">Unidades</th><th style="text-align:right">Valor en guías</th></tr></thead><tbody id="cons-tb-mes"></tbody></table></div>
     </div>
   </div>
   <div class="card">
@@ -1446,8 +1446,8 @@ a{color:#7dd3fc}
   <div id="liq-comparacion" style="display:none;margin-bottom:14px"></div>
   <div class="sc-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="sc"><div class="sc-lbl">Total ventas</div><div class="sc-val cg" id="liq-ventas">$0.00</div></div>
-    <div class="sc"><div class="sc-lbl">Costo editorial neto</div><div class="sc-val cr" id="liq-costo">$0.00</div><div class="sc-sub">Facturas − notas crédito</div></div>
-    <div class="sc"><div class="sc-lbl">Comisiones a colegios</div><div class="sc-val ca" id="liq-comisiones">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Costo de los libros vendidos</div><div class="sc-val cr" id="liq-costo">$0.00</div><div class="sc-sub">lo que cobra la editorial por lo vendido</div></div>
+    <div class="sc"><div class="sc-lbl">Comisiones</div><div class="sc-val ca" id="liq-comisiones">$0.00</div><div class="sc-sub" id="liq-com-sub"></div></div>
     <div class="sc"><div class="sc-lbl">Utilidad estimada</div><div class="sc-val" id="liq-utilidad">$0.00</div></div>
   </div>
   <div class="two" style="margin-top:12px">
@@ -1456,7 +1456,7 @@ a{color:#7dd3fc}
       <div id="liq-detalle"></div>
     </div>
     <div class="card">
-      <div class="card-t cb"><i class="ti ti-building-store"></i> Costo por editorial</div>
+      <div class="card-t cb"><i class="ti ti-building-store"></i> Cada editorial: lo vendido y lo que le debo</div>
       <div id="liq-por-editorial"></div>
     </div>
   </div>
@@ -1504,6 +1504,7 @@ a{color:#7dd3fc}
     <div class="sc"><div class="sc-lbl">Salidas (pagos)</div><div class="sc-val cr" id="bal-f-pagos">$0.00</div></div>
     <div class="sc"><div class="sc-lbl">Flujo neto</div><div class="sc-val" id="bal-f-neto">$0.00</div></div>
   </div>
+  <div style="font-size:11px;color:var(--mu);margin-top:-4px">Aquí entra TODO lo anotado en Pagos (también el préstamo). Arriba, en "Plata que ya tengo", solo cuenta lo del negocio de libros.</div>
 </div>
 
 <!-- PANEL: PAGOS -->
@@ -5988,11 +5989,16 @@ function renderBalance(){
   const ultBanco=bancoOrd.length?bancoOrd[bancoOrd.length-1]:null;
   const saldoBanco=resumenNegocio().caja;   // cobros − pagos (Pagos), igual que "Plata que ya tengo" en Inicio
   const nb=document.getElementById('bal-banco-nota');
-  if(nb) nb.textContent=ultBanco?('Último extracto importado ('+String(ultBanco.fecha||'').split('-').reverse().join('/')+'): '+fmt(ultBanco.saldo||0)):'';
   // 2-nov-2026 (Mónica: "faltan devoluciones"): misma cuenta que "④ AL FINAL"
   // de Mi cuenta. Los libros que sobran no son inventario para vender: se
   // devuelven y bajan la deuda (porDevolver), y las comisiones aparte se restan.
   const R=resumenNegocio();
+  const noLibros=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&!editorialDePago(p)).reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  if(nb) nb.innerHTML='cobré '+fmt(R.cobrado+R.cobradoOtros)+' − pagué a editoriales '+fmt(R.pagadoEd)
+    +(R.comOtrasPag>0.005?' − comisiones pagadas '+fmt(R.comOtrasPag):'')
+    +(R.gastosNeg>0.005?' − internet/servicios '+fmt(R.gastosNeg):'')
+    +(noLibros>0.005?'<br>(no se resta '+fmt(noLibros)+' de pagos que no son de libros, ej. el préstamo)':'')
+    +(ultBanco?'<br>Último extracto importado ('+String(ultBanco.fecha||'').split('-').reverse().join('/')+'): '+fmt(ultBanco.saldo||0):'');
   const invCosto=R.porDevolver;
   const enBodega=valorInventarioCosto();
   const ni=document.getElementById('bal-inv-nota');
@@ -6013,7 +6019,7 @@ function renderBalance(){
   },0);
   const totalPasivos=deudaEditorial+comis+deudasPend;
 
-  const patrimonio=totalActivos-totalPasivos;
+  const patrimonio=cuadrarCentavo(totalActivos-totalPasivos);
 
   document.getElementById('bal-a-banco').textContent=fmt(saldoBanco);
   document.getElementById('bal-a-inv').textContent=fmt(invCosto);
@@ -8745,7 +8751,7 @@ function renderResumenGanancia(){
       ${op('−')}
       ${paso('Costo libros',g.costoNeto,'','#b45309',`Costo de los libros que YA vendiste a los colegios (no de todo el inventario). Lo que le debes a la editorial por todo lo comprado se muestra abajo aparte.`)}
       ${op('−')}
-      ${paso('Comisión colegios',g.comisiones,'','#b45309',`Comisión que les pagas a los colegios (${fmt(g.comisionCol)}) + capacitación/otras comisiones`)}
+      ${paso('Comisiones',g.comisiones,'','#b45309',`Comisión que les pagas a los colegios (${fmt(g.comisionCol)}) + capacitación/otras comisiones`)}
       ${op('−')}
       ${paso('Otros gastos',g.otrosGastos,'','#b45309','Gastos del negocio que no son compra de textos (flete, servicios, etc.)')}
       ${op('=')}
@@ -11717,7 +11723,7 @@ function renderColResumen(){
       <div style="background:#e3f2fd;border-radius:6px;padding:7px 11px;margin-top:9px;font-size:11px;color:#1565c0">Suma del cuadro "Lo real" de cada colegio. Para ver el detalle de uno, ábrelo en la tabla de abajo.</div>
     </div>`;
   const tb=document.getElementById('tb-col-res');
-  tb.innerHTML=rows+`<tr class="total-row"><td>TOTALES</td><td></td><td></td><td></td><td>${fmt(totalTV)}</td><td>${fmt(totalC)}</td><td>${fmt(totalP)}</td><td>${fmt(totalCostoEd)}</td><td>${fmt(totalPagEd)}</td><td>${fmt(totalSaldoEd)}</td><td></td></tr>`;
+  tb.innerHTML=rows+`<tr class="total-row"><td>TOTALES</td><td></td><td></td><td></td><td>${fmt(totalTV)}</td><td>${fmt(totalC)}</td><td>${fmt(totalP)}</td><td>${fmt(totalCostoEd)}</td><td title="Los pagos a la editorial no son por colegio: aquí va el total de Pagos">${fmt(RNc?RNc.pagadoEd:totalPagEd)}<div style="font-size:9px;font-weight:400">pagos a editoriales</div></td><td>${fmt(totalSaldoEd)}<div style="font-size:9px;font-weight:400">facturas − devoluciones − pagado</div></td><td></td></tr>`;
 
   renderColDetalleTodos();
 }
@@ -13180,13 +13186,16 @@ function resumenNegocio(){
   const tot=k=>Object.values(ed).reduce((a,x)=>a+x[k],0);
   const comOtras=e=>(DB.comisiones||[]).filter(c=>(c.estado==='pagado')===e).reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
   const comOtrasPag=comOtras(true),comOtrasPend=comOtras(false);
+  // Gastos del negocio que no son libros (internet, servicios): salen del banco
+  // aunque no estén en Pagos — así la plata cuadra con la ganancia (2-nov-2026).
+  const gastosNeg=DB.regs.filter(r=>r.tipo==='negocio'&&!esCompraEditorial(r)).reduce((a,r)=>a+(parseFloat(r.total)||0),0);
   // porCobrar = suma de lo que le falta a cada colegio, redondeado fila por fila (30-oct: así Mi cuenta, Comisiones, Colegios y ¿me alcanza? dicen el mismo centavo).
   return {vendido,cobrado,aCobrar,comPorEntregar,comAparte,porCobrar:(()=>{const s=filasComisiones().reduce((a,x)=>a+x.falta,0);return Math.round(Math.max(0,s)*100)/100;})(),ganancia,ed,otrosCobros,cobradoOtros,ventaEd,costoVend,
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
     // Comisiones aparte ya pagadas (librerías, capacitaciones): salieron de la caja.
     // Las cruzadas con un depósito están también como cobro "Compensación", así que se anulan.
-    comOtrasPag,comOtrasPend,
-    caja:cobrado+cobradoOtros-tot('pagado')-comOtrasPag,porDevolver:tot('porDevolver')};
+    comOtrasPag,comOtrasPend,gastosNeg,
+    caja:cobrado+cobradoOtros-tot('pagado')-comOtrasPag-gastosNeg,porDevolver:tot('porDevolver')};
 }
 // Filas chicas con el detalle de cada nota de crédito / pago, debajo del total,
 // para poder comprobar de dónde sale cada número (pedido de Mónica y su esposo).
@@ -13251,7 +13260,7 @@ function resumenNegocioHTML(R){
       ${R.porDevolver?f1('(+) Lo que baja la deuda al devolver los libros que sobran',R.porDevolver):''}
       ${R.comOtrasPend>0.005?f1('(−) Otras comisiones por pagar (librerías, capacitaciones)',R.comOtrasPend):''}
       ${R.comAparte>0.005?f1('(−) Comisiones que les doy yo a los colegios'+(R.comPorEntregar>0.005?' (por entregar: '+fmt(R.comPorEntregar)+')':''),R.comAparte):''}
-      ${(()=>{const q=(bancoReal===null?R.caja:bancoReal)+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
+      ${(()=>{let q=(bancoReal===null?R.caja:bancoReal)+R.porCobrar-R.debeEd+R.porDevolver-R.comAparte-R.comOtrasPend;if(bancoReal===null)q=cuadrarCentavo(q);return f1('= ME QUEDA cuando cobre todo, devuelva lo que sobra y pague todo',q,{b:1,big:1,color:verde(q),bg:'#e8f5e9'});})()}
     </table>
   </div>`;
 }
@@ -13284,6 +13293,9 @@ function imprimirResumenNegocio(){return imprimirComisionesColegios();
   win.document.close();
 }
 
+// Diferencias de 1-2 centavos salen solo por redondear colegio por colegio: se
+// muestra la misma ganancia que en todo el sistema (Mónica quiere el mismo centavo).
+function cuadrarCentavo(v){try{const g=resumenGanancia().neta;return Math.abs(v-g)<=0.02?g:v;}catch(e){return v;}}
 function resumenGanancia(){
   // Las ventas reales de Mónica se registran POR COLEGIO (en colData), no como
   // DB.regs tipo 'venta'. Este resumen suma todos los colegios — mismo criterio
@@ -13825,7 +13837,7 @@ function tablaComisionesHTML(print){
   <tbody>${L.map(fila).join('')}
   <tr style="border-top:2px solid #334155;background:#f1f5f9;font-weight:800">
    <td style="padding:8px 7px">TOTAL</td>
-   ${td(fmt(S('tv'))+(S('dev')>0?`<div style="font-size:10px;color:#7c3aed">↩ devolvieron ${S('dev')} libros − ${fmt(S('devPvp'))}</div>`:''),'',1,'font-size:13px;')}${td('− '+fmt(S('total')),'#b45309',1,'font-size:13px;')}${td(fmt(S('neto')),'#0369a1',1,'font-size:13px;')}${td(fmt(S('cobrado')),'#16a34a',1,'font-size:13px;')}${td(fmt(Math.max(0,S('falta'))),'#dc2626',1,'font-size:13px;')}${td('− '+fmt(S('costo')),'#1d4ed8',1,'font-size:13px;')}${td(fmt(S('gan')),'#16a34a',1,'font-size:14px;')}
+   ${td(fmt(S('tv'))+(S('dev')>0?`<div style="font-size:10px;color:#7c3aed">↩ devolvieron ${S('dev')} libros − ${fmt(S('devPvp'))}</div>`:''),'',1,'font-size:13px;')}${td('− '+fmt(S('total')),'#b45309',1,'font-size:13px;')}${td(fmt(S('neto')),'#0369a1',1,'font-size:13px;')}${td(fmt(S('cobrado')),'#16a34a',1,'font-size:13px;')}${td(fmt(Math.max(0,S('falta'))),'#dc2626',1,'font-size:13px;')}${td('− '+fmt(S('costo')),'#1d4ed8',1,'font-size:13px;')}${(()=>{const G=resumenGanancia();return td(fmt(S('gan'))+(G.otrosGastos>0.005?'<div style="font-size:10px;font-weight:600">− internet/servicios '+fmt(G.otrosGastos)+'<br>= mi ganancia '+fmt(G.neta)+'</div>':''),'#16a34a',1,'font-size:14px;');})()}
    <td colspan="2" style="padding:8px 7px;text-align:center;font-size:12px;color:#b45309">comisión por entregar: ${fmt(comPend)}</td></tr>
   <tr><td colspan="10" style="padding:8px 7px 4px;font-weight:800;font-size:13px;background:#e2e8f0">📚 LAS EDITORIALES — los ${fmt(S('costo'))} de la columna 4 se pagan aparte, a cada editorial (no por colegio):</td></tr>
   ${tit('📘 DIDÁCTICA','#dbeafe')}
@@ -13850,7 +13862,8 @@ function tablaComisionesHTML(print){
       const it=(t,v,nota,campo)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #e2e8f0"><div><div style="font-size:13px;font-weight:600">${t}</div>${nota?'<div style="font-size:11px;color:#64748b">'+nota+'</div>':''}</div><div style="${mono}font-size:14px;font-weight:700;white-space:nowrap">${campo||fmt(v)}</div></div>`;
       // Casilla para escribir aquí mismo la plata del banco (la misma de Colegios → Banco Pichincha).
       const campoBanco=print?'':`$<input type="text" inputmode="decimal" value="${banco===null?'':banco}" placeholder="escriba" style="width:110px;padding:5px 7px;font-size:14px;font-weight:700;text-align:right;border:2px solid #15803d;border-radius:6px" onchange="guardarBancoCierre(this.value)">`;
-      const tengo=[banco===null?['Plata en el banco',0,'⚠️ escriba cuánto hay hoy en el banco y aplaste Enter',campoBanco]:['Plata en el banco',banco,print?'':'si cambia, escriba lo de hoy y aplaste Enter',campoBanco]];
+      // Sin banco escrito se usa lo cobrado − pagado (antes ponía $0 y salía "ME FALTAN" de mentira, 2-nov-2026).
+      const tengo=[banco===null?['Plata que ya tengo (cobré − pagué)',R.caja,print?'':'si quiere, escriba lo que hay hoy en el banco y aplaste Enter: '+campoBanco]:['Plata en el banco',banco,print?'':'si cambia, escriba lo de hoy y aplaste Enter',campoBanco]];
       tengo.push(['Me falta cobrar a los colegios',Math.max(0,S('falta')),'']);
       // Lo que de verdad le debo (facturas − devoluciones ya anotadas − abonos),
       // sin restar libros que el sistema cree que hay en bodega (Mónica 29-oct).
@@ -13871,7 +13884,7 @@ function tablaComisionesHTML(print){
           <div style="margin-top:12px;border-radius:10px;padding:12px 16px;text-align:center;background:${q>=0?'#dcfce7':'#fee2e2'};border:2px solid ${q>=0?'#15803d':'#b91c1c'}">
             <div style="font-size:13px;color:#334155">${fmt(tT)} − ${fmt(tP)} =</div>
             <div style="font-size:22px;font-weight:800;color:${q>=0?'#15803d':'#b91c1c'}">${q>=0?'✅ ME SOBRAN '+fmt(q):'❌ ME FALTAN '+fmt(-q)}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px">cuando cobre todo y pague todo</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">cuando cobre todo y pague todo</div>${R.porDevolver>0.005?'<div style="font-size:12px;color:#334155;margin-top:6px">y si devuelvo a la editorial los libros que sobran ('+fmt(R.porDevolver)+'), la deuda baja y me quedan <b>'+fmt(banco===null?cuadrarCentavo(q+R.porDevolver):q+R.porDevolver)+'</b>'+(banco===null?' — igual que el Balance':'')+'</div>':''}
           </div></div></td></tr>`;
     }})()}
   </tbody></table></div>
@@ -14249,6 +14262,7 @@ function renderLiquidacion(){
   const comisiones=comisionCol+f(DB.comisiones).reduce((a,c)=>a+c.monto,0);
   const otrosGastos=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria!=='Textos escolares').reduce((a,r)=>a+r.total,0);
   const utilidad=resumenGanancia().neta;   // misma cifra exacta que Inicio, Reportes y Consolidado
+  const RN=resumenNegocio();
   document.getElementById('liq-ventas').textContent=fmt(ventas);
   document.getElementById('liq-costo').textContent=fmt(costoNeto);
   document.getElementById('liq-comisiones').textContent=fmt(comisiones);
@@ -14260,24 +14274,15 @@ function renderLiquidacion(){
     <div class="pf"><span>Comisión a colegios + capacitación</span><span class="cr">− ${fmt(comisiones)}</span></div>
     <div class="pf"><span>Otros gastos negocio</span><span class="cr">− ${fmt(otrosGastos)}</span></div>
     <div class="pf" style="border-top:2px solid var(--bd);font-weight:700;font-size:14px;padding:10px 0"><span>UTILIDAD ESTIMADA</span><span class="${utilidad>=0?'cg':'cr'}">${fmt(utilidad)}</span></div>
-    <div class="pf" style="font-size:11px;color:var(--mu);padding-top:8px"><span>Le debes a la editorial por todo lo comprado (facturas ${fmt(comprasEdit)} − NC ${fmt(totalNC)})</span><span>${fmt(Math.max(0,comprasEdit-totalNC))}</span></div>`;
-  // Por editorial — claves normalizadas para evitar duplicados por mayúsculas/espacios
-  const normK=s=>(s||'').trim().toLowerCase();
-  const porEditMap={};
-  f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').forEach(r=>{
-    const k=normK(r.proveedor);
-    if(!porEditMap[k])porEditMap[k]={display:r.proveedor||'(sin nombre)',total:0};
-    porEditMap[k].total+=r.total;
-  });
-  // NCs sin filtro de año, normalizadas igual
-  DB.notasCredito.forEach(n=>{
-    const k=normK(n.editorial);
-    if(!porEditMap[k])porEditMap[k]={display:n.editorial||'(sin nombre)',total:0};
-    porEditMap[k].total-=n.total;
-  });
-  document.getElementById('liq-por-editorial').innerHTML=Object.keys(porEditMap).length===0
-    ?'<div class="empty">Sin compras editoriales registradas</div>'
-    :Object.values(porEditMap).sort((a,b)=>b.total-a.total).map(e=>`<div class="pf"><span>${escH(e.display)}</span><span class="${e.total>0?'cr':'cg'}">${fmt(e.total)}</span></div>`).join('');
+    <div class="pf" style="font-size:11px;color:var(--mu);padding-top:8px"><span>Le debo hoy a las editoriales (facturas ${fmt(RN.facturado)} − devoluciones ${fmt(RN.notas)} − ya pagué ${fmt(RN.pagadoEd)}) — igual que Mi cuenta y Balance</span><span>${fmt(Math.max(0,RN.debeEd))}</span></div>`;
+  const comCol=document.getElementById('liq-com-sub');
+  if(comCol)comCol.textContent=(DB.comisiones||[]).length?'colegios '+fmt(comisionCol)+' + librerías/capacitación '+fmt(comisiones-comisionCol):'';
+  // Por editorial: lo mismo que Mi cuenta → Editoriales (2-nov-2026; antes era
+  // facturas − NC sin restar lo pagado, y Tech Books salía $0 porque se le paga por lo vendido).
+  document.getElementById('liq-por-editorial').innerHTML=Object.entries(RN.ed).map(([g,x])=>
+    `<div class="pf" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;justify-content:space-between"><b>${escH(g==='Tech Books'?'Tech Books (Marco)':g)}</b><span class="cr">le debo ${fmt(Math.max(0,x.debe))}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu)"><span>costo de lo vendido ${fmt(RN.costoVend[g]||0)}</span><span>${x.sinFacturas?'se le paga lo vendido':'facturas '+fmt(x.facturado)+' − devoluciones '+fmt(x.notas)}</span><span>ya pagué ${fmt(x.pagado)}</span></div></div>`).join('')
+    +`<div class="pf" style="font-weight:700"><span>Total que le debo a las editoriales</span><span class="cr">${fmt(Math.max(0,RN.debeEd))}</span></div>`;
   // Por colegio — antes buscaba en DB.regs tipo 'venta' (la pestaña Ventas, que
   // casi no usas) y por eso siempre salía "Sin ventas registradas". Ahora usa
   // Control de ventas de cada colegio (colData), la misma fuente que Colegios →
