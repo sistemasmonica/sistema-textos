@@ -1476,22 +1476,23 @@ a{color:#7dd3fc}
       <div class="card-t cg"><i class="ti ti-wallet"></i> Activos</div>
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <tr><td style="padding:6px 0">Plata que ya tengo <span style="font-size:10px;color:var(--mu)">(cobros − pagos, pestaña Pagos)</span><div id="bal-banco-nota" style="font-size:10px;color:var(--mu)"></div></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-banco">$0.00</td></tr>
-        <tr><td style="padding:6px 0">Inventario a costo</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-inv">$0.00</td></tr>
-        <tr><td style="padding:6px 0">Cuentas por cobrar</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-cxc">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Me falta cobrar <span style="font-size:10px;color:var(--mu)">(colegios)</span></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-cxc">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Libros que sobran y devuelvo a la editorial <span style="font-size:10px;color:var(--mu)">(a costo; al devolverlos baja la deuda)</span><div id="bal-inv-nota" style="font-size:10px;color:var(--mu)"></div></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-a-inv">$0.00</td></tr>
         <tr style="border-top:2px solid var(--bd);font-weight:700"><td style="padding:8px 0">Total activos</td><td style="padding:8px 0;text-align:right;font-family:monospace;color:var(--g1)" id="bal-a-total">$0.00</td></tr>
       </table>
     </div>
     <div class="card">
       <div class="card-t cr"><i class="ti ti-credit-card"></i> Pasivos</div>
       <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <tr><td style="padding:6px 0">Deuda editorial pendiente</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-edit">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Le debo hoy a las editoriales<div id="bal-edit-nota" style="font-size:10px;color:var(--mu)"></div></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-edit">$0.00</td></tr>
+        <tr><td style="padding:6px 0">Comisiones que les doy a los colegios<div id="bal-com-nota" style="font-size:10px;color:var(--mu)"></div></td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-com">$0.00</td></tr>
         <tr><td style="padding:6px 0">Deudas personales/negocio</td><td style="padding:6px 0;text-align:right;font-family:monospace" id="bal-p-deu">$0.00</td></tr>
         <tr style="border-top:2px solid var(--bd);font-weight:700"><td style="padding:8px 0">Total pasivos</td><td style="padding:8px 0;text-align:right;font-family:monospace;color:var(--r1)" id="bal-p-total">$0.00</td></tr>
       </table>
     </div>
   </div>
   <div class="sc-grid" style="grid-template-columns:repeat(1,1fr);margin-top:4px">
-    <div class="sc"><div class="sc-lbl">Patrimonio (Activos − Pasivos)</div><div class="sc-val" id="bal-patrimonio">$0.00</div></div>
+    <div class="sc"><div class="sc-lbl">Patrimonio (Activos − Pasivos) = me queda cuando cobre todo, devuelva lo que sobra y pague todo</div><div class="sc-val" id="bal-patrimonio">$0.00</div></div>
   </div>
 
   <div class="sh" style="margin-top:16px"><h2>Flujo de caja (Pagos/Cobros)</h2></div>
@@ -5988,22 +5989,29 @@ function renderBalance(){
   const saldoBanco=resumenNegocio().caja;   // cobros − pagos (Pagos), igual que "Plata que ya tengo" en Inicio
   const nb=document.getElementById('bal-banco-nota');
   if(nb) nb.textContent=ultBanco?('Último extracto importado ('+String(ultBanco.fecha||'').split('-').reverse().join('/')+'): '+fmt(ultBanco.saldo||0)):'';
-  const invCosto=valorInventarioCosto();
-  // Cuentas por cobrar: lo que te deben los colegios de verdad (ingreso esperado
-  // por Control de ventas − lo ya cobrado en Pagos), misma cuenta que "Por Cobrar".
-  // Antes esto buscaba en DB.regs tipo 'venta' (una pestaña que casi no usas) y
-  // siempre daba $0, así que el Patrimonio quedaba subestimado.
-  const cxc=resumenNegocio().porCobrar;   // igual que Inicio y Por Cobrar
-  const totalActivos=saldoBanco+invCosto+cxc;
+  // 2-nov-2026 (Mónica: "faltan devoluciones"): misma cuenta que "④ AL FINAL"
+  // de Mi cuenta. Los libros que sobran no son inventario para vender: se
+  // devuelven y bajan la deuda (porDevolver), y las comisiones aparte se restan.
+  const R=resumenNegocio();
+  const invCosto=R.porDevolver;
+  const enBodega=valorInventarioCosto();
+  const ni=document.getElementById('bal-inv-nota');
+  if(ni) ni.textContent=invCosto>0.005?'de eso, en bodega según Inventario: '+fmt(enBodega):'';
+  const cxc=R.porCobrar;   // igual que Inicio y Por Cobrar
+  const totalActivos=saldoBanco+cxc+invCosto;
 
-  // Pasivos — se usa resumenEditorial() (misma fuente que Editorial y Auditoría)
-  // para que la deuda ya reste las notas de crédito, en vez de recalcularla aparte.
-  const deudaEditorial=resumenEditorial().deudaReal;
+  // Pasivos — facturas − devoluciones (notas de crédito) − ya pagado.
+  const deudaEditorial=R.debeEd;
+  const ne=document.getElementById('bal-edit-nota');
+  if(ne) ne.textContent='facturas '+fmt(R.facturado)+' − devoluciones (notas de crédito) '+fmt(R.notas)+' − ya pagué '+fmt(R.pagadoEd);
+  const comis=R.comAparte+R.comOtrasPend;
+  const nc=document.getElementById('bal-com-nota');
+  if(nc) nc.textContent=R.comPorEntregar>0.005?'por entregar: '+fmt(R.comPorEntregar):'';
   const deudasPend=DB.deudas.filter(d=>!d.pagada).reduce((a,d)=>{
     const pag=d.abonos.reduce((s,ab)=>s+ab.monto,0);
     return a+Math.max(0,d.montoTotal-pag);
   },0);
-  const totalPasivos=deudaEditorial+deudasPend;
+  const totalPasivos=deudaEditorial+comis+deudasPend;
 
   const patrimonio=totalActivos-totalPasivos;
 
@@ -6012,6 +6020,7 @@ function renderBalance(){
   document.getElementById('bal-a-cxc').textContent=fmt(cxc);
   document.getElementById('bal-a-total').textContent=fmt(totalActivos);
   document.getElementById('bal-p-edit').textContent=fmt(deudaEditorial);
+  document.getElementById('bal-p-com').textContent=fmt(comis);
   document.getElementById('bal-p-deu').textContent=fmt(deudasPend);
   document.getElementById('bal-p-total').textContent=fmt(totalPasivos);
   const patEl=document.getElementById('bal-patrimonio');
