@@ -8268,14 +8268,19 @@ function eliminarConteo(){
   const ncs=(DB.notasCredito||[]).filter(x=>c.inicio&&String(x.conteoRef||'').startsWith(c.inicio+'|'));
   let aviso='';
   if(c.ajustado)aviso+='\n\n⚠️ Con este conteo ya ajustaste el stock ('+c.ajustado+'). Ese ajuste NO se deshace.';
-  if(ncs.length)aviso+='\n\n⚠️ Este conteo ya está anotado como devolución a la editorial ('+ncs.map(x=>x.num||fmt(x.total)).join(', ')+'). Esa nota de crédito NO se borra; si también sobra, elimínala en Editorial → Notas de crédito.';
+  const pend=ncs.filter(x=>x.pendiente),reales=ncs.filter(x=>!x.pendiente);
+  if(pend.length)aviso+='\n\n🗑 También se borra su devolución a la editorial sin nota de crédito ('+pend.map(x=>fmt(x.total)).join(', ')+') y esos libros vuelven a tu bodega. Si los pasaste a otro conteo, abre ese conteo y aprieta otra vez "Ya se lo entregué a la editorial" para que se actualice.';
+  if(reales.length)aviso+='\n\n⚠️ Este conteo ya está anotado como devolución a la editorial ('+reales.map(x=>x.num||fmt(x.total)).join(', ')+'). Esa nota de crédito NO se borra; si también sobra, elimínala en Editorial → Notas de crédito.';
   if(!confirm('¿ELIMINAR el conteo "'+nom+'" ('+n+' libros)?\n\nSe borra para siempre. Los demás conteos guardados no se tocan.'+aviso))return;
   clearTimeout(_conteoTimer);
   const g=[...(c.guardados||[])].sort((a,b)=>String(b.inicio||'').localeCompare(String(a.inicio||'')));
   const sig=g[0];
   DB.conteo={guardados:(c.guardados||[]).filter(y=>!sig||y.id!==sig.id),precios:c.precios||{}};
   if(sig)Object.assign(DB.conteo,{nombre:sig.nombre,inicio:sig.inicio,items:sig.items||{},ajustado:sig.ajustado});
-  logHistorial('Conteo físico eliminado','"'+nom+'" ('+n+' libros)');
+  pend.forEach(x=>{DB.movInv=DB.movInv.filter(m=>m.ref!=='NC-'+x.id);});
+  DB.notasCredito=(DB.notasCredito||[]).filter(x=>!pend.includes(x));
+  logHistorial('Conteo físico eliminado','"'+nom+'" ('+n+' libros)'+(pend.length?' + devolución sin NC '+pend.map(x=>fmt(x.total)).join(', '):''));
+  [renderNotasCredito,renderDeudaEditorial,renderDash,renderCatalogo,renderStockReport].forEach(fn=>{try{typeof fn==='function'&&fn();}catch(e){}});
   save();renderConteo();
   toast('🗑 Eliminado: '+nom+(sig?' — ahora ves: '+sig.nombre:''),'ok');
 }
