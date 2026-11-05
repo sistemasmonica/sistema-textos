@@ -2400,6 +2400,7 @@ async function syncFromCloud(){
     try{reparacionOct2026e();}catch(e){console.warn('Reparación oct-2026 (5):',e);}
     try{reparacionOct2026f();}catch(e){console.warn('Reparación oct-2026 (6):',e);}
     try{reparacionOct2026g();}catch(e){console.warn('Reparación oct-2026 (7):',e);}
+    try{reparacionNov2026a();}catch(e){console.warn('Reparación nov-2026:',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -13175,6 +13176,38 @@ function reparacionOct2026d(){
 // 26-oct-2026, nueva regla (la comisión la entrega Mónica aparte): los colegios
 // que YA le pagaron exacto "vendido − su comisión" (ej. Antonio Flores) se la
 // descontaron al pagar → quedan marcados así para que no salgan debiendo. Una vez.
+// 4-nov-2026: Mónica anotó como "comisión pagada" (+ Comisión) las de GIRASOLES
+// ($388.50) y CARRUSEL ($30.50) creyendo que así se descontaba; en realidad el
+// colegio se la descontó al pagar y no salió plata. Se borran esos 2 pagos y se
+// marca "se la descontó".
+function reparacionNov2026a(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 4-nov: comisiones Girasoles/Carrusel = se las descontó el colegio';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const ids=['1793850636540_5hv7hh','1793850648883_kovmps'],hechos=[];
+  ids.forEach(id=>{
+    const p=(DB.pagos||[]).find(x=>x.id===id);if(!p||p.editorial!=='comision')return;
+    const d=DB.colData?.[p.colegio];
+    DB.pagos=DB.pagos.filter(x=>x.id!==id);
+    if(d&&!d.comisionPagada){const T=totalesColegio(d);d.comisionPagada={fecha:p.fecha||today(),monto:Math.round(T.totalColegio*100)/100,modo:'descontada'};}
+    hechos.push(p.colegio+' '+fmt(p.valor));
+  });
+  logHistorial(MARCA,hechos.length?hechos.join(' · '):'Nada que corregir');
+  save();
+}
+// "+ Comisión" → el colegio se la descontó al pagarme (no salió plata).
+function mcComisionDescontada(nombre){
+  initColData();
+  const d=DB.colData[nombre];if(!d)return;
+  const T=totalesColegio(d);
+  d.comisionPagada={fecha:today(),monto:Math.round(T.totalColegio*100)/100,modo:'descontada'};
+  logHistorial('Comisión colegio descontada por el colegio',nombre+' '+fmt(T.totalColegio)+' desde Mi cuenta');
+  save();
+  document.getElementById('modal-mc-pago')?.classList.remove('on');
+  renderComisionesColegios();
+  try{renderControl();}catch(e){}try{renderResumenNegocio();}catch(e){}
+  toast('Listo: '+nombre+' se descontó la comisión. Ahora te debe vendido − comisión.','ok');
+}
 function reparacionOct2026e(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 26-oct (3): comisiones descontadas por el colegio';
@@ -14192,7 +14225,10 @@ function mcAbrirPago(tipo,nombre,sugerido){
   ov.innerHTML=`<div class="modal" style="width:min(440px,95vw)">
     <div class="modal-t"><span>${cobro?'💰 Me pagó: ':com?'🏫 Le pagué la comisión a: ':'💸 Abono a: '}${escH(nombre)}</span><button class="btn btn-s btn-sm" onclick="document.getElementById('modal-mc-pago').classList.remove('on')">✕</button></div>
     ${cobro&&sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le falta pagar ${fmt(sugerido)}</div>`:''}
-    ${com&&sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le debo de comisión ${fmt(sugerido)}. Si le pagas solo una parte, escribe esa parte.</div>`:''}
+    ${com?`<div style="font-size:14px;font-weight:800;margin-bottom:6px">¿Cómo fue?</div>
+    <button class="btn btn-p" style="width:100%;margin-bottom:6px;padding:10px;font-size:14px" onclick="mcComisionDescontada('${escH(nombre).replace(/'/g,"\\'")}')">🏫 El colegio se la DESCONTÓ al pagarme<br><span style="font-size:11px;font-weight:400">(me pagó menos; yo no le di plata)</span></button>
+    <div style="font-size:13px;font-weight:700;margin:10px 0 6px;padding-top:8px;border-top:1px dashed #94a3b8">💵 O, si YO le di la plata de la comisión, escribe cuánto:</div>
+    ${sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le debo de comisión ${fmt(sugerido)}. Si le pagas solo una parte, escribe esa parte.</div>`:''}`:''}
     <div class="fg"><label>Fecha</label><input type="date" id="mcp-fecha" value="${today()}"></div>
     <div class="fg"><label>Valor ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="mcp-valor" placeholder="Ej: 250,50" oninput="document.getElementById('mcp-prev').textContent=this.value.trim()?'= '+fmt(leerMonto(this.value)):''"><small id="mcp-prev" style="font-size:12px;color:var(--g1);font-weight:700"></small></div>
     <div class="fg"><label>Forma de pago</label><select id="mcp-forma"><option>Transferencia</option><option>Depósito</option><option>Efectivo</option><option>Cheque</option><option>Otro</option></select></div>
