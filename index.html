@@ -14526,7 +14526,7 @@ function mcPlataHTML(R){
       ${tengo!=null?fila('Tienes',fmt(tengo),'#38bdf8'):''}
     </table>${res?'<div style="margin-top:10px">'+res+'</div>':'<div style="font-size:12px;color:#94a3b8;margin-top:8px">Escribe arriba cuánto tienes y te digo si cuadra.</div>'}`)
   +caja('③ Plata que NO es tuya — apártala','#f87171',`<table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${Object.entries(R.ed||{}).map(([g,x])=>fila('Le debes a '+escH(g==='Tech Books'?'Tech Books (Marco)':g),fmt(Math.max(0,x.debe)),'#f87171')).join('')}
+      ${Object.entries(R.ed||{}).map(([g,x])=>fila('Le debes a '+escH(g==='Tech Books'?'Tech Books (Marco)':g)+'<div style="font-size:11px;color:#94a3b8;font-weight:400">'+(x.sinFacturas?'lo vendido ':'facturas ')+fmt(x.facturado)+(x.notas>0.005?' − devoluciones '+fmt(x.notas)+' ('+x.ncs.length+')':' − sin devoluciones')+' − pagado '+fmt(x.pagado)+'</div>'+(x.ncs||[]).map(n=>'<div style="font-size:10px;color:'+(n.pendiente?'#fbbf24':'#94a3b8')+';font-weight:400;padding-left:10px">• '+escH(String(n.fecha||'').split('-').reverse().join('/'))+' '+escH(n.pendiente?'Devolución física (sin nota de crédito todavía)':'Nota de crédito '+(n.num||''))+(n.nota&&n.pendiente?' — '+escH(n.nota):'')+': '+fmt(parseFloat(n.total)||0)+'</div>').join(''),fmt(Math.max(0,x.debe)),'#f87171')).join('')}
       ${fila('Comisiones que tienes que entregar',fmt(comPend),'#fb923c')}
       ${fila('= No la toques',fmt(noEsMia),'#f87171',1)}
     </table><div style="font-size:12px;color:#cbd5e1;margin-top:6px">Cada vez que un colegio te pague, separa ese mismo día lo de la editorial.</div>`)
