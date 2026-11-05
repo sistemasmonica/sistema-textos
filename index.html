@@ -7973,10 +7973,15 @@ function _conteoEditNombre(){return {didactica:'Didáctica Textos Escolares (esp
 function _conteoLista(){
   const orden={venta:0,solucionario:1,muestra:2};
   const ed=_conteoEditSel();
+  // Si este mismo conteo ya se entregó a la editorial, sus libros salieron del
+  // stock: se comparan contra el stock de ANTES de entregarlos (si no, todo
+  // lo que se va sumando al conteo sale como "sobran").
+  const ini=DB.conteo?.inicio;
+  const propias=new Set(ini?(DB.notasCredito||[]).filter(n=>String(n.conteoRef||'').startsWith(ini+'|')).map(n=>'NC-'+n.id):[]);
   return DB.productos.filter(p=>p.editorial!=='Hist.')
     .filter(p=>ed==='todas'||(ed==='tech')===_conteoEsTech(p)).map(p=>{
     const ent=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='entrada').reduce((a,m)=>a+m.cantidad,0);
-    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida').reduce((a,m)=>a+m.cantidad,0);
+    const sal=DB.movInv.filter(m=>m.prodId===p.id&&m.tipo==='salida'&&!propias.has(m.ref)).reduce((a,m)=>a+m.cantidad,0);
     return {p,st:(p.stockInicial||0)+ent-sal,cls:clasifMaterial(p)};
   }).sort((a,b)=>(orden[a.cls]-orden[b.cls])||a.p.nombre.localeCompare(b.p.nombre,'es'));
 }
