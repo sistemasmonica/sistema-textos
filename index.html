@@ -948,6 +948,7 @@ a{color:#7dd3fc}
       <b style="color:#5b21b6">📂 Conteo que estás viendo:</b>
       <select id="conteo-sel" onchange="abrirConteoGuardado(this.value)" title="Cada conteo queda guardado aparte: elige uno para verlo, imprimirlo o seguir anotando" style="font-weight:700;min-width:240px;border:2px solid #7c3aed;color:#5b21b6"></select>
       <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="renombrarConteo()"><i class="ti ti-pencil"></i> Cambiar nombre</button>
+      <button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="eliminarConteo()" title="Borra el conteo que estás viendo (por ejemplo, si ya lo juntaste con otro a mano)"><i class="ti ti-trash"></i> 🗑 Eliminar este conteo</button>
       <button class="btn btn-sm" style="background:#b45309;color:#fff;font-weight:700;margin-left:auto" onclick="verDevolucionesColegios()" title="Suma de lo que anotaste en la columna DEV del Control de ventas de cada colegio (aparte del conteo de bodega)"><i class="ti ti-arrow-back-up"></i> 🏫 Devoluciones de los colegios</button>
     </div>
     <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e3a8a;margin-bottom:10px">
@@ -8254,6 +8255,29 @@ function renombrarConteo(){
   DB.conteo=DB.conteo||{};DB.conteo.nombre=v.trim();
   if(!DB.conteo.inicio)DB.conteo.inicio=new Date().toISOString();
   clearTimeout(_conteoTimer);save();renderConteo();
+}
+// Elimina el conteo que se está viendo (DB.conteo). No toca el inventario ni
+// las notas de crédito: si ya se ajustó el stock o se entregó a la editorial,
+// eso queda como está (solo se avisa). Después abre el conteo guardado más reciente.
+function eliminarConteo(){
+  if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
+  const c=DB.conteo||{};
+  const n=Object.keys(c.items||{}).length;
+  const nom=_conteoNombreActual();
+  if(!n&&!c.nombre)return toast('Este conteo está en blanco — no hay nada que eliminar','ok');
+  const ncs=(DB.notasCredito||[]).filter(x=>c.inicio&&String(x.conteoRef||'').startsWith(c.inicio+'|'));
+  let aviso='';
+  if(c.ajustado)aviso+='\n\n⚠️ Con este conteo ya ajustaste el stock ('+c.ajustado+'). Ese ajuste NO se deshace.';
+  if(ncs.length)aviso+='\n\n⚠️ Este conteo ya está anotado como devolución a la editorial ('+ncs.map(x=>x.num||fmt(x.total)).join(', ')+'). Esa nota de crédito NO se borra; si también sobra, elimínala en Editorial → Notas de crédito.';
+  if(!confirm('¿ELIMINAR el conteo "'+nom+'" ('+n+' libros)?\n\nSe borra para siempre. Los demás conteos guardados no se tocan.'+aviso))return;
+  clearTimeout(_conteoTimer);
+  const g=[...(c.guardados||[])].sort((a,b)=>String(b.inicio||'').localeCompare(String(a.inicio||'')));
+  const sig=g[0];
+  DB.conteo={guardados:(c.guardados||[]).filter(y=>!sig||y.id!==sig.id),precios:c.precios||{}};
+  if(sig)Object.assign(DB.conteo,{nombre:sig.nombre,inicio:sig.inicio,items:sig.items||{},ajustado:sig.ajustado});
+  logHistorial('Conteo físico eliminado','"'+nom+'" ('+n+' libros)');
+  save();renderConteo();
+  toast('🗑 Eliminado: '+nom+(sig?' — ahora ves: '+sig.nombre:''),'ok');
 }
 function borrarConteo(){
   if(MODO_LECTURA)return toast('🔒 Modo solo lectura','err');
