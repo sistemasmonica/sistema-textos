@@ -5085,6 +5085,7 @@ function cobrosVendedoraHTML(soloVend,print,soloCol){
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
         <div style="font-size:15px;font-weight:800">👩 ${escH(v)} — ${nLib} libro(s) — <span style="color:#dc2626">${fmt(tot)}</span>${cobrado?' <span style="color:#16a34a">✅ ya cobrado</span>':''}</div>
         ${print?'':`<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="imprimirCobroVendedora('${esc}')"><i class="ti ti-printer"></i> Imprimir para ${escH(v.split(' ')[0])}</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;cursor:pointer;background:#fef3c7;color:#92400e;border-radius:6px;padding:3px 10px"><input type="checkbox" ${window._cvSinVal?'checked':''} onchange="window._cvSinVal=this.checked;document.querySelectorAll('.cv-sinval').forEach(x=>x.checked=this.checked)" class="cv-sinval"> Imprimir SIN valores</label>
           <button class="btn btn-s btn-sm" onclick="marcarCobradoVendedora('${esc}',${!cobrado})">${cobrado?'↩ Volver a pendiente':'✅ Ya me pagó'}</button></div>`}
       </div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -5102,14 +5103,26 @@ function renderCobrosVendedora(){
   dl('cv-libro-list',DB.productos.filter(p=>p.editorial!=='Hist.').map(p=>p.nombre).sort());
   box.innerHTML=cobrosVendedoraHTML();
 }
+// Copia de la hoja sin las columnas PRECIO C/U y TOTAL (solo libros y cantidades)
+function _cvQuitarValores(html){
+  const d=new DOMParser().parseFromString('<div id="r">'+html+'</div>','text/html');
+  d.querySelectorAll('tr').forEach(tr=>{
+    const c=[...tr.children];
+    if(c.length===1){c[0].setAttribute('colspan','2');return;}
+    c.slice(2).forEach(x=>x.remove());
+  });
+  d.querySelectorAll('div span').forEach(sp=>{if(!/[$]/.test(sp.textContent))return;const p=sp.previousSibling;if(p&&p.nodeType===3)p.textContent=p.textContent.replace(/[ ]*[—-][ ]*$/,'');sp.remove();});
+  d.querySelectorAll('td').forEach(td=>{if(/^TOTAL A COBRAR A /.test(td.textContent))td.textContent=td.textContent.replace('TOTAL A COBRAR A','TOTAL DE LIBROS —');});
+  return d.getElementById('r').innerHTML;
+}
 function imprimirCobroVendedora(v,col){
   const win=window.open('','_blank');
   if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
   win.document.write(`<html><head><title>Libros no devueltos — ${escH(v)}${col?' — '+escH(col):''}</title>
   <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Libros no devueltos — '+v+(col?' — '+col:''),'Al '+new Date().toLocaleDateString('es-EC'))}
-  <p style="font-size:12px">Estos libros se entregaron como muestra y el colegio no los devolvió. La editorial nos los cobra, por eso se descuentan / cobran a la vendedora.</p>
-  ${cobrosVendedoraHTML(v,true,col)}
+  <p style="font-size:12px">Estos libros se entregaron como muestra y el colegio no los devolvió.${window._cvSinVal?'':' La editorial nos los cobra, por eso se descuentan / cobran a la vendedora.'}</p>
+  ${window._cvSinVal?_cvQuitarValores(cobrosVendedoraHTML(v,true,col)):cobrosVendedoraHTML(v,true,col)}
   <div style="display:flex;justify-content:space-around;margin-top:50px;font-size:11px;text-align:center"><div>____________________<br>D&amp;M Books</div><div>____________________<br>${escH(v)}</div></div>
   <\/body><\/html>`);
   win.document.close();
