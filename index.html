@@ -346,11 +346,11 @@ a{color:#7dd3fc}
   <button class="nt" onclick="tab('pagos',this)"><i class="ti ti-cash"></i> Pagos</button>
   <button class="nt" onclick="tab('xml',this)" id="btn-xml"><i class="ti ti-file-code"></i> Facturas XML+IA <span id="badge-correo" style="display:none;background:#e53935;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700"></span></button>
   <button class="nt" onclick="tab('man',this)"><i class="ti ti-pencil"></i> Factura manual</button>
+  <button class="nt" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> 🏦 Banco</button>
   <button class="nt-mas" id="btn-mas" onclick="toggleMenuMas()" title="Pantallas para la contadora o para revisar: muestran las mismas cifras de Mi cuenta de otra forma">➕ Más (contadora)</button>
   <button class="nt extra" onclick="tab('dash',this)"><i class="ti ti-dashboard"></i> Inicio</button>
   <button class="nt extra" onclick="tab('porcobrar',this)"><i class="ti ti-hand-stop"></i> Por Cobrar</button>
   <button class="nt extra" onclick="tab('editorial',this)"><i class="ti ti-building-store"></i> Editorial</button>
-  <button class="nt extra" onclick="tab('banco',this)"><i class="ti ti-building-bank"></i> Banco</button>
   <button class="nt extra" onclick="tab('liquidacion',this)"><i class="ti ti-calculator"></i> Liquidación</button>
   <button class="nt extra" onclick="tab('balance',this)"><i class="ti ti-scale"></i> Balance</button>
   <button class="nt extra" onclick="tab('rep',this)"><i class="ti ti-report"></i> Reportes</button>
@@ -589,8 +589,8 @@ a{color:#7dd3fc}
 <!-- ===================== BANCO ===================== --><!-- ===================== BANCO ===================== -->
 <div id="pn-banco" class="pn">
   <div class="card">
-    <div class="card-t"><i class="ti ti-building-bank"></i> Importar estado de cuenta bancario</div>
-    <p style="font-size:12px;color:var(--mu);margin-bottom:12px">Sube el CSV o Excel que descarga tu banco. El sistema intenta conciliar automáticamente los movimientos con tus facturas registradas.</p>
+    <div class="card-t"><i class="ti ti-building-bank"></i> Subir estado de cuenta del banco</div>
+    <p style="font-size:12px;color:var(--mu);margin-bottom:12px">Sube el Excel o CSV que descargas del banco. Puedes subir un mes y después otro: <b>se van juntando</b> y los movimientos repetidos no se suman dos veces.</p>
     <div class="dz" id="dz-banco" onclick="document.getElementById('fi-banco').click()">
       <i class="ti ti-table-import"></i>
       <h3>Arrastra tu estado de cuenta aquí</h3>
@@ -598,11 +598,10 @@ a{color:#7dd3fc}
     </div>
     <input type="file" id="fi-banco" accept=".csv,.xls,.xlsx" style="display:none">
     <div id="banco-preview" style="font-size:11px;color:var(--mu);margin-bottom:8px"></div>
-    <div style="background:var(--b2);border:1px solid #bbdefb;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--b1)">
-      <b>Tip:</b> Si el banco exporta en formato Excel (.xlsx), conviértelo a CSV desde Excel con Guardar como → CSV UTF-8. Si ya está en CSV, súbelo directamente.
-    </div>
   </div>
 
+  <div id="banco-simple"></div>
+  <details id="banco-concil-wrap" style="margin-top:14px"><summary style="cursor:pointer;font-size:12px;color:var(--mu);padding:6px 0">🔧 Conciliación con facturas (para la contadora — no hace falta que la uses)</summary>
   <div id="banco-concil" style="display:none">
     <div class="sh">
       <h2>Conciliación bancaria</h2>
@@ -644,6 +643,7 @@ a{color:#7dd3fc}
       </table>
     </div>
   </div>
+</details>
 </div>
 
 <!-- ===================== INVENTARIO ===================== -->
@@ -973,6 +973,8 @@ a{color:#7dd3fc}
         <option value="todos">Todos</option>
         <option value="sin">Solo los que faltan contar</option>
         <option value="dif">Solo los que no cuadran</option>
+        <option value="faltan">🔴 Solo los libros que FALTAN</option>
+        <option value="sobran">🟠 Solo los libros que SOBRAN</option>
         <option value="ok">Solo los que cuadran</option>
       </select>
     </div>
@@ -3229,16 +3231,21 @@ document.getElementById('fi-banco').addEventListener('change',function(e){
     }
     console.log('[BANCO] filas extraídas:',rows.length, rows.slice(0,3));
     if(!rows.length)return toast('No se pudieron leer filas del estado de cuenta — abre F12 → Consola para ver el diagnóstico','err');
-    DB.banco=rows;
-    DB.conciliaciones=[];
+    const _clave=b=>[b.fecha,String(b.descripcion||'').trim().toUpperCase(),(+b.debito||0).toFixed(2),(+b.credito||0).toFixed(2),(+b.saldo||0).toFixed(2)].join('|');
+    const _ya=new Set((DB.banco||[]).map(_clave));
+    const nuevos=rows.filter(b=>{const k=_clave(b);if(_ya.has(k))return false;_ya.add(k);return true;});
+    const repetidos=rows.length-nuevos.length;
+    DB.banco=(DB.banco||[]).concat(nuevos).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+    rows=nuevos;
     // Sugerir coincidencias automáticamente al cargar (sin aplicar nada todavía)
-    DB.banco.forEach(b=>{
+    rows.forEach(b=>{
       const match=buscarMejorCandidato(b);
       if(match)b.sugerido=match.reg.id;
     });
+    logHistorial('Estado de cuenta del banco subido',rows.length+' movimientos nuevos'+(repetidos?' ('+repetidos+' ya estaban)':''));
     save();
     renderBanco();
-    toast(rows.length+' movimientos bancarios cargados','ok');
+    alert('✅ '+rows.length+' movimientos nuevos agregados.'+(repetidos?'\n'+repetidos+' ya estaban subidos antes y no se repitieron.':''));
   };
   if(ext==='csv')r.readAsText(f,'UTF-8');
   else r.readAsArrayBuffer(f);
@@ -3523,7 +3530,98 @@ function resolverTodoBanco(){
   renderBanco();
 }
 
+// ===================================================
+// BANCO SIMPLE: dos listas — lo que ENTRÓ (me pagaron) y lo que SALIÓ (pagué).
+// Solo lee DB.banco; no cambia nada. Filtro por mes y buscador.
+// ===================================================
+let _bsMes='',_bsQ='';
+function _bsNombre(d){
+  // "TRANSF. DIRECTA A ESPINOZA TORRES NAHOMY" → "ESPINOZA TORRES NAHOMY"
+  const t=String(d||'').trim();
+  const m=t.match(/(?:\bDE\b|\bA\b|\bPARA\b)\s+(.+)$/i);
+  return (m?m[1]:t).trim()||t;
+}
+function _bsMovs(){
+  const q=_bsQ.trim().toUpperCase();
+  return (DB.banco||[]).filter(b=>(!_bsMes||String(b.fecha).slice(0,7)===_bsMes)&&(!q||String(b.descripcion||'').toUpperCase().includes(q)||String(b.debito||b.credito||'').includes(q)))
+    .slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+}
+function _bsMesNombre(ym){
+  if(!ym)return 'Todos los meses';
+  const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return M[+ym.slice(5,7)-1]+' '+ym.slice(0,4);
+}
+function _bsFecha(f){const p=String(f||'').split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f;}
+function renderBancoSimple(){
+  const cont=document.getElementById('banco-simple');if(!cont)return;
+  const banco=DB.banco||[];
+  if(!banco.length){cont.innerHTML='<div class="empty" style="padding:20px">Todavía no has subido ningún estado de cuenta. Súbelo arriba ☝️</div>';return;}
+  const meses=[...new Set(banco.map(b=>String(b.fecha).slice(0,7)))].sort().reverse();
+  if(_bsMes&&!meses.includes(_bsMes))_bsMes='';
+  const movs=_bsMovs();
+  const ent=movs.filter(b=>(+b.credito||0)>0),sal=movs.filter(b=>(+b.debito||0)>0);
+  const tE=ent.reduce((a,b)=>a+(+b.credito||0),0),tS=sal.reduce((a,b)=>a+(+b.debito||0),0);
+  const lista=(arr,campo,color)=>arr.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:4px">Fecha</th><th style="padding:4px">${campo==='credito'?'¿Quién me pagó?':'¿A quién le pagué?'}</th><th style="padding:4px;text-align:right">Valor</th></tr></thead>
+      <tbody>${arr.map(b=>`<tr style="border-top:1px solid var(--bd)"><td style="padding:5px 4px;white-space:nowrap;color:var(--mu)">${_bsFecha(b.fecha)}</td>
+        <td style="padding:5px 4px"><b>${escH(_bsNombre(b.descripcion))}</b><div style="font-size:10px;color:var(--mu)">${escH(b.descripcion||'')}</div></td>
+        <td style="padding:5px 4px;text-align:right;font-weight:700;color:${color};white-space:nowrap">${fmt(+b[campo]||0)}</td></tr>`).join('')}</tbody></table>`
+    :'<div style="padding:12px;color:var(--mu)">Nada en este mes</div>';
+  const dif=tE-tS;
+  cont.innerHTML=`
+  <div class="card" style="margin-top:12px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <b style="font-size:15px">🏦 Mi banco:</b>
+      <select onchange="_bsMes=this.value;renderBancoSimple()" style="font-weight:700;padding:6px">
+        <option value="">Todos los meses</option>${meses.map(m=>`<option value="${m}"${m===_bsMes?' selected':''}>${_bsMesNombre(m)}</option>`).join('')}
+      </select>
+      <input type="text" id="bs-q" placeholder="🔍 Buscar nombre o valor…" value="${escH(_bsQ)}" oninput="_bsQ=this.value;clearTimeout(window._bsT);window._bsT=setTimeout(()=>{renderBancoSimple();const i=document.getElementById('bs-q');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},300)" style="flex:1;min-width:180px;padding:6px">
+      <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirBancoSimple()"><i class="ti ti-printer"></i> Imprimir</button>
+      <button class="btn btn-s btn-sm" onclick="excelBancoSimple()"><i class="ti ti-download"></i> Excel</button>
+    </div>
+    <div class="sc-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="sc"><div class="sc-lbl">💚 Me pagaron (entró)</div><div class="sc-val" style="color:#16a34a">${fmt(tE)}</div><div class="sc-sub">${ent.length} movimientos</div></div>
+      <div class="sc"><div class="sc-lbl">❤️ Pagué (salió)</div><div class="sc-val" style="color:#dc2626">${fmt(tS)}</div><div class="sc-sub">${sal.length} movimientos</div></div>
+      <div class="sc"><div class="sc-lbl">${dif>=0?'➕ Entró más de lo que salió':'➖ Salió más de lo que entró'}</div><div class="sc-val" style="color:${dif>=0?'#16a34a':'#dc2626'}">${fmt(Math.abs(dif))}</div><div class="sc-sub">${_bsMesNombre(_bsMes)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:12px">
+      <div style="border:2px solid #16a34a;border-radius:10px;padding:10px"><div style="font-weight:800;color:#16a34a;font-size:15px;margin-bottom:6px">💚 LO QUE ME PAGARON — ${fmt(tE)}</div>${lista(ent,'credito','#16a34a')}</div>
+      <div style="border:2px solid #dc2626;border-radius:10px;padding:10px"><div style="font-weight:800;color:#dc2626;font-size:15px;margin-bottom:6px">❤️ LO QUE PAGUÉ — ${fmt(tS)}</div>${lista(sal,'debito','#dc2626')}</div>
+    </div>
+  </div>`;
+}
+function _bsTablaHTML(conEstilo){
+  const movs=_bsMovs();
+  const ent=movs.filter(b=>(+b.credito||0)>0),sal=movs.filter(b=>(+b.debito||0)>0);
+  const tE=ent.reduce((a,b)=>a+(+b.credito||0),0),tS=sal.reduce((a,b)=>a+(+b.debito||0),0);
+  const n2=v=>(Math.round(v*100)/100).toFixed(2);
+  const td=(v,num)=>num?`<td style="text-align:right;mso-number-format:'0.00'">${n2(v)}</td>`:`<td>${escH(v)}</td>`;
+  const bloque=(tit,arr,campo,col)=>`<tr><td colspan="4" style="background:${col};color:#fff;font-weight:bold;font-size:13px">${tit}</td></tr>
+    <tr style="font-weight:bold;background:#eee"><td>Fecha</td><td>Nombre</td><td>Detalle del banco</td><td style="text-align:right">Valor</td></tr>
+    ${arr.map(b=>`<tr>${td(_bsFecha(b.fecha))}${td(_bsNombre(b.descripcion))}${td(b.descripcion||'')}${td(+b[campo]||0,1)}</tr>`).join('')}
+    <tr style="font-weight:bold"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right;mso-number-format:'0.00'">${n2(arr.reduce((a,b)=>a+(+b[campo]||0),0))}</td></tr><tr><td colspan="4"></td></tr>`;
+  return {html:`<table border="1" style="border-collapse:collapse;width:100%;font-family:Arial;font-size:11px">
+    <tr><td colspan="4" style="font-size:15px;font-weight:bold">MI BANCO — ${escH(_bsMesNombre(_bsMes))}${_bsQ?' — búsqueda: '+escH(_bsQ):''}</td></tr>
+    <tr><td colspan="3">Me pagaron (entró)</td><td style="text-align:right;mso-number-format:'0.00'">${n2(tE)}</td></tr>
+    <tr><td colspan="3">Pagué (salió)</td><td style="text-align:right;mso-number-format:'0.00'">${n2(tS)}</td></tr>
+    <tr style="font-weight:bold"><td colspan="3">Diferencia (entró − salió)</td><td style="text-align:right;mso-number-format:'0.00'">${n2(tE-tS)}</td></tr><tr><td colspan="4"></td></tr>
+    ${bloque('LO QUE ME PAGARON (ENTRÓ)',ent,'credito','#16a34a')}
+    ${bloque('LO QUE PAGUÉ (SALIÓ)',sal,'debito','#dc2626')}
+  </table>`};
+}
+function excelBancoSimple(){
+  if(!(DB.banco||[]).length)return toast('No hay movimientos del banco','err');
+  bajarXLS(_bsTablaHTML().html,'Mi banco '+_bsMesNombre(_bsMes)+'.xls');
+}
+function imprimirBancoSimple(){
+  if(!(DB.banco||[]).length)return toast('No hay movimientos del banco','err');
+  const win=window.open('','_blank');
+  if(!win)return alert('El navegador bloqueó la ventana. Usa el botón Excel.');
+  win.document.write(`<html><head><title>Mi banco ${escH(_bsMesNombre(_bsMes))}</title><style>body{font-family:Arial;padding:14px}td{padding:4px 6px}@media print{tr{page-break-inside:avoid}}</style></head><body>${_bsTablaHTML().html}<script>window.print()<\/script></body></html>`);
+  win.document.close();
+}
 function renderBanco(){
+  try{renderBancoSimple();}catch(e){console.error(e);}
   const conc=document.getElementById('banco-concil');
   if(!DB.banco.length){conc.style.display='none';return}
   conc.style.display='block';
@@ -8031,6 +8129,8 @@ function renderConteo(){
     if(fil==='sin')return c==null;
     if(fil==='dif')return c!=null&&c!==e.st;
     if(fil==='ok')return c!=null&&c===e.st;
+    if(fil==='faltan')return c!=null&&c<e.st;
+    if(fil==='sobran')return c!=null&&c>e.st;
     return true;
   });
   tb.innerHTML=vis.map((e,i)=>{
@@ -8546,10 +8646,15 @@ function valorConteo(){
   win.document.close();
 }
 function imprimirResultadoConteo(){
-  const soloDif=confirm('¿Imprimir SOLO los libros que no cuadran?\n\nAceptar = solo los que tienen diferencia\nCancelar = la lista completa');
+  const fil=document.getElementById('conteo-fil')?.value||'todos';
+  const soloFS=fil==='faltan'||fil==='sobran';
+  const soloDif=soloFS?false:confirm('¿Imprimir SOLO los libros que no cuadran?\n\nAceptar = solo los que tienen diferencia\nCancelar = la lista completa\n\n(Para imprimir solo los que FALTAN o solo los que SOBRAN, elígelo primero en el filtro de abajo)');
   let filas=_conteoFilasExport();
   const contados=filas.filter(f=>f.c!=null).length;
   if(soloDif)filas=filas.filter(f=>f.d!=null&&f.d!==0);
+  if(fil==='faltan')filas=filas.filter(f=>f.d!=null&&f.d<0);
+  if(fil==='sobran')filas=filas.filter(f=>f.d!=null&&f.d>0);
+  const totDif=filas.reduce((a,f)=>a+Math.abs(f.d||0),0);
   if(!filas.length){alert('No hay libros con diferencia.');return;}
   const fecha=new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
   const html=filas.map(({e,c,obs,d},i)=>`<tr>
@@ -8570,7 +8675,7 @@ function imprimirResultadoConteo(){
     .firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
     @media print{body{padding:8px}tr{page-break-inside:avoid}thead{display:table-header-group}}
   </style></head><body>
-  <h1>DM Books — Resultado del conteo de inventario${_conteoEditNombre()?' · '+escH(_conteoEditNombre()):''}${soloDif?' (solo diferencias)':''}</h1>
+  <h1>DM Books — Resultado del conteo de inventario${_conteoEditNombre()?' · '+escH(_conteoEditNombre()):''}${soloDif?' (solo diferencias)':''}${fil==='faltan'?' (solo los que FALTAN: '+filas.length+' libros, '+totDif+' u.)':''}${fil==='sobran'?' (solo los que SOBRAN: '+filas.length+' libros, '+totDif+' u.)':''}</h1>
   <p>Fecha: ${fecha} &nbsp;|&nbsp; 📂 ${escH(_conteoNombreActual())} &nbsp;|&nbsp; Productos contados: <b>${contados}</b></p>
   <table><thead><tr><th>#</th><th>Código</th><th>Producto</th><th>Editorial</th><th style="text-align:center">Sistema</th><th style="text-align:center">Contado</th><th style="text-align:center">Diferencia</th><th>Observación</th></tr></thead>
   <tbody>${html}</tbody></table>
