@@ -14516,7 +14516,9 @@ function mcPlataHTML(R){
   return caja('① ¿Cuánta plata tienes HOY?','#38bdf8',`
       <div style="font-size:12px;color:#cbd5e1;margin-bottom:6px">Suma lo que hay en el banco + el efectivo del negocio, y escríbelo:</div>
       <input type="text" inputmode="decimal" placeholder="Ej: 12.500,00" value="${tengo!=null?String(tengo).replace('.',','):''}" onchange="plataGuardarHoy(this.value)" style="font-size:20px;font-weight:800;padding:8px 12px;border-radius:8px;border:2px solid #38bdf8;background:#0f172a;color:#e2e8f0;width:220px;font-family:monospace">
-      ${H?`<span style="font-size:11px;color:#94a3b8;margin-left:8px">anotado el ${String(H.fecha).split('-').reverse().join('/')}</span>`:''}`)
+      ${H?`<span style="font-size:11px;color:#94a3b8;margin-left:8px">anotado el ${String(H.fecha).split('-').reverse().join('/')}</span>`:''}
+      <div style="margin-top:10px"><button onclick="imprimirResumenPlata()" style="padding:8px 14px;border-radius:8px;border:2px solid #38bdf8;background:#0c4a6e;color:#e0f2fe;font-weight:800;cursor:pointer;font-size:14px">🖨 Imprimir resumen completo de la plata</button>
+      <span style="font-size:11px;color:#94a3b8;margin-left:6px">lo cobrado, lo pagado, lo que falta y en qué se fue la plata del banco — para mostrar o guardar en PDF</span></div>`)
   +caja('② Según lo anotado, deberías tener','#a78bfa',`<table style="width:100%;border-collapse:collapse;font-size:13px">
       ${fila('✅ Te pagaron los colegios',fmt(R.cobrado+(R.cobradoOtros||0)),'#4ade80')}
       ${Object.entries(R.ed||{}).filter(([g,x])=>x.pagado>0.005).map(([g,x])=>fila('− Pagaste a '+escH(g==='Tech Books'?'Tech Books (Marco)':g),fmt(x.pagado),'#f87171')).join('')}
@@ -14543,6 +14545,120 @@ function mcPlataHTML(R){
         ${sal.map(p=>`<tr style="border-top:1px solid #334155"><td style="padding:5px;color:#94a3b8;white-space:nowrap">${String(p.fecha).split('-').reverse().join('/')}</td><td style="padding:5px">${escH(p.nombre||'')}${p.nota?`<div style="font-size:10px;color:#94a3b8">${escH(p.nota)}</div>`:''}</td><td style="padding:5px;text-align:right;font-family:monospace;font-weight:700;color:#fbbf24">${fmt(parseFloat(p.valor)||0)}</td></tr>`).join('')}
         <tr style="border-top:2px solid #475569"><td></td><td style="padding:5px;font-weight:800;text-align:right">Total retiros</td><td style="padding:5px;text-align:right;font-family:monospace;font-weight:800;color:#fbbf24">${fmt(tSal)}</td></tr></table>`
       :'<div style="font-size:12px;color:#94a3b8;margin-top:8px">Todavía no hay retiros anotados.</div>'}`);
+}
+// Resumen de la plata para imprimir / mostrar al esposo (5-nov-2026): lo que
+// se cobró, lo que se pagó, lo que falta y las salidas del banco desde el 1-sep.
+function resumenPlataHTML(TENGO){
+    const R=resumenNegocio(),L=filasComisiones();
+    const $=v=>'$'+(Math.round(v*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const F=d=>String(d||'').split('-').reverse().join('/');
+    const e=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const cobros=DB.pagos.filter(x=>x.tipo==='cobro').reduce((a,x)=>a+(+x.valor||0),0);
+    const pagosEd=DB.pagos.filter(x=>x.tipo==='pago'&&editorialDePago(x)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    const sal=_salidasPersonales(),tSal=sal.reduce((a,x)=>a+(+x.valor||0),0);
+    const otrosNeg=(R.comOtrasPag||0)+(R.comColPag||0)+(R.gastosNeg||0);
+    const deberia=R.caja-tSal,dif=deberia-TENGO;
+    const porCobrar=Math.max(0,L.reduce((a,x)=>a+x.falta,0));
+    const noMia=Math.max(0,R.debeEd)+(R.comPorEntregar||0);const fin=TENGO+porCobrar-noMia;
+    const BK=DB.banco.filter(x=>x.fecha>='2026-09-01');
+    const out=BK.filter(x=>+x.debito>0);
+    const grupos=[
+      ['Pagos a Didáctica (ya están arriba)',/DIDACTICA/i,1],
+      ['Pagos a Tech Books / Marco (ya están arriba)',/GUEVARA VARGAS KARINA/i,1],
+      ['Préstamo $2,000 (ya está arriba)',/AGUIRRE TOPA BYRON/i,1],
+      ['Transferencias a RÍOS APOLO DANIEL RICARDO',/RIOS APOLO DANIEL/i],
+      ['Transferencias a la otra cuenta de MÓNICA ALVARADO',/ALVARADO AGUILERA MONICA/i],
+      ['NAVARRETE AGUILERA LEIDY YOLANDA',/NAVARRETE AGUILERA LEIDY/i],
+      ['CAGUA MARCILLO EDISON ADÁN',/CAGUA MARCILLO/i],
+      ['NOVACREDIT (cuotas de crédito)',/NOVACREDIT/i],
+      ['DE PRATI',/DE PRATI/i],
+      ['Pago de tarjeta de crédito',/PAGO TARJETA/i],
+      ['Regularización de transacción (banco)',/REGULARIZACI/i],
+      ['SZK DEL ECUADOR',/SZK DEL ECUADOR/i],
+      ['NARBAES WILSON FERNANDO',/NARBAES/i],
+      ['LOOR PANCHANA VICTOR JAVIER',/LOOR PANCHANA/i],
+      ['Supermercados (Favorita / Supermaxi / Tía / Santa María…)',/FAVORITA|SUPERMAXI|TIENDAS INDUSTRIALES|SANTA MARIA|MEGAMAXI/i],
+      ['Farmacias',/DIFARE|FARMA|FYBECA|SANA SANA|PHARMAC/i],
+      ['Comisiones e impuestos del banco',/COMISION|IVA COBRADO|IMPUESTO|SOLCA/i],
+    ];
+    const tot={};const usado=new Set();
+    grupos.forEach(([n,re])=>{out.forEach(x=>{if(usado.has(x.id))return;if(re.test(x.descripcion)){usado.add(x.id);tot[n]=tot[n]||{t:0,c:0};tot[n].t+=+x.debito;tot[n].c++;}});});
+    const resto=out.filter(x=>!usado.has(x.id));const tResto=resto.reduce((a,x)=>a+(+x.debito),0);
+    const nm=d=>{const m=String(d||'').match(/(?:\bDE\b|\bA\b|\bPARA\b)\s+(.+)$/i);return (m?m[1]:d).trim().toUpperCase()};
+    const rg={};resto.forEach(x=>{const k=nm(x.descripcion);rg[k]=rg[k]||{t:0,c:0};rg[k].t+=+x.debito;rg[k].c++;});
+    const restoTop=Object.entries(rg).sort((a,b)=>b[1].t-a[1].t).slice(0,15);
+    const inD=BK.filter(x=>/RIOS APOLO DANIEL|DE DANIEL$/i.test(x.descripcion.trim())).reduce((a,x)=>a+(+x.credito||0),0);
+    const efect=DB.pagos.filter(x=>x.tipo==='cobro'&&x.forma==='Efectivo');const tEf=efect.reduce((a,x)=>a+(+x.valor||0),0);
+    const dep=BK.filter(x=>/DEPOSITO/i.test(x.descripcion)).reduce((a,x)=>a+(+x.credito||0),0);
+    const tOut=out.reduce((a,x)=>a+(+x.debito),0);
+    const yaArriba=grupos.filter(g=>g[2]).reduce((a,g)=>a+(tot[g[0]]?.t||0),0);
+    const S=BK.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    const sIni=DB.banco.filter(x=>x.fecha<'2026-09-01').sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop()?.saldo||0;
+    const sFin=S[S.length-1]?.saldo||0;
+    const tr=(c)=>'<tr>'+c.map((v,i)=>`<td${i&&/^[$0-9✅—]/.test(String(v))?' class="n"':''}>${v}</td>`).join('')+'</tr>';
+    const row=(t,v,cls)=>`<tr class="${cls||''}"><td>${t}</td><td class="n">${v}</td></tr>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Resumen de la plata — Textos 2026</title><style>
+      body{font-family:Arial,sans-serif;color:#111;margin:0;padding:22px;font-size:12.5px;background:#fff}
+      h1{font-size:20px;margin:0 0 2px;color:#1e3a8a}h2{font-size:15px;margin:22px 0 6px;padding:5px 8px;background:#1e3a8a;color:#fff;border-radius:4px}
+      .sub{color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-top:4px}td,th{padding:5px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}
+      th{background:#eef2ff;font-size:11px}.n{text-align:right;white-space:nowrap;font-family:Consolas,monospace}
+      .tot td{font-weight:bold;border-top:2px solid #333;background:#f8fafc}.rojo td{color:#b91c1c;font-weight:bold;font-size:14px;background:#fef2f2}.verde td{color:#15803d;font-weight:bold}
+      .box{border:2px solid #1e3a8a;border-radius:8px;padding:10px 14px;margin-top:8px;background:#f8fafc}.nota{font-size:11px;color:#555;margin-top:6px}
+      .pb{page-break-before:always}
+      @media print{body{padding:10px}h2,.rojo td{-webkit-print-color-adjust:exact;print-color-adjust:exact}tr{page-break-inside:avoid}}
+    </style></head><body>
+    <h1>D&amp;M Books — Resumen de la plata 2026</h1>
+    <div class="sub">Al ${new Date().toLocaleDateString('es-EC')} · Sale del sistema de Textos y de los estados de cuenta del banco (septiembre a noviembre)</div>
+    <div class="box">
+      <table>${row('✅ Nos pagaron los colegios',$(cobros))}${row('− Pagamos a las editoriales (Didáctica '+$(R.ed['Didáctica']?.pagado||0)+' + Tech Books '+$(R.ed['Tech Books']?.pagado||0)+')',$(R.pagadoEd))}${row('− Comisiones y gastos del negocio',$(otrosNeg))}${row('− Préstamo $2,000 y retiros anotados',$(tSal))}
+      ${row('= Debería haber',$(deberia),'tot')}${row('Hay hoy (banco + efectivo + otra cuenta)',$(TENGO))}${row('❗ Salió y NO está anotado',$(dif),'rojo')}</table>
+    </div>
+    <div class="box" style="border-color:#b91c1c">
+      <table>${row('Hay hoy',$(TENGO))}${row('+ Nos falta cobrar a los colegios',$(porCobrar))}${Object.entries(R.ed).map(([g,x])=>row('− Le debemos a '+e(g==='Tech Books'?'Tech Books (Marco)':g),$(Math.max(0,x.debe)))).join('')}${row('− Comisiones que hay que entregar a colegios',$(R.comPorEntregar||0))}
+      ${row(fin>=0?'= Nos queda libre al final':'= Nos FALTA para pagar todo',$(Math.abs(fin)),fin>=0?'verde':'rojo')}</table>
+      <div class="nota">Si Domingo Savio no paga sus ${$(L.find(x=>/DOMINGO/.test(x.nombre))?.falta||0)}, faltaría más. Si devolvemos a Didáctica libros que tienen otros clientes, la deuda baja.</div>
+    </div>
+
+    <h2>1. Lo que pagamos</h2>
+    <table><tr><th>Fecha</th><th>A quién</th><th class="n">Valor</th></tr>
+      ${pagosEd.map(x=>tr([F(x.fecha),(editorialDePago(x)==='Tech Books'?'Tech Books (Marco)':'Didáctica')+' — '+e(x.nota||x.nombre).slice(0,60),$(+x.valor)])).join('')}
+      ${sal.map(x=>tr([F(x.fecha),'Préstamo / retiro — '+e(x.nota||x.nombre).slice(0,55),$(+x.valor)])).join('')}
+      ${DB.pagos.filter(x=>x.tipo==='pago'&&x.editorial==='comision').map(x=>tr([F(x.fecha),e(x.nombre),$(+x.valor)])).join('')}
+      <tr class="tot"><td></td><td>Total pagado</td><td class="n">${$(DB.pagos.filter(x=>x.tipo==='pago').reduce((a,x)=>a+(+x.valor||0),0))}</td></tr></table>
+
+    <h2>2. Lo que nos pagó cada colegio</h2>
+    <table><tr><th>Colegio</th><th class="n">Vendido</th><th class="n">Nos pagó</th><th class="n">Falta cobrar</th><th class="n">Comisión por entregar</th></tr>
+      ${L.slice().sort((a,b)=>b.tv-a.tv).map(x=>tr([e(x.nombre),$(x.tv),$(x.cobrado),x.falta>1?$(x.falta):'✅',x.comFalta>0.005?$(x.comFalta):'—'])).join('')}
+      <tr class="tot"><td>TOTAL</td><td class="n">${$(L.reduce((a,x)=>a+x.tv,0))}</td><td class="n">${$(L.reduce((a,x)=>a+x.cobrado,0))}</td><td class="n">${$(porCobrar)}</td><td class="n">${$(R.comPorEntregar||0)}</td></tr></table>
+    <div class="nota">"Vendido" es a precio de venta; lo que paga el colegio es menos cuando se descontó su comisión. Cobros en efectivo (Hernán Malo): ${$(tEf)}. Depósitos en efectivo que entraron al banco: ${$(dep)}.</div>
+
+    <h2>3. ¿En qué se pudo ir la plata? (salidas del banco del 01/09 al ${F(S[S.length-1]?.fecha)})</h2>
+    <div class="nota" style="margin-bottom:6px">El banco tenía ${$(sIni)} al 31/08 y unos ${$(sFin)} al ${F(S[S.length-1]?.fecha)}. En ese tiempo salieron en total ${$(tOut)}; de eso ${$(yaArriba)} son las editoriales y el préstamo (ya están arriba). El resto:</div>
+    <table><tr><th>A dónde salió</th><th class="n">Veces</th><th class="n">Total</th></tr>
+      ${grupos.filter(g=>!g[2]&&tot[g[0]]).sort((a,b)=>tot[b[0]].t-tot[a[0]].t).map(g=>tr([e(g[0]),tot[g[0]].c,$(tot[g[0]].t)])).join('')}
+      ${tr(['Otros pagos y compras pequeñas (detalle abajo)',resto.length,$(tResto)])}
+      <tr class="tot"><td>Total que salió del banco aparte de editoriales y préstamo</td><td></td><td class="n">${$(tOut-yaArriba)}</td></tr></table>
+    <div class="nota">Ojo: también ENTRARON al banco ${$(inD)} desde la cuenta de RÍOS APOLO DANIEL RICARDO (por ahí llegaron cobros de colegios, por ejemplo Ortiz Crespo $6,331). La plata va y viene entre las dos cuentas.</div>
+    <h2>Detalle de "otros pagos y compras pequeñas" (los 15 más grandes)</h2>
+    <table><tr><th>A quién</th><th class="n">Veces</th><th class="n">Total</th></tr>${restoTop.map(([k,v])=>tr([e(k),v.c,$(v.t)])).join('')}</table>
+
+    <h2>4. Para que no vuelva a pasar</h2>
+    <ol style="line-height:1.6;margin:6px 0 0 18px">
+      <li>Una cuenta de banco <b>solo para los libros</b>: ahí entran los cobros y salen solo editoriales y comisiones.</li>
+      <li>Cada vez que se saque plata para la casa, una deuda o un sueldo, <b>anotarla</b> en el sistema (Mi cuenta → ¿Me cuadra la plata? → + Anotar retiro).</li>
+      <li>Cuando un colegio paga, <b>apartar ese mismo día</b> lo de la editorial (alrededor del 65%).</li>
+      <li>El efectivo que pagan los colegios, <b>depositarlo</b> en la cuenta del negocio.</li>
+      <li>Un sueldo fijo al mes y repartir la ganancia <b>recién al final</b>, cuando ya se pagó a las editoriales.</li>
+    </ol>
+    <script>window.onload=()=>window.print()<\/script></body></html>`;
+  
+}
+function imprimirResumenPlata(){
+  const H=_plataHoy();
+  if(!H)return alert('Primero escribe en el cuadro ① cuánta plata tienes hoy (banco + efectivo + la otra cuenta).');
+  const win=window.open('','_blank');
+  if(!win)return alert('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio.');
+  win.document.write(resumenPlataHTML(H.v));win.document.close();
 }
 function mcColegiosHTML(L,esc){
   const q=_mcQ.toLowerCase();
