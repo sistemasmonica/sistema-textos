@@ -1545,6 +1545,7 @@ a{color:#7dd3fc}
           <option value="Didáctica">📘 Sí, a DIDÁCTICA (baja lo que le debo)</option>
           <option value="Tech Books">🔤 Sí, a TECH BOOKS (baja lo que le debo)</option>
           <option value="comision">🏫 Comisión a un COLEGIO (baja la comisión que le debo)</option>
+          <option value="retiro">💵 Retiro para mí (sueldo, deuda, casa)</option>
           <option value="prestamo">🤝 Préstamo (no es pago de libros)</option>
           <option value="no">🧾 No, es otro gasto</option>
         </select>
@@ -14458,11 +14459,12 @@ function renderMiCuentaPanel(){
     <div style="font-size:11px;font-weight:700;color:#cbd5e1;letter-spacing:.4px;margin-top:4px">${tit}</div>
     <div style="font-size:24px;font-weight:800;color:${col};font-family:monospace;margin-top:2px">${val}</div>
     <div style="font-size:11px;color:#94a3b8;margin-top:2px">${sub}</div></div>`;
-  const tabs=[['colegios','🏫 Colegios'],['editoriales','📚 Editoriales'],['comis','🤝 Comisiones'],['tabla','📋 Tabla completa y ¿me alcanza?']];
+  const tabs=[['colegios','🏫 Colegios'],['editoriales','📚 Editoriales'],['comis','🤝 Comisiones'],['tabla','📋 Tabla completa y ¿me alcanza?'],['plata','💵 ¿Me cuadra la plata?']];
   const tabBtn=([k,t])=>`<button onclick="mcTab('${k}')" style="padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${_mcTab===k?'#f59e0b':'#475569'};background:${_mcTab===k?'#422006':'#1e293b'};color:${_mcTab===k?'#fbbf24':'#e2e8f0'}">${t}</button>`;
   let cuerpo='';
   if(_mcTab==='colegios')cuerpo=mcColegiosHTML(L,esc);
   else if(_mcTab==='editoriales')cuerpo=mcEditorialesHTML(R);
+  else if(_mcTab==='plata')cuerpo=mcPlataHTML(R);
   box.innerHTML=`<div style="background:#0f172a;border-radius:14px;padding:16px;margin-bottom:12px;color:#e2e8f0">
     <div style="font-size:18px;font-weight:800;margin-bottom:12px">💰 Mi cuenta — colegios, editoriales y comisiones</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
@@ -14475,6 +14477,72 @@ function renderMiCuentaPanel(){
     ${cuerpo}
   </div>`;
   document.querySelectorAll('#pn-comisiones .mc-sec').forEach(el=>{el.style.display=el.dataset.mc===_mcTab?'':'none';});
+}
+// ===================================================
+// "💵 ¿Me cuadra la plata?" (Mi cuenta, 5-nov-2026). Compara la plata que
+// DEBERÍA haber según lo anotado con la que Mónica tiene de verdad, para ver
+// cuánto salió sin anotar. Los retiros (sueldo, deudas, casa) se anotan como
+// pagos con editorial:'retiro' — no cuentan como pago a editorial.
+// ===================================================
+function _plataHoy(){try{return JSON.parse(localStorage.getItem('txe_plata_hoy')||'null');}catch(e){return null;}}
+function plataGuardarHoy(v){
+  const n=leerMonto(v);
+  try{localStorage.setItem('txe_plata_hoy',JSON.stringify(v.trim()?{v:n,fecha:today()}:null));}catch(e){}
+  renderMiCuentaPanel();
+}
+function _salidasPersonales(){
+  // Pagos que no son a una editorial ni comisión: retiros, préstamos, deudas personales.
+  return (DB.pagos||[]).filter(p=>p.tipo==='pago'&&!editorialDePago(p)&&p.editorial!=='comision')
+    .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+}
+function mcPlataHTML(R){
+  const L=filasComisiones();
+  const porCobrar=Math.max(0,L.reduce((a,x)=>a+x.falta,0));
+  const sal=_salidasPersonales(),tSal=sal.reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+  const deberia=R.caja-tSal;
+  const debeEd=Math.max(0,R.debeEd),comPend=R.comPorEntregar||0;
+  const noEsMia=debeEd+comPend;
+  const H=_plataHoy(),tengo=H?H.v:null;
+  const fila=(t,v,col,b)=>`<tr><td style="padding:6px 8px;${b?'font-weight:800;border-top:2px solid #475569':''}">${t}</td><td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:800;color:${col};white-space:nowrap;${b?'border-top:2px solid #475569':''}">${v}</td></tr>`;
+  const caja=(tit,borde,cont)=>`<div style="background:#1e293b;border:2px solid ${borde};border-radius:12px;padding:12px 14px;margin-top:12px"><div style="font-size:15px;font-weight:800;margin-bottom:8px">${tit}</div>${cont}</div>`;
+  let res='';
+  if(tengo!=null){
+    const dif=deberia-tengo;
+    res=Math.abs(dif)<1?`<div style="font-size:16px;font-weight:800;color:#4ade80">✅ Cuadra: tienes lo que dice el sistema.</div>`
+      :dif>0?`<div style="font-size:18px;font-weight:800;color:#f87171">❗ Salieron ${fmt(dif)} que no están anotados</div><div style="font-size:12px;color:#cbd5e1;margin-top:4px">Búscalos en 🏦 Banco → "Lo que pagué" y anótalos con el botón <b>+ Anotar retiro</b> (sueldo, deuda, casa…). Así sabes en qué se fue.</div>`
+      :`<div style="font-size:18px;font-weight:800;color:#fbbf24">Tienes ${fmt(-dif)} MÁS de lo que dice el sistema</div><div style="font-size:12px;color:#cbd5e1;margin-top:4px">Puede ser un cobro que no anotaste en Pagos, o plata que pusiste tú.</div>`;
+  }
+  const libre=tengo!=null?tengo+porCobrar-noEsMia:null;
+  return caja('① ¿Cuánta plata tienes HOY?','#38bdf8',`
+      <div style="font-size:12px;color:#cbd5e1;margin-bottom:6px">Suma lo que hay en el banco + el efectivo del negocio, y escríbelo:</div>
+      <input type="text" inputmode="decimal" placeholder="Ej: 12.500,00" value="${tengo!=null?String(tengo).replace('.',','):''}" onchange="plataGuardarHoy(this.value)" style="font-size:20px;font-weight:800;padding:8px 12px;border-radius:8px;border:2px solid #38bdf8;background:#0f172a;color:#e2e8f0;width:220px;font-family:monospace">
+      ${H?`<span style="font-size:11px;color:#94a3b8;margin-left:8px">anotado el ${String(H.fecha).split('-').reverse().join('/')}</span>`:''}`)
+  +caja('② Según lo anotado, deberías tener','#a78bfa',`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      ${fila('✅ Te pagaron los colegios',fmt(R.cobrado+(R.cobradoOtros||0)),'#4ade80')}
+      ${fila('− Pagaste a las editoriales',fmt(R.pagadoEd),'#f87171')}
+      ${fila('− Comisiones y gastos del negocio',fmt((R.comOtrasPag||0)+(R.comColPag||0)+(R.gastosNeg||0)),'#f87171')}
+      ${fila('− Retiros y préstamos que anotaste',fmt(tSal),'#f87171')}
+      ${fila('= Deberías tener',fmt(deberia),'#fbbf24',1)}
+      ${tengo!=null?fila('Tienes',fmt(tengo),'#38bdf8'):''}
+    </table>${res?'<div style="margin-top:10px">'+res+'</div>':'<div style="font-size:12px;color:#94a3b8;margin-top:8px">Escribe arriba cuánto tienes y te digo si cuadra.</div>'}`)
+  +caja('③ Plata que NO es tuya — apártala','#f87171',`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      ${fila('Le debes a las editoriales',fmt(debeEd),'#f87171')}
+      ${fila('Comisiones que tienes que entregar',fmt(comPend),'#fb923c')}
+      ${fila('= No la toques',fmt(noEsMia),'#f87171',1)}
+    </table><div style="font-size:12px;color:#cbd5e1;margin-top:6px">Cada vez que un colegio te pague, separa ese mismo día lo de la editorial.</div>`)
+  +caja('④ Al final, cuando todo esté cobrado y pagado','#4ade80',libre==null?'<div style="font-size:12px;color:#94a3b8">Escribe en ① cuánto tienes hoy.</div>':`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      ${fila('Tienes hoy',fmt(tengo),'#38bdf8')}
+      ${fila('+ Te falta cobrar',fmt(porCobrar),'#4ade80')}
+      ${fila('− Lo que no es tuyo (③)',fmt(noEsMia),'#f87171')}
+      ${fila(libre>=0?'= Te queda libre':'= Te FALTA para pagar todo',fmt(Math.abs(libre)),libre>=0?'#4ade80':'#f87171',1)}
+    </table>${libre<0?'<div style="font-size:12px;color:#fca5a5;margin-top:6px">Ojo: si todavía vas a devolver libros a la editorial, la deuda baja y esto mejora.</div>':''}`)
+  +caja('⑤ Retiros: sueldo, deudas, casa','#fbbf24',`
+      <div style="font-size:12px;color:#cbd5e1;margin-bottom:8px">Cada vez que saques plata del negocio para ti (aunque sea para pagar una deuda), anótala aquí. Así nunca más "desaparece" la ganancia.</div>
+      <button onclick="mcAbrirPago('retiro','Retiro',0)" style="padding:8px 14px;border-radius:8px;border:2px solid #fbbf24;background:#422006;color:#fde68a;font-weight:800;cursor:pointer;font-size:14px">+ Anotar retiro</button>
+      ${sal.length?`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+        ${sal.map(p=>`<tr style="border-top:1px solid #334155"><td style="padding:5px;color:#94a3b8;white-space:nowrap">${String(p.fecha).split('-').reverse().join('/')}</td><td style="padding:5px">${escH(p.nombre||'')}${p.nota?`<div style="font-size:10px;color:#94a3b8">${escH(p.nota)}</div>`:''}</td><td style="padding:5px;text-align:right;font-family:monospace;font-weight:700;color:#fbbf24">${fmt(parseFloat(p.valor)||0)}</td></tr>`).join('')}
+        <tr style="border-top:2px solid #475569"><td></td><td style="padding:5px;font-weight:800;text-align:right">Total retiros</td><td style="padding:5px;text-align:right;font-family:monospace;font-weight:800;color:#fbbf24">${fmt(tSal)}</td></tr></table>`
+      :'<div style="font-size:12px;color:#94a3b8;margin-top:8px">Todavía no hay retiros anotados.</div>'}`);
 }
 function mcColegiosHTML(L,esc){
   const q=_mcQ.toLowerCase();
@@ -14528,14 +14596,15 @@ function mcAbrirPago(tipo,nombre,sugerido){
   let ov=document.getElementById('modal-mc-pago');
   if(!ov){ov=document.createElement('div');ov.id='modal-mc-pago';ov.className='modal-overlay';document.body.appendChild(ov);
     ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('on');});}
-  const cobro=tipo==='cobro',com=tipo==='comision';
+  const cobro=tipo==='cobro',com=tipo==='comision',ret=tipo==='retiro';
   ov.innerHTML=`<div class="modal" style="width:min(440px,95vw)">
-    <div class="modal-t"><span>${cobro?'💰 Me pagó: ':com?'🏫 Le pagué la comisión a: ':'💸 Abono a: '}${escH(nombre)}</span><button class="btn btn-s btn-sm" onclick="document.getElementById('modal-mc-pago').classList.remove('on')">✕</button></div>
+    <div class="modal-t"><span>${ret?'💵 Saqué plata del negocio':cobro?'💰 Me pagó: ':com?'🏫 Le pagué la comisión a: ':'💸 Abono a: '}${ret?'':escH(nombre)}</span><button class="btn btn-s btn-sm" onclick="document.getElementById('modal-mc-pago').classList.remove('on')">✕</button></div>
     ${cobro&&sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le falta pagar ${fmt(sugerido)}</div>`:''}
     ${com?`<div style="font-size:14px;font-weight:800;margin-bottom:6px">¿Cómo fue?</div>
     <button class="btn btn-p" style="width:100%;margin-bottom:6px;padding:10px;font-size:14px" onclick="mcComisionDescontada('${escH(nombre).replace(/'/g,"\\'")}')">🏫 El colegio se la DESCONTÓ al pagarme<br><span style="font-size:11px;font-weight:400">(me pagó menos; yo no le di plata)</span></button>
     <div style="font-size:13px;font-weight:700;margin:10px 0 6px;padding-top:8px;border-top:1px dashed #94a3b8">💵 O, si YO le di la plata de la comisión, escribe cuánto:</div>
     ${sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le debo de comisión ${fmt(sugerido)}. Si le pagas solo una parte, escribe esa parte.</div>`:''}`:''}
+    ${ret?`<div class="fg"><label>¿Para qué fue?</label><select id="mcp-motivo"><option>Sueldo (para mí)</option><option>Pago de una deuda</option><option>Gastos de la casa</option><option>Préstamo a alguien</option><option>Otro</option></select></div>`:''}
     <div class="fg"><label>Fecha</label><input type="date" id="mcp-fecha" value="${today()}"></div>
     <div class="fg"><label>Valor ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="mcp-valor" placeholder="Ej: 250,50" oninput="document.getElementById('mcp-prev').textContent=this.value.trim()?'= '+fmt(leerMonto(this.value)):''"><small id="mcp-prev" style="font-size:12px;color:var(--g1);font-weight:700"></small></div>
     <div class="fg"><label>Forma de pago</label><select id="mcp-forma"><option>Transferencia</option><option>Depósito</option><option>Efectivo</option><option>Cheque</option><option>Otro</option></select></div>
@@ -14553,18 +14622,21 @@ function mcGuardarPago(tipo,nombre){
   const nota=(document.getElementById('mcp-nota').value||'').trim();
   // Comisión a un colegio = un pago en Pagos con editorial 'comision' y el colegio (baja la comisión que le debo).
   const com=tipo==='comision';
-  const reg={id:uid(),fecha,tipo:com?'pago':tipo,nombre:com?'Comisión '+nombre:nombre,valor,forma,nota};
+  const ret=tipo==='retiro';
+  const reg={id:uid(),fecha,tipo:(com||ret)?'pago':tipo,nombre:com?'Comisión '+nombre:ret?'Retiro: '+(document.getElementById('mcp-motivo')?.value||'Otro'):nombre,valor,forma,nota};
+  if(ret)reg.editorial='retiro';
   if(tipo==='pago')reg.editorial=nombre;
   if(com){reg.editorial='comision';reg.colegio=nombre;}
   if(tipo==='cobro')reg.colegio=nombre;
   DB.pagos=DB.pagos||[];DB.pagos.push(reg);
-  logHistorial(tipo==='cobro'?'Cobro registrado':com?'Comisión pagada a colegio':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma}) desde Mi cuenta`);
+  logHistorial(tipo==='cobro'?'Cobro registrado':com?'Comisión pagada a colegio':ret?'Retiro registrado':'Pago registrado',`${ret?reg.nombre:nombre} — ${fmt(valor)} (${forma}) desde Mi cuenta`);
   save();
   document.getElementById('modal-mc-pago').classList.remove('on');
   renderComisionesColegios();
   try{renderPagos();}catch(e){}try{renderPorCobrar();}catch(e){}try{renderResumenNegocio();}catch(e){}
   try{renderControl();}catch(e){}
-  toast((tipo==='cobro'?'Cobro':com?'Comisión pagada':'Abono')+' guardado: '+fmt(valor),'ok');
+  try{renderMiCuentaPanel();}catch(e){}
+  toast((tipo==='cobro'?'Cobro':com?'Comisión pagada':ret?'Retiro':'Abono')+' guardado: '+fmt(valor),'ok');
 }
 // Cuadro "¿Qué colegios ya cerré y a cuáles les debo la comisión?": separa los
 // que ya pagaron (directo o por una librería) pero todavía no reciben su
