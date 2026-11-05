@@ -14519,14 +14519,14 @@ function mcPlataHTML(R){
       ${H?`<span style="font-size:11px;color:#94a3b8;margin-left:8px">anotado el ${String(H.fecha).split('-').reverse().join('/')}</span>`:''}`)
   +caja('② Según lo anotado, deberías tener','#a78bfa',`<table style="width:100%;border-collapse:collapse;font-size:13px">
       ${fila('✅ Te pagaron los colegios',fmt(R.cobrado+(R.cobradoOtros||0)),'#4ade80')}
-      ${fila('− Pagaste a las editoriales'+(Object.keys(R.ed||{}).length?'<div style="font-size:11px;color:#94a3b8">'+Object.entries(R.ed).filter(([g,x])=>x.pagado>0.005).map(([g,x])=>escH(g)+' '+fmt(x.pagado)).join(' + ')+'</div>':''),fmt(R.pagadoEd),'#f87171')}
+      ${Object.entries(R.ed||{}).filter(([g,x])=>x.pagado>0.005).map(([g,x])=>fila('− Pagaste a '+escH(g==='Tech Books'?'Tech Books (Marco)':g),fmt(x.pagado),'#f87171')).join('')}
       ${fila('− Comisiones y gastos del negocio',fmt((R.comOtrasPag||0)+(R.comColPag||0)+(R.gastosNeg||0)),'#f87171')}
       ${fila('− Retiros y préstamos que anotaste',fmt(tSal),'#f87171')}
       ${fila('= Deberías tener',fmt(deberia),'#fbbf24',1)}
       ${tengo!=null?fila('Tienes',fmt(tengo),'#38bdf8'):''}
     </table>${res?'<div style="margin-top:10px">'+res+'</div>':'<div style="font-size:12px;color:#94a3b8;margin-top:8px">Escribe arriba cuánto tienes y te digo si cuadra.</div>'}`)
   +caja('③ Plata que NO es tuya — apártala','#f87171',`<table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${fila('Le debes a las editoriales',fmt(debeEd),'#f87171')}
+      ${Object.entries(R.ed||{}).map(([g,x])=>fila('Le debes a '+escH(g==='Tech Books'?'Tech Books (Marco)':g),fmt(Math.max(0,x.debe)),'#f87171')).join('')}
       ${fila('Comisiones que tienes que entregar',fmt(comPend),'#fb923c')}
       ${fila('= No la toques',fmt(noEsMia),'#f87171',1)}
     </table><div style="font-size:12px;color:#cbd5e1;margin-top:6px">Cada vez que un colegio te pague, separa ese mismo día lo de la editorial.</div>`)
