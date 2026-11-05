@@ -1520,13 +1520,17 @@ a{color:#7dd3fc}
         </select>
       </div>
       <div class="fg" id="pago-ed-wrap" style="display:none"><label>¿Es pago a una editorial?</label>
-        <select id="pago-editorial" style="border:2px solid #f59e0b">
+        <select id="pago-editorial" style="border:2px solid #f59e0b" onchange="mostrarEditorialPago()">
           <option value="">— Elige —</option>
           <option value="Didáctica">📘 Sí, a DIDÁCTICA (baja lo que le debo)</option>
           <option value="Tech Books">🔤 Sí, a TECH BOOKS (baja lo que le debo)</option>
+          <option value="comision">🏫 Comisión a un COLEGIO (baja la comisión que le debo)</option>
           <option value="prestamo">🤝 Préstamo (no es pago de libros)</option>
           <option value="no">🧾 No, es otro gasto</option>
         </select>
+      </div>
+      <div class="fg" id="pago-col-wrap"><label id="pago-col-lbl">¿De qué colegio es?</label>
+        <select id="pago-colegio" style="border:2px solid #16a34a"></select>
       </div>
       <div class="fg"><label>Nombre (cliente, colegio, librería o proveedor)</label><input type="text" id="pago-nombre" placeholder="Ej: Colegio San José, Editorial Norma..."></div>
     </div>
@@ -5245,7 +5249,26 @@ function guardarPago(){
         mostrarEditorialPago();
         document.getElementById('pago-editorial')?.focus();
         return alert('Este pago parece ser a una editorial.\n\nEn "¿Es pago a una editorial?" elige DIDÁCTICA, TECH BOOKS, Préstamo u Otro gasto, y vuelve a guardar.\n\n(Así el Resumen del negocio descuenta bien lo que le debes.)');
+      } else if(/COMISI/i.test(nombre+' '+nota)||colegioDeTexto(nombre)){
+        mostrarEditorialPago();
+        document.getElementById('pago-editorial')?.focus();
+        return alert('¿Este pago es la COMISIÓN de un colegio?\n\nEn "¿Es pago a una editorial?" elige "Comisión a un COLEGIO" y abajo el colegio (o "Otro gasto" si no es comisión), y vuelve a guardar.\n\n(Así baja la comisión que le debes a ese colegio.)');
       } else editorial='no';
+    }
+  }
+  // De qué colegio es: el cobro baja lo que el colegio te debe; la comisión
+  // pagada baja la comisión que tú le debes. Se guarda en p.colegio para que no
+  // dependa de cómo se escribió el nombre (4-nov-2026: pagos que "no se conectaban").
+  let colegio=document.getElementById('pago-colegio')?.value||'';
+  if(tipo==='pago'&&editorial!=='comision')colegio='';
+  else if(!colegio){
+    colegio=tipo==='cobro'?(colegiosList().find(c=>_cobroEsDeColegio({nombre,nota},c.nombre))?.nombre||''):colegioDeTexto(nombre+' '+nota);
+    if(!colegio){
+      mostrarEditorialPago();
+      document.getElementById('pago-colegio')?.focus();
+      return alert(tipo==='cobro'
+        ?'Este cobro NO se conecta con ningún colegio (por el nombre "'+nombre+'").\n\nEn "¿De qué colegio es?" elige el colegio (o "No es de un colegio") y vuelve a guardar.\n\n(Si no, no baja lo que te debe el colegio.)'
+        :'Elige en "¿De qué colegio es?" el colegio al que le pagaste la comisión y vuelve a guardar.');
     }
   }
   DB.pagos=DB.pagos||[];
@@ -5255,6 +5278,7 @@ function guardarPago(){
     if(!p)return toast('No se encontró el registro a editar','err');
     Object.assign(p,{fecha,tipo,nombre,valor,forma,nota});
     if(editorial)p.editorial=editorial;else delete p.editorial;
+    if(colegio)p.colegio=colegio;else delete p.colegio;
     if(pagoComprobante)p.comprobante=pagoComprobante;
     logHistorial(tipo==='cobro'?'Cobro editado':'Pago editado',`${nombre} — ${fmt(valor)} (${forma})`);
     save();
@@ -5265,6 +5289,7 @@ function guardarPago(){
   }
   const reg={id:uid(),fecha,tipo,nombre,valor,forma,nota};
   if(editorial)reg.editorial=editorial;
+  if(colegio)reg.colegio=colegio;
   if(pagoComprobante)reg.comprobante=pagoComprobante;
   DB.pagos.push(reg);
   logHistorial(tipo==='cobro'?'Cobro registrado':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma})`+(pagoComprobante?' + comprobante':''));
@@ -5272,11 +5297,12 @@ function guardarPago(){
   document.getElementById('pago-nombre').value='';
   document.getElementById('pago-valor').value='';previewValorPago();
   document.getElementById('pago-nota').value='';
+  const sc=document.getElementById('pago-colegio');if(sc)sc.value='';
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
   const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
   pagoComprobante=null;
   renderPagos();
-  toast((tipo==='cobro'?'Cobro':'Pago')+' registrado: '+fmt(valor),'ok');
+  toast((tipo==='cobro'?'Cobro':'Pago')+' registrado: '+fmt(valor)+(colegio&&colegio!=='(ninguno)'?' — '+colegio:''),'ok');
   if(tipo==='cobro')verReciboPago(reg.id);
 }
 
@@ -5302,6 +5328,8 @@ function editarPago(id){
   const se=document.getElementById('pago-editorial');
   if(se)se.value=p.tipo==='pago'?(p.editorial||editorialAdivinadaPago(p)||''):'';
   mostrarEditorialPago();
+  const sc=document.getElementById('pago-colegio');
+  if(sc)sc.value=p.colegio||(p.tipo==='cobro'?(colegiosList().find(c=>_cobroEsDeColegio(p,c.nombre))?.nombre||''):'');
   document.getElementById('pago-edit-id').value=id;
   pagoComprobante=null;
   const fi=document.getElementById('pago-foto'); if(fi)fi.value='';
@@ -5324,6 +5352,8 @@ function cancelarEdicionPago(){
   const info=document.getElementById('pago-foto-info'); if(info)info.textContent='Puedes subir la captura de la transferencia o el depósito. Se guarda junto al pago.';
   pagoComprobante=null;
   const se=document.getElementById('pago-editorial');if(se)se.value='';
+  const sc=document.getElementById('pago-colegio');if(sc)sc.value='';
+  mostrarEditorialPago();
   document.getElementById('btn-guardar-pago').innerHTML='<i class="ti ti-check"></i> Guardar';
   document.getElementById('btn-cancelar-pago').style.display='none';
   _avisoEdicionPago(null);
@@ -5331,7 +5361,46 @@ function cancelarEdicionPago(){
 // Muestra "¿Es pago a una editorial?" solo cuando el tipo es Pago.
 function mostrarEditorialPago(){
   const w=document.getElementById('pago-ed-wrap');if(!w)return;
-  w.style.display=document.getElementById('pago-tipo')?.value==='pago'?'':'none';
+  const pago=document.getElementById('pago-tipo')?.value==='pago';
+  w.style.display=pago?'':'none';
+  // "¿De qué colegio es?": en cobros y en pagos de comisión a un colegio.
+  const cw=document.getElementById('pago-col-wrap'),sc=document.getElementById('pago-colegio');if(!cw||!sc)return;
+  const com=pago&&document.getElementById('pago-editorial')?.value==='comision';
+  cw.style.display=!pago||com?'':'none';
+  document.getElementById('pago-col-lbl').textContent=com?'¿A qué colegio le pagaste la comisión?':'¿De qué colegio es este cobro?';
+  const prev=sc.value;
+  sc.innerHTML=`<option value="">${com?'— Elige el colegio —':'— Lo adivino por el nombre —'}</option>`
+    +colegiosList().map(c=>`<option value="${escH(c.nombre)}">${escH(c.nombre)}</option>`).join('')
+    +(com?'':'<option value="(ninguno)">🙅 No es de un colegio (librería, otro cliente)</option>');
+  sc.value=prev;
+}
+// Colegio cuyo nombre aparece en un texto (nombre o nota de un pago), o ''.
+function colegioDeTexto(t){
+  t=String(t||'');if(!t.trim())return '';
+  const c=colegiosList().find(c=>_normNombre(t).includes(_normNombre(c.nombre))||_coincideColegio(t,c.nombre));
+  return c?c.nombre:'';
+}
+// Comisión que ya le pagaste a un colegio con pagos registrados en Pagos
+// ("Comisión a un COLEGIO"). Puede ser en partes.
+function comisionPagosColegio(nombre){
+  return (DB.pagos||[]).filter(p=>p.tipo==='pago'&&p.editorial==='comision'&&p.colegio===nombre)
+    .reduce((a,p)=>a+(parseFloat(p.valor)||0),0);
+}
+// ¿Ya está entregada la comisión del colegio? La marca ✔ Entregué / Se la
+// descontó, o los pagos de comisión en Pagos que ya cubren todo.
+function comisionPagadaDe(nombre,d){
+  if(d.comisionPagada)return d.comisionPagada;
+  const T=totalesColegio(d),pg=comisionPagosColegio(nombre);
+  if(T.totalColegio>0.005&&pg>=T.totalColegio-TOL_COBRO){
+    const f=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&p.editorial==='comision'&&p.colegio===nombre).map(p=>p.fecha||'').sort().pop();
+    return {fecha:f,monto:pg,modo:'pagos'};
+  }
+  return null;
+}
+// Lo que todavía le debes de comisión al colegio (total − pagos de comisión).
+function comisionFaltaDe(nombre,d){
+  if(comisionPagadaDe(nombre,d))return 0;
+  return Math.max(0,Math.round((totalesColegio(d).totalColegio-comisionPagosColegio(nombre))*100)/100);
 }
 function _pareceEditorial(t){return /EDITORIAL|DID[AÁ]CTICA|TECH\s*BOOKS|DANIEL|MARCOS?\b|LIBROS/i.test(String(t||''));}
 // A qué editorial va un pago (Didáctica / Tech Books) o null si no es pago de libros.
@@ -5403,6 +5472,7 @@ function eliminarPago(id){
 }
 
 function renderPagos(){
+  if(!document.getElementById('pago-colegio')?.options.length)mostrarEditorialPago();
   const tipoFil=document.getElementById('pg-tipo-fil')?.value||'';
   const formaFil=document.getElementById('pg-forma-fil')?.value||'';
   const q=(document.getElementById('pg-q')?.value||'').toLowerCase();
@@ -8579,8 +8649,8 @@ function revisarSistema(){
   checks.push({key:'banco', txt: bancoItems.length?`${bancoItems.length} movimiento(s) bancarios necesitan revisión`:'Todos los movimientos bancarios están resueltos', nivel: bancoItems.length?'warn':'ok'});
 
   // Comisiones de colegios: las de la tabla de Comisiones sin ✔ Entregué / Se la descontó
-  const comisionesPend=filasComisiones().filter(x=>x.total>0.005&&!x.pag)
-    .map(x=>({fecha:'',beneficiario:x.nombre,monto:x.total}));
+  const comisionesPend=filasComisiones().filter(x=>x.comFalta>0.005)
+    .map(x=>({fecha:'',beneficiario:x.nombre,monto:x.comFalta}));
   checks.push({key:'comisiones', txt: comisionesPend.length?`${comisionesPend.length} colegio(s) con comisión por entregar (${fmt(comisionesPend.reduce((a,c)=>a+c.monto,0))})`:'No hay comisiones pendientes', nivel: comisionesPend.length?'warn':'ok'});
 
   const mapaFact={};
@@ -9784,10 +9854,12 @@ function estadoCierreColegio(nombre){
   // Solo si anotaste pagos a la editorial DENTRO de este colegio se mira su saldo;
   // si no, la editorial se paga toda junta y no frena el cierre del colegio.
   const cobrar=saldoCobroColegio(nombre,d), edit=(d.pagosEdit||[]).length?T.saldoEdit:0;
-  const r={cobrar,edit,tv:T.tv,com:T.totalColegio,desc:T.descontada,fecha:d.cerrado||''};
+  // Comisión que todavía le debes al colegio (sin lo pagado en Pagos). Si se la descontó, es 0.
+  const comFalta=comisionFaltaDe(nombre,d);
+  const r={cobrar,edit,comFalta,tv:T.tv,com:T.totalColegio,desc:T.descontada,fecha:d.cerrado||''};
   if(d.cerrado) r.est='cerrado';
   else if(!T.cant&&!T.tv) r.est='sin';
-  else if(cobrar>TOL_COBRO||edit>TOL_COBRO) r.est='falta';
+  else if(cobrar>TOL_COBRO||edit>TOL_COBRO||comFalta>TOL_COBRO) r.est='falta';
   else r.est='listo';
   return r;
 }
@@ -9798,6 +9870,7 @@ function etiquetaCierre(nombre,e){
   const f=[];
   if(e.cobrar>TOL_COBRO) f.push('cobrar '+fmt(e.cobrar));
   if(e.edit>TOL_COBRO) f.push('editorial '+fmt(e.edit));
+  if(e.comFalta>TOL_COBRO) f.push('comisión '+fmt(e.comFalta));
   return '⏳ '+nombre+'  — falta: '+f.join(', ');
 }
 function refrescarCierreColSel(){
@@ -9828,10 +9901,11 @@ function toggleCierreColegio(){
   }else{
     const e=estadoCierreColegio(nombre);
     let aviso='¿Marcar "'+nombre+'" como CERRADO / LIQUIDADO?';
-    if(e.cobrar>TOL_COBRO||e.edit>TOL_COBRO){
+    if(e.cobrar>TOL_COBRO||e.edit>TOL_COBRO||e.comFalta>TOL_COBRO){
       aviso+='\n\nOjo: el sistema todavía ve pendiente:';
       if(e.cobrar>TOL_COBRO) aviso+='\n• Falta que te pague el colegio: '+fmt(e.cobrar);
       if(e.edit>TOL_COBRO) aviso+='\n• Falta pagar a la editorial: '+fmt(e.edit);
+      if(e.comFalta>TOL_COBRO) aviso+='\n• Falta entregar la comisión al colegio: '+fmt(e.comFalta);
       aviso+='\n\n¿Cerrarlo igual?';
     }
     if(!confirm(aviso))return;
@@ -9869,19 +9943,21 @@ function imprimirColegiosPorCerrar(){
   const pend=lista.filter(x=>x.est==='falta'||x.est==='listo');
   const cerr=lista.filter(x=>x.est==='cerrado');
   const sinV=lista.filter(x=>x.est==='sin');
-  let tCob=0,tEd=0;
+  let tCob=0,tEd=0,tCom=0;
   const fila=x=>{
-    const fc=x.cobrar>TOL_COBRO, fe=x.edit>TOL_COBRO;
-    if(fc)tCob+=x.cobrar; if(fe)tEd+=x.edit;
+    const fc=x.cobrar>TOL_COBRO, fe=x.edit>TOL_COBRO, fm=x.comFalta>TOL_COBRO;
+    if(fc)tCob+=x.cobrar; if(fe)tEd+=x.edit; if(fm)tCom+=x.comFalta;
     const que=[];
     if(fc) que.push('Cobrar al colegio');
     if(fe) que.push('Pagar a la editorial');
+    if(fm) que.push('Entregar comisión');
     if(!que.length) que.push('Todo al día — solo falta marcarlo cerrado');
     return `<tr><td style="text-align:center;width:28px">☐</td><td><b>${escH(x.nombre)}</b></td><td>${que.join(' + ')}</td>
       <td style="text-align:right">${fmt(x.tv)}</td>
       <td style="text-align:right;color:#e65100">${x.com>0.005?'−'+fmt(x.com):'—'}</td>
       <td style="text-align:right;font-weight:bold">${fmt(x.tv-(x.com||0))}</td>
       <td style="text-align:right;${fc?'color:#c0392b;font-weight:bold':''}">${fc?fmt(x.cobrar):'—'}${fc&&x.com>0.005&&!x.desc?'<div style="font-size:9px;color:#666;font-weight:normal">paga PVP completo; tú le das la comisión</div>':''}</td>
+      <td style="text-align:right;${fm?'color:#b45309;font-weight:bold':''}">${fm?fmt(x.comFalta):'—'}</td>
       <td style="text-align:right;${fe?'color:#c0392b;font-weight:bold':''}">${fe?fmt(x.edit):'—'}</td></tr>`;
   };
   const filasPend=pend.map(fila).join('');
@@ -9906,12 +9982,12 @@ function imprimirColegiosPorCerrar(){
   ${bancoHTML}
   ${(()=>{try{const R=resumenNegocio();return '<div style="border:1px solid #f5c6cb;background:#fdecea;border-radius:6px;padding:8px 14px;margin:6px 0;font-size:13px"><b>Le debo a las editoriales (todas juntas): '+fmt(Math.max(0,R.debeEd))+'</b> · Me falta cobrar a los colegios: <b>'+fmt(R.porCobrar)+'</b></div>';}catch(e){return '';}})()}
   <h3>⏳ FALTAN CERRAR (${pend.length})</h3>
-  ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>− COMISIÓN $</th><th>= VENDIDO MENOS COMISIÓN $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
-  ${filasPend}<tr class="tot"><td colspan="6" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
+  ${pend.length?`<table><tr><th></th><th style="text-align:left">COLEGIO</th><th style="text-align:left">QUÉ FALTA</th><th>VENDIDO $</th><th>− COMISIÓN $</th><th>= VENDIDO MENOS COMISIÓN $</th><th>FALTA QUE PAGUE EL COLEGIO $</th><th>FALTA ENTREGAR COMISIÓN $</th><th>FALTA PAGAR A EDITORIAL $</th></tr>
+  ${filasPend}<tr class="tot"><td colspan="6" style="text-align:right">TOTAL PENDIENTE:</td><td style="text-align:right">${fmt(tCob)}</td><td style="text-align:right">${fmt(tCom)}</td><td style="text-align:right">${fmt(tEd)}</td></tr></table>`:'<p>No falta ningún colegio por cerrar. 🎉</p>'}
   ${cerr.length?`<h3>✅ YA CERRADOS (${cerr.length})</h3><table><tr><th style="text-align:left">COLEGIO</th><th>VENDIDO $</th><th>CERRADO EL</th></tr>
   ${cerr.map(x=>`<tr><td>${escH(x.nombre)}</td><td style="text-align:right">${fmt(x.tv)}</td><td style="text-align:center">${escH(String(x.fecha).split('-').reverse().join('/'))}</td></tr>`).join('')}</table>`:''}
   ${sinV.length?`<h3>⚪ SIN VENTAS ESTE AÑO (${sinV.length})</h3><p>${sinV.map(x=>escH(x.nombre)).join(' · ')}</p>`:''}
-  <p style="margin-top:14px;font-size:10px;color:#666">"Falta que pague el colegio" sale de los cobros registrados en Pagos. Lo que se debe a la editorial se paga todo junto y está arriba en el recuadro rojo.</p>
+  <p style="margin-top:14px;font-size:10px;color:#666">"Falta que pague el colegio" sale de los cobros registrados en Pagos. "Falta entregar comisión" = comisión del colegio menos lo pagado en Pagos como "Comisión a un COLEGIO" (0 si se la descontó). Lo que se debe a la editorial se paga todo junto y está arriba en el recuadro rojo.</p>
   <\/body><\/html>`);
   win.document.close();
   win.onload=()=>win.print();
@@ -10206,6 +10282,67 @@ function setDescPctLinea(nombre,i,v){
   recalcControl(nombre);save();
 }
 
+// Serie de un libro para separar valores (4-nov-2026, Hernán Malo: el esposo de
+// Mónica pide Wonder aparte y Limitless aparte porque se venden y se pagan a
+// valores distintos). Español → Didáctica; inglés → Tech Books.
+function serieLinea(l){
+  let t=String(l.libro||'');
+  if(l.prodId){const pr=DB.productos.find(x=>x.id===l.prodId);if(pr)t+=' '+(pr.nombre||'');}
+  if(/WONDER/i.test(t))return {serie:'Wonder Family',ed:'Tech Books'};
+  if(/LIMIT+LES/i.test(t))return {serie:'Limitless',ed:'Tech Books'};
+  if(/ROB[OÓ]TICA/i.test(t))return {serie:'Robótica',ed:'Tech Books'};
+  if(esLineaTechBooks(l))return {serie:'Otros Tech Books',ed:'Tech Books'};
+  return {serie:'Español (Didáctica)',ed:'Didáctica'};
+}
+// Totales del colegio por serie, con la misma fórmula de totalesColegio().
+function seriesColegio(d){
+  const pvUnit=d.comisionPVUnit??0.5, M={};
+  (d.lineas||[]).forEach(l=>{
+    const {serie,ed}=serieLinea(l);
+    const x=M[serie]||(M[serie]={serie,ed,lib:0,tv:0,com:0,costo:0});
+    const c=l.cant||0,v=c-(l.dev||0),pvp=l.pvp||0;
+    x.lib+=v;x.tv+=v*pvp;x.costo+=v*(l.costo||0);
+    if(lineaComisiona(l))x.com+=v*pvp*(pctLinea(d,l)/100)+c*pvUnit;
+  });
+  const orden=['Español (Didáctica)','Wonder Family','Limitless','Robótica','Otros Tech Books'];
+  return Object.values(M).filter(x=>x.lib||x.tv).sort((a,b)=>orden.indexOf(a.serie)-orden.indexOf(b.serie));
+}
+function seriesColegioHTML(nombre,d,print){
+  const S=seriesColegio(d);
+  if(S.length<2)return '';
+  const th=t=>`<th style="padding:5px 8px;border:1px solid #e6c800;background:#f9d71c;color:#333;font-size:11px;text-align:right">${t}</th>`;
+  const td=(v,st)=>`<td style="padding:5px 8px;border:1px solid #ddd;text-align:right;font-family:monospace;${st||''}">${v}</td>`;
+  const fila=(x,b)=>`<tr style="${b?'font-weight:700;background:#fff3c4':''}"><td style="padding:5px 8px;border:1px solid #ddd;font-weight:700">${escH(x.serie)}${x.ed&&!b?` <span style="font-size:10px;color:#777;font-weight:400">(${x.ed})</span>`:''}</td>
+    ${td(x.lib)}${td('$'+x.tv.toFixed(2),'color:#1565c0')}${td(x.com>0.005?'−$'+x.com.toFixed(2):'—','color:#e65100')}${td('$'+(x.tv-x.com).toFixed(2))}${td('−$'+x.costo.toFixed(2),'color:#b71c1c')}${td('$'+(x.tv-x.com-x.costo).toFixed(2),'color:#1b5e20;font-weight:700')}</tr>`;
+  const sum=(f,k)=>S.filter(f).reduce((a,x)=>a+x[k],0);
+  const tot=(nom,f)=>({serie:nom,lib:sum(f,'lib'),tv:sum(f,'tv'),com:sum(f,'com'),costo:sum(f,'costo')});
+  const hayTB=S.some(x=>x.ed==='Tech Books'),hayD=S.some(x=>x.ed==='Didáctica');
+  const esc=escH(nombre).replace(/'/g,"\\'");
+  return `<div style="background:#fff;color:#222;border:1px solid #f9d71c;border-radius:6px;padding:8px 10px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:800;color:#555">📚 POR SERIE — cada una con su valor (Wonder aparte, Limitless aparte)</div>
+      ${print?'':`<button class="btn btn-s btn-sm" onclick="imprimirSeriesColegio('${esc}')"><i class="ti ti-printer"></i> Imprimir por serie</button>`}
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr><th style="padding:5px 8px;border:1px solid #e6c800;background:#f9d71c;color:#333;font-size:11px;text-align:left">SERIE</th>${th('LIBROS VENDIDOS')}${th('VENDIDO $')}${th('− COMISIÓN COLEGIO')}${th('= ME QUEDA')}${th('− EDITORIAL')}${th('= GANANCIA')}</tr>
+      ${S.map(x=>fila(x)).join('')}
+      ${hayTB&&hayD?fila(tot('Total Tech Books (inglés)',x=>x.ed==='Tech Books'),1)+fila(tot('Total Didáctica (español)',x=>x.ed==='Didáctica'),1):''}
+      ${fila(tot('TOTAL COLEGIO',()=>true),1)}
+    </table></div></div>`;
+}
+function imprimirSeriesColegio(nombre){
+  const d=DB.colData[nombre];if(!d)return;
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  win.document.write(`<html><head><title>${escH(nombre)} — por serie</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader(nombre+' — valores por serie','Al '+new Date().toLocaleDateString('es-EC'))}
+  ${seriesColegioHTML(nombre,d,true)}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
+
 // ── CONTROL DE VENTAS (tabla amarilla) ──────────────────────────────────────
 function renderControl(){
   initColData();
@@ -10242,15 +10379,14 @@ function renderControl(){
         <div style="font-size:9px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:.3px">− Le pagas a la editorial</div>
         <div style="font-family:monospace;font-size:17px;font-weight:700;color:#b71c1c;margin-top:3px" id="ctrl-top-ed">$${tvCosto.toFixed(2)}</div>
         ${(()=>{
-          const gEdTop=(l)=>{
-            if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
-            const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
-          };
-          const porGrupo={};
-          d.lineas.forEach(l=>{ const ed=gEdTop(l)||'General'; porGrupo[ed]=(porGrupo[ed]||0)+(l.cant-l.dev)*l.costo; });
-          const grupos=Object.keys(porGrupo);
-          if(grupos.length<2) return '';
-          return grupos.map(ed=>`<div style="font-size:9px;color:#b71c1c;margin-top:2px">${escH(ed)}: $${porGrupo[ed].toFixed(2)}</div>`).join('');
+          // Español = Didáctica, inglés = Tech Books (Wonder / Limitless): se pagan por separado.
+          const S=seriesColegio(d);
+          const ed=k=>S.filter(x=>x.ed===k).reduce((a,x)=>a+x.costo,0);
+          const tb=S.filter(x=>x.ed==='Tech Books');
+          if(S.length<2) return '';
+          return (ed('Didáctica')>0.005?`<div style="font-size:10px;color:#b71c1c;margin-top:3px">📘 Didáctica: <b>$${ed('Didáctica').toFixed(2)}</b></div>`:'')
+            +(tb.length?`<div style="font-size:10px;color:#b71c1c;margin-top:2px">🔤 Tech Books: <b>$${ed('Tech Books').toFixed(2)}</b></div>`:'')
+            +tb.map(x=>`<div style="font-size:9px;color:#b71c1c">· ${escH(x.serie)}: $${x.costo.toFixed(2)}</div>`).join('');
         })()}
       </div>
       <div style="background:${gananciaNet>=0?'#e8f5e9':'#fdecea'};border:2px solid ${gananciaNet>=0?'#66bb6a':'#e57373'};border-radius:6px;padding:8px 10px;text-align:center" id="ctrl-top-gan-box">
@@ -10263,6 +10399,7 @@ function renderControl(){
         ${casillaComisionDescontadaHTML(nombre,d)}
       </div>
     </div>
+    ${seriesColegioHTML(nombre,d)}
 
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -11043,6 +11180,7 @@ function abonosColegio(nombre){
 // "Librería La Feria Tumbaco" y Nicole Ninahualpa pagan por COMENIOS.
 const PAGADORES_COLEGIO={'COMENIOS':/TUMBACO|LA FERIA|NINAHUALPA/i};
 function _cobroEsDeColegio(p,nombre){
+  if(p.colegio)return p.colegio===nombre;   // elegido en Pagos → "¿De qué colegio es?"
   const nom=p.nombre||'';
   const txt=nom+' '+(p.nota||'');
   const deAlias=Object.keys(PAGADORES_COLEGIO).find(k=>PAGADORES_COLEGIO[k].test(txt));
@@ -13139,7 +13277,7 @@ function paraDevolverDidactica(){
   return {bodega,muestras,u:bodega.u+muestras.u,v:bodega.v+muestras.v,devCol};
 }
 function resumenNegocio(){
-  let vendido=0,ganancia=0,aCobrar=0,comPorEntregar=0,comAparte=0;
+  let vendido=0,ganancia=0,aCobrar=0,comPorEntregar=0,comAparte=0,comColPag=0;
   const costoVend={'Didáctica':0,'Tech Books':0};
   // Venta (ya sin comisión del colegio) por editorial, línea por línea con la
   // misma fórmula de totalesColegio.
@@ -13147,7 +13285,8 @@ function resumenNegocio(){
   Object.keys(DB.colData||{}).forEach(nom=>{
     const d=DB.colData[nom];if(!d||!Array.isArray(d.lineas))return;
     const T=totalesColegio(d);vendido+=T.ingreso;ganancia+=T.ganancia;aCobrar+=T.aCobrar;
-    if(T.totalColegio>0.005&&!d.comisionPagada)comPorEntregar+=T.totalColegio;
+    // Lo que falta entregar de comisión (ya sin lo pagado en Pagos → Comisión a un COLEGIO).
+    comPorEntregar+=comisionFaltaDe(nom,d);comColPag+=comisionPagosColegio(nom);
     if(!T.descontada)comAparte+=T.totalColegio;
     const pvUnit=d.comisionPVUnit??0.5;
     d.lineas.forEach(l=>{
@@ -13194,8 +13333,9 @@ function resumenNegocio(){
     facturado:tot('facturado'),notas:tot('notas'),pagadoEd:tot('pagado'),debeEd:tot('debe'),
     // Comisiones aparte ya pagadas (librerías, capacitaciones): salieron de la caja.
     // Las cruzadas con un depósito están también como cobro "Compensación", así que se anulan.
-    comOtrasPag,comOtrasPend,gastosNeg,
-    caja:cobrado+cobradoOtros-tot('pagado')-comOtrasPag-gastosNeg,porDevolver:tot('porDevolver')};
+    comOtrasPag,comOtrasPend,gastosNeg,comColPag,
+    // Comisiones a colegios pagadas en Pagos: también salieron de la caja (4-nov-2026).
+    caja:cobrado+cobradoOtros-tot('pagado')-comOtrasPag-comColPag-gastosNeg,porDevolver:tot('porDevolver')};
 }
 // Filas chicas con el detalle de cada nota de crédito / pago, debajo del total,
 // para poder comprobar de dónde sale cada número (pedido de Mónica y su esposo).
@@ -13736,7 +13876,7 @@ function comisionesColegiosDatos(){
     const T=totalesColegio(d);
     const pcts=[...new Set((d.lineas||[]).filter(l=>lineaComisiona(l)&&((l.cant||0)-(l.dev||0))>0).map(l=>pctLinea(d,l)))];
     return {nombre:c.nombre,tv:T.tv,pct:pcts.length===1?pcts[0]+'%':(pcts.length?'varios':'—'),
-      com:T.comision,cap:T.comisionPV,total:T.totalColegio,pag:d.comisionPagada||null,
+      com:T.comision,cap:T.comisionPV,total:T.totalColegio,pag:comisionPagadaDe(c.nombre,d),
       neto:T.ingreso,costo:T.costo,gan:T.ganancia};
   }).filter(x=>x&&x.tv>0);
 }
@@ -13769,7 +13909,7 @@ function filasComisiones(){
     const lib=r2((DB.comisiones||[]).filter(x=>x.colegio===c.nombre).reduce((a,x)=>a+(parseFloat(x.monto)||0),0));
     // Devoluciones del colegio: ya están restadas de VENDÍ y de EDITORIAL; se muestran para que se vea.
     const devCosto=r2((d.lineas||[]).reduce((a,l)=>a+(l.dev||0)*(l.costo||0),0));
-    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,lib,gan:r2(neto-costo-lib),pag:d.comisionPagada||null,
+    return {nombre:c.nombre,tv,pct,total,cap:T.comisionPV,neto,cobrado,falta:r2(aCobrar-cobrado),descontada:T.descontada,costo,lib,gan:r2(neto-costo-lib),pag:comisionPagadaDe(c.nombre,d),comPag:r2(comisionPagosColegio(c.nombre)),comFalta:comisionFaltaDe(c.nombre,d),
       dev:T.dev,devPvp:r2(T.tvBruto-T.tv),entregado:r2(T.tvBruto),devCosto};
   }).filter(x=>x&&(x.tv>0||x.cobrado>0)).sort((a,b)=>b.tv-a.tv);
   return L;
@@ -13779,17 +13919,19 @@ function tablaComisionesHTML(print){
   const F=d=>String(d||'').split('-').reverse().join('/');
   const L=filasComisiones();
   const S=k=>L.reduce((a,x)=>a+x[k],0);
-  const comPend=L.filter(x=>x.total>0.005&&!x.pag).reduce((a,x)=>a+x.total,0);
+  const comPend=L.reduce((a,x)=>a+x.comFalta,0);
   const mono=print?'':'font-family:monospace;';
   const td=(v,col,b,extra)=>`<td style="padding:6px 5px;text-align:right;white-space:nowrap;${mono}color:${col||'#111'};${b?'font-weight:700;':''}${extra||''}">${v}</td>`;
   const sub=t=>`<div style="font-size:10px;color:#64748b;font-weight:400;font-family:inherit">${t}</div>`;
   const esc=n=>escH(n).replace(/'/g,"\\'");
   const estado=x=>{
     if(x.total<=0.005) return '<span style="color:#64748b">—</span>';
-    const como=x.pag&&x.pag.modo==='descontada'?'se la descontó':'entregada';
-    if(print) return x.pag?'✔ '+como+' '+F(x.pag.fecha):'☐ por entregar';
+    const como=x.pag&&x.pag.modo==='descontada'?'se la descontó':x.pag&&x.pag.modo==='pagos'?'pagada (en Pagos)':'entregada';
+    const parte=x.comPag>0.005&&!x.pag?'pagué '+fmt(x.comPag)+', falta '+fmt(x.comFalta):'';
+    if(print) return x.pag?'✔ '+como+' '+F(x.pag.fecha):'☐ por entregar'+(parte?' ('+parte+')':'');
+    if(x.pag&&x.pag.modo==='pagos') return '✅ '+como+' '+F(x.pag.fecha);
     return x.pag?`✅ ${como} ${F(x.pag.fecha)} <button class="btn btn-s btn-sm" onclick="toggleComisionPagada('${esc(x.nombre)}')" title="Deshacer">↩</button>`
-      :`<button class="btn btn-p btn-sm" onclick="toggleComisionPagada('${esc(x.nombre)}')" title="Yo le entregué la comisión al colegio">✔ Entregué</button> <button class="btn btn-s btn-sm" style="margin-top:3px" onclick="toggleComisionPagada('${esc(x.nombre)}','descontada')" title="El colegio se quedó con su comisión al pagarme (me pagó vendido − comisión)">Se la descontó</button>`;};
+      :(parte?`<div style="font-size:10px;color:#b45309">${parte}</div>`:'')+`<button class="btn btn-p btn-sm" onclick="mcAbrirPago('comision','${esc(x.nombre)}',${x.comFalta})" title="Registrar en Pagos lo que le pagué de comisión (todo o una parte)">+ Pagué comisión</button> <button class="btn btn-s btn-sm" style="margin-top:3px" onclick="toggleComisionPagada('${esc(x.nombre)}','descontada')" title="El colegio se quedó con su comisión al pagarme (me pagó vendido − comisión)">Se la descontó</button>`;};
   const corto={'Sin comisión':'—','🟢 Me resulta':'🟢 Sí','🟠 Di más de lo que gané':'🟠 Di más','🔴 Pierdo':'🔴 Pierdo'};
   const fila=x=>{const v=veredictoComision(x);
     return `<tr style="border-top:1px solid #e2e8f0">
@@ -13912,7 +14054,7 @@ function exportarComisionesXLS(){
   const hasta=fila;fila++;const filaTot=fila;
   const S=k=>L.reduce((a,x)=>a+x[k],0);
   const sumCol=(k,col,extra)=>fx('=SUM('+col+desde+':'+col+hasta+')',S(k),extra,'tot');
-  const totRow=`<tr><td class="tot">TOTAL</td>${sumCol('tv','B')}${sumCol('total','C')}${sumCol('neto','D')}${sumCol('cobrado','E')}${sumCol('falta','F')}${sumCol('costo','G')}${sumCol('gan','H')}<td class="tot" colspan="2">Comisión por entregar: ${L.filter(x=>x.total>0.005&&!x.pag).reduce((a,x)=>a+x.total,0).toFixed(2)}</td></tr>`;
+  const totRow=`<tr><td class="tot">TOTAL</td>${sumCol('tv','B')}${sumCol('total','C')}${sumCol('neto','D')}${sumCol('cobrado','E')}${sumCol('falta','F')}${sumCol('costo','G')}${sumCol('gan','H')}<td class="tot" colspan="2">Comisión por entregar: ${L.reduce((a,x)=>a+x.comFalta,0).toFixed(2)}</td></tr>`;
   // Editoriales: etiqueta en A:F, valor en G, nota en H:J
   const D=R.ed['Didáctica'], TB=R.ed['Tech Books'];
   const lp=arr=>arr.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))).map(p=>F(p.fecha)+': '+(parseFloat(p.valor)||0).toFixed(2)).join(' · ');
@@ -14007,15 +14149,16 @@ function mcColegiosHTML(L,esc){
     let av='';
     if(x.falta<-TOL_COBRO)av+=aviso('PAGÓ DE MÁS '+fmt(-x.falta)+' — revisar','#f87171');
     if(sinPvp)av+=aviso(sinPvp+' libro(s) sin precio de venta (PVP)','#f87171');
-    if(x.total>0.005&&!x.pag&&x.falta<=TOL_COBRO)av+=aviso('Ya pagó: falta entregarle su comisión '+fmt(x.total),'#fb923c');
+    if(x.comFalta>0.005&&x.falta<=TOL_COBRO)av+=aviso('Ya pagó: falta entregarle su comisión '+fmt(x.comFalta),'#fb923c');
     const falta=x.falta>TOL_COBRO?num('Me falta cobrar',fmt(x.falta),'#fb923c'):x.falta<-TOL_COBRO?num('Pagó de más',fmt(-x.falta),'#f87171'):num('Me falta cobrar','✅ $0','#4ade80');
     return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:10px 12px;margin-top:8px">
       <div style="width:34px;height:34px;border-radius:50%;border:2px solid #38bdf8;color:#38bdf8;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">${escH(x.nombre.trim().charAt(0).toUpperCase())}</div>
       <div style="flex:1;min-width:180px"><div style="font-weight:800;font-size:14px">${escH(x.nombre)}</div>
-        <div style="font-size:11px;color:#94a3b8">${x.total>0.005?'comisión '+(x.pct||'')+' '+fmt(x.total)+(x.pag?' · '+(x.pag.modo==='descontada'?'se la descontó':'entregada'):' · por entregar'):'sin comisión'}</div>${av}</div>
+        <div style="font-size:11px;color:#94a3b8">${x.total>0.005?'comisión '+(x.pct||'')+' '+fmt(x.total)+(x.pag?' · '+(x.pag.modo==='descontada'?'se la descontó':'entregada'):(x.comPag>0.005?' · pagué '+fmt(x.comPag)+', falta '+fmt(x.comFalta):' · por entregar')):'sin comisión'}</div>${av}</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         ${num('Vendido',fmt(x.tv),'#fbbf24')}${num('Ya me pagó',fmt(x.cobrado),'#4ade80')}${falta}
         <button onclick="mcAbrirPago('cobro','${esc(x.nombre)}',${Math.max(0,x.falta)})" style="padding:7px 12px;border-radius:8px;border:2px solid #4ade80;background:#14532d;color:#bbf7d0;font-weight:800;cursor:pointer;font-size:13px">+ Pago</button>
+        ${x.comFalta>0.005?`<button onclick="mcAbrirPago('comision','${esc(x.nombre)}',${x.comFalta})" title="Le pagué su comisión (todo o una parte)" style="padding:7px 12px;border-radius:8px;border:2px solid #fb923c;background:#431407;color:#fed7aa;font-weight:800;cursor:pointer;font-size:13px">+ Comisión</button>`:''}
       </div></div>`;
   };
   const V=L.filter(pasa);
@@ -14045,10 +14188,11 @@ function mcAbrirPago(tipo,nombre,sugerido){
   let ov=document.getElementById('modal-mc-pago');
   if(!ov){ov=document.createElement('div');ov.id='modal-mc-pago';ov.className='modal-overlay';document.body.appendChild(ov);
     ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('on');});}
-  const cobro=tipo==='cobro';
+  const cobro=tipo==='cobro',com=tipo==='comision';
   ov.innerHTML=`<div class="modal" style="width:min(440px,95vw)">
-    <div class="modal-t"><span>${cobro?'💰 Me pagó: ':'💸 Abono a: '}${escH(nombre)}</span><button class="btn btn-s btn-sm" onclick="document.getElementById('modal-mc-pago').classList.remove('on')">✕</button></div>
+    <div class="modal-t"><span>${cobro?'💰 Me pagó: ':com?'🏫 Le pagué la comisión a: ':'💸 Abono a: '}${escH(nombre)}</span><button class="btn btn-s btn-sm" onclick="document.getElementById('modal-mc-pago').classList.remove('on')">✕</button></div>
     ${cobro&&sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le falta pagar ${fmt(sugerido)}</div>`:''}
+    ${com&&sugerido>0.005?`<div style="font-size:12px;color:#64748b;margin-bottom:8px">Le debo de comisión ${fmt(sugerido)}. Si le pagas solo una parte, escribe esa parte.</div>`:''}
     <div class="fg"><label>Fecha</label><input type="date" id="mcp-fecha" value="${today()}"></div>
     <div class="fg"><label>Valor ($)</label><input type="text" inputmode="decimal" autocomplete="off" id="mcp-valor" placeholder="Ej: 250,50" oninput="document.getElementById('mcp-prev').textContent=this.value.trim()?'= '+fmt(leerMonto(this.value)):''"><small id="mcp-prev" style="font-size:12px;color:var(--g1);font-weight:700"></small></div>
     <div class="fg"><label>Forma de pago</label><select id="mcp-forma"><option>Transferencia</option><option>Depósito</option><option>Efectivo</option><option>Cheque</option><option>Otro</option></select></div>
@@ -14064,15 +14208,20 @@ function mcGuardarPago(tipo,nombre){
   const fecha=document.getElementById('mcp-fecha').value||today();
   const forma=document.getElementById('mcp-forma').value;
   const nota=(document.getElementById('mcp-nota').value||'').trim();
-  const reg={id:uid(),fecha,tipo,nombre,valor,forma,nota};
+  // Comisión a un colegio = un pago en Pagos con editorial 'comision' y el colegio (baja la comisión que le debo).
+  const com=tipo==='comision';
+  const reg={id:uid(),fecha,tipo:com?'pago':tipo,nombre:com?'Comisión '+nombre:nombre,valor,forma,nota};
   if(tipo==='pago')reg.editorial=nombre;
+  if(com){reg.editorial='comision';reg.colegio=nombre;}
+  if(tipo==='cobro')reg.colegio=nombre;
   DB.pagos=DB.pagos||[];DB.pagos.push(reg);
-  logHistorial(tipo==='cobro'?'Cobro registrado':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma}) desde Mi cuenta`);
+  logHistorial(tipo==='cobro'?'Cobro registrado':com?'Comisión pagada a colegio':'Pago registrado',`${nombre} — ${fmt(valor)} (${forma}) desde Mi cuenta`);
   save();
   document.getElementById('modal-mc-pago').classList.remove('on');
   renderComisionesColegios();
   try{renderPagos();}catch(e){}try{renderPorCobrar();}catch(e){}try{renderResumenNegocio();}catch(e){}
-  toast((tipo==='cobro'?'Cobro':'Abono')+' guardado: '+fmt(valor),'ok');
+  try{renderControl();}catch(e){}
+  toast((tipo==='cobro'?'Cobro':com?'Comisión pagada':'Abono')+' guardado: '+fmt(valor),'ok');
 }
 // Cuadro "¿Qué colegios ya cerré y a cuáles les debo la comisión?": separa los
 // que ya pagaron (directo o por una librería) pero todavía no reciben su
@@ -14082,14 +14231,14 @@ function cierreComisionesHTML(print){
   const esc=n=>escH(n).replace(/'/g,"\\'");
   const L=filasComisiones().map(x=>{
     const libs=[...new Set((DB.comisiones||[]).filter(c=>c.colegio===x.nombre&&c.tipo==='libreria').map(c=>c.beneficiario))];
-    const pagoTodo=x.falta<=1,conCom=x.total>0.005,debeCom=conCom&&!x.pag;
+    const pagoTodo=x.falta<=1,conCom=x.total>0.005,debeCom=conCom&&x.comFalta>0.005;
     // Orden: primero los que ya pagaron y les debo la comisión, luego los que deben, al final los listos.
     const ord=pagoTodo&&debeCom?0:!pagoTodo?1:2;
     return {...x,libs,pagoTodo,conCom,debeCom,ord};
   }).sort((a,b)=>a.ord-b.ord||b.tv-a.tv);
   const S=f=>L.reduce((a,x)=>a+f(x),0);
   const tCob=S(x=>x.cobrado),tFalta=Math.max(0,S(x=>x.falta)),tCom=S(x=>x.conCom?x.total:0);
-  const tComYa=S(x=>x.conCom&&x.pag?x.total:0),tComFalta=S(x=>x.debeCom?x.total:0);
+  const tComYa=S(x=>x.conCom?x.total-x.comFalta:0),tComFalta=S(x=>x.debeCom?x.comFalta:0);
   const th=(t,bg)=>`<th style="padding:7px 6px;font-size:11px;color:#fff;background:${bg};text-align:center;white-space:nowrap">${t}</th>`;
   const td=(v,st)=>`<td style="padding:6px;border-top:1px solid #e2e8f0;text-align:right;white-space:nowrap;${st||''}">${v}</td>`;
   const verde='color:#16a34a;font-weight:700',rojo='color:#dc2626;font-weight:700',nar='color:#b45309;font-weight:700',gris='color:#94a3b8';
@@ -14098,8 +14247,8 @@ function cierreComisionesHTML(print){
     if(!x.pagoTodo) return '<span style="white-space:nowrap;'+rojo+'">⏳ Debe</span>';
     return '<span style="white-space:nowrap;'+verde+'">✅ Listo</span>';
   };
-  const comYa=x=>!x.conCom?td('—',gris):x.pag?td(fmt(x.total)+`<div style="font-size:10px;color:#64748b;font-weight:400">${x.pag.modo==='descontada'?'se la descontó':'entregada'} ${F(x.pag.fecha)}</div>`,verde):td('—',gris);
-  const comFalta=x=>!x.debeCom?td('—',gris):td(fmt(x.total)+(print?'':`<div><button class="btn btn-p btn-sm" style="margin-top:3px" onclick="toggleComisionPagada('${esc(x.nombre)}')" title="Ya le entregué la comisión al colegio">✔ Entregué</button></div>`),nar);
+  const comYa=x=>!x.conCom?td('—',gris):x.pag?td(fmt(x.total)+`<div style="font-size:10px;color:#64748b;font-weight:400">${x.pag.modo==='descontada'?'se la descontó':x.pag.modo==='pagos'?'pagada en Pagos':'entregada'} ${F(x.pag.fecha)}</div>`,verde):x.comPag>0.005?td(fmt(x.comPag)+'<div style="font-size:10px;color:#64748b;font-weight:400">una parte, en Pagos</div>',verde):td('—',gris);
+  const comFalta=x=>!x.debeCom?td('—',gris):td(fmt(x.comFalta)+(print?'':`<div><button class="btn btn-p btn-sm" style="margin-top:3px" onclick="mcAbrirPago('comision','${esc(x.nombre)}',${x.comFalta})" title="Registrar en Pagos lo que le pagué de comisión (todo o una parte)">+ Pagué comisión</button></div>`),nar);
   const filas=L.map(x=>`<tr style="background:${x.ord===0?'#fff7ed':x.ord===1?'#fff':'#f0fdf4'}">
     <td style="padding:6px 7px;border-top:1px solid #e2e8f0;font-weight:700">${escH(x.nombre)}${x.libs.length?`<div style="font-size:10px;color:#64748b;font-weight:400">pagó por ${x.libs.map(escH).join(', ')}</div>`:''}</td>
     <td style="padding:6px;border-top:1px solid #e2e8f0;font-size:12px">${estado(x)}</td>
