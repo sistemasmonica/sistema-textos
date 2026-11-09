@@ -2427,6 +2427,7 @@ async function syncFromCloud(){
     try{reparacionNov2026c();}catch(e){console.warn('Reparación nov-2026 (3):',e);}
     try{reparacionNov2026d();}catch(e){console.warn('Reparación nov-2026 (4):',e);}
     try{reparacionNov2026e();}catch(e){console.warn('Reparación nov-2026 (5):',e);}
+    try{reparacionNov2026f();}catch(e){console.warn('Reparación nov-2026 (6):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5211,6 +5212,27 @@ function reparacionNov2026e(){
     if(c>0&&Math.abs((parseFloat(l.costo)||0)-c)>0.005){det.push(col+' '+l.libro+' '+l.costo+'→'+c);l.costo=c;}
   }));
   logHistorial(MARCA,det.length+' línea(s)'+(det.length?': '+det.slice(0,30).join('; '):''));
+  save();
+}
+
+// 9-nov (Mónica dijo sí): llenar SOLO los precios VACÍOS de la Lista de
+// precios con el PVP del Control de ventas de ESE MISMO colegio. Un precio ya
+// puesto no se toca (el precio de venta varía por colegio).
+function reparacionNov2026f(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 9-nov: precios vacíos de Lista de precios = Control de ventas del colegio';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  let n=0;
+  Object.entries(DB.preciosCol||{}).forEach(([col,lista])=>{
+    const d=DB.colData?.[col];if(!Array.isArray(lista)||!d||!Array.isArray(d.lineas))return;
+    lista.forEach(r=>{
+      if(!r.prodId||(parseFloat(r.precio)||0)>0)return;
+      const l=d.lineas.find(x=>x.prodId===r.prodId);
+      const pvp=parseFloat(l?.pvp)||0;
+      if(pvp>0){r.precio=pvp;n++;}
+    });
+  });
+  logHistorial(MARCA,n+' precio(s) llenados');
   save();
 }
 
