@@ -2425,6 +2425,7 @@ async function syncFromCloud(){
     try{reparacionNov2026a();}catch(e){console.warn('Reparación nov-2026:',e);}
     try{reparacionNov2026b();}catch(e){console.warn('Reparación nov-2026 (2):',e);}
     try{reparacionNov2026c();}catch(e){console.warn('Reparación nov-2026 (3):',e);}
+    try{reparacionNov2026d();}catch(e){console.warn('Reparación nov-2026 (4):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5161,6 +5162,33 @@ function reparacionNov2026c(){
   let n=0;
   (DB.cobrosVendedora||[]).forEach(c=>{if(recargoVendedora(c.vendedora)&&c.recargo==null){c.precio=Math.round((c.precio+2)*100)/100;c.recargo=2;n++;}});
   logHistorial(MARCA,n+' línea(s)');
+  save();
+}
+
+// 9-nov: la Lista de precios tenía Wonder/Limitless con costo 0 y el precio
+// igual al costo de la editorial. "Control de ventas manda": se copia a la
+// Lista de precios el PVP y el costo editorial que ya están en cada colegio.
+function reparacionNov2026d(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 9-nov: Lista de precios = Control de ventas';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  let n=0;const det=[];
+  Object.entries(DB.preciosCol||{}).forEach(([col,lista])=>{
+    const d=DB.colData?.[col];if(!Array.isArray(lista)||!d||!Array.isArray(d.lineas))return;
+    lista.forEach(r=>{
+      if(!r.prodId)return;
+      const l=d.lineas.find(x=>x.prodId===r.prodId);if(!l)return;
+      const pvp=parseFloat(l.pvp)||0,costo=parseFloat(l.costo)||0;
+      // Se llena lo vacío; los de inglés (Wonder/Limitless) se corrigen siempre.
+      // Un precio ya puesto distinto (ej. Antonio Flores 36 vs 32.5) NO se toca.
+      const ing=!!serieIngles(l), pAct=parseFloat(r.precio)||0, cAct=parseFloat(r.costo)||0;
+      let cambio=false;
+      if(pvp>0&&Math.abs(pAct-pvp)>0.005&&(ing||pAct<=0)){r.precio=pvp;cambio=true;}
+      if(costo>0&&Math.abs(cAct-costo)>0.005&&(ing||cAct<=0)){r.costo=costo;cambio=true;}
+      if(cambio){n++;if(det.length<40)det.push(col+' '+(r.nombre||'')+' '+pvp+'/'+costo);}
+    });
+  });
+  logHistorial(MARCA,n+' producto(s)'+(det.length?': '+det.join('; '):''));
   save();
 }
 
