@@ -1037,6 +1037,12 @@ a{color:#7dd3fc}
     <i class="ti ti-info-circle" style="margin-top:1px;flex-shrink:0"></i>
     <span>Para ver tus facturas aquí: ve a <b>XML+IA</b> y arrastra tus archivos XML del SRI. Si ya los habías cargado antes, usa <b>📂 Restaurar</b> (arriba) con tu archivo de backup JSON.</span>
   </div>
+  <!-- 9-nov-2026: Negocio vs Personal lado a lado (mismo mes del filtro) + sugerencias de carros -->
+  <div class="card" style="margin-bottom:10px;border:2px solid #0d9488">
+    <div class="card-t" style="color:#0d9488"><i class="ti ti-arrows-split"></i> Negocio vs Personal (facturas que me hicieron)</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Usa el mes que escojas abajo en el filtro. Para pasar una factura de un lado al otro, cambia su <b>Categoría</b> en la lista de abajo.</div>
+    <div id="np-res"></div>
+  </div>
   <div class="filters">
     <select id="f-tipo" onchange="renderMov()">
       <option value="">Todos los tipos</option>
@@ -2479,7 +2485,7 @@ async function saveClaudeKey(val){
 // ===================================================
 // CONSTANTES
 // ===================================================
-const CATS_N=['Textos escolares','Útiles/materiales','Transporte/flete','Servicios negocio','Otros negocio'];
+const CATS_N=['Textos escolares','Gasolina y peajes','Vehículos (mantenimiento/repuestos)','Útiles/materiales','Transporte/flete','Servicios negocio','Otros negocio'];
 const CATS_P=['Comida','Gasolina','Préstamos','Seguros','Servicios personales','Otros personal'];
 const CCAT={'Textos escolares':'#1a6b3c','Útiles/materiales':'#2e9b5f','Transporte/flete':'#1565c0','Servicios negocio':'#6a1b9a','Otros negocio':'#546e7a','Comida':'#b45309','Gasolina':'#d97706','Préstamos':'#c0392b','Seguros':'#558b2f','Servicios personales':'#0891b2','Otros personal':'#6b7280','Venta':'#1565c0'};
 
@@ -9637,6 +9643,7 @@ function renderMov(){
   if(cat)data=data.filter(r=>r.categoria===cat);
   if(mes)data=data.filter(r=>mesAnio(r.fecha)===mes);
   if(q)data=data.filter(r=>(r.proveedor||'').toLowerCase().includes(q)||(r.numFact||'').toLowerCase().includes(q)||(r.nota||'').toLowerCase().includes(q));
+  try{renderNegVsPer(mes);}catch(e){console.warn('Negocio vs Personal:',e);}
   const tb=document.getElementById('tb-mov');
   const tip=document.getElementById('mov-tip');
   if(!data.length){
@@ -9657,7 +9664,7 @@ function renderMov(){
       <td style="font-family:monospace;white-space:nowrap">${r.fecha}</td>
       <td>${r.proveedor}${r.nota?`<br><small style="color:var(--mu)">${r.nota}</small>`:''}</td>
       <td style="font-family:monospace;font-size:11px">${r.numFact||'—'}</td>
-      <td>${r.categoria}</td>
+      <td onclick="event.stopPropagation()">${movCatSelect(r)}</td>
       <td><span class="bdg bdg-${r.tipo}">${r.tipo.toUpperCase()}</span></td>
       <td style="font-family:monospace">${fmt(r.subtotal)}</td>
       <td style="font-family:monospace">${fmt(r.iva)}</td>
@@ -9666,6 +9673,73 @@ function renderMov(){
       <td><button class="btn btn-d btn-sm" title="Eliminar este registro" onclick="event.stopPropagation();eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>${detHTML}`;
   }).join('')+`<tr class="total-row"><td colspan="8" style="text-align:right;font-size:11px">TOTAL (${data.length} registros):</td><td colspan="2" style="font-family:monospace">${fmt(tot)}</td></tr>`;
+}
+
+// ── NEGOCIO vs PERSONAL (9-nov-2026) ──────────────────────────────────────
+// Selector de categoría por fila: Negocio / Personal. "Textos escolares" NO se ofrece
+// (cambiaría la deuda con la editorial); esas filas y las ventas se muestran fijas.
+function movCatSelect(r){
+  if(r.tipo==='venta'||r.categoria==='Textos escolares')return escH(r.categoria);
+  const op=(t,c)=>`<option value="${t}|${escH(c)}"${r.tipo===t&&r.categoria===c?' selected':''}>${escH(c)}</option>`;
+  const extra=(r.tipo==='negocio'?CATS_N:CATS_P).includes(r.categoria)?'':op(r.tipo,r.categoria);
+  return `<select style="font-size:11px;padding:3px 4px;max-width:170px;border-color:${r.tipo==='negocio'?'#0d9488':'var(--bd)'}" onchange="movCambiarCat('${r.id}',this.value)">${extra}
+    <optgroup label="🏢 NEGOCIO">${CATS_N.filter(c=>c!=='Textos escolares').map(c=>op('negocio',c)).join('')}</optgroup>
+    <optgroup label="🏠 PERSONAL">${CATS_P.map(c=>op('personal',c)).join('')}</optgroup></select>`;
+}
+function movCambiarCat(id,val){
+  const r=DB.regs.find(x=>x.id===id);if(!r)return;
+  const i=val.indexOf('|');const t=val.slice(0,i),c=val.slice(i+1);
+  const antes=r.tipo+' / '+r.categoria;
+  r.tipo=t;r.categoria=c;
+  logHistorial('Categoría cambiada',`${r.proveedor} ${r.numFact||''} (${fmt(r.total)}): ${antes} → ${t} / ${c}`);
+  save();renderMov();
+  toast(`Pasada a ${t==='negocio'?'NEGOCIO':'PERSONAL'} · ${c}`,'ok');
+}
+// Proveedores que casi seguro son de los carros (gasolineras, peajes, repuestos)
+const NP_SUGERENCIAS=[
+  {cat:'Gasolina y peajes',re:/COMBUSTIBLE|ATIMASA|PRIMAX|PETROECUADOR|TERPEL|GASOLINER|ESTACION DE SERVICIO|SERVICENTRO|MOBIL|SHELL|PUMA ENERGY|PEAJE|PANAVIAL|CONCESIONARIA|METROPOLITANA DE MO|GAS SUCRE/},
+  {cat:'Vehículos (mantenimiento/repuestos)',re:/LLANTA|LUBRIC|TALLER|AUTOMOTRI|REPUESTO|MECANIC|VULCANIZ|LATAMPARTS|AUTOPARTE|ECUAMOTORS|MOTOR|LAVADORA DE AUTO|LAVADO/}
+];
+function npSugerencia(r){
+  if(r.tipo!=='personal')return null;
+  const p=_normNombre(r.proveedor||'');
+  const s=NP_SUGERENCIAS.find(x=>x.re.test(p));
+  return s?s.cat:null;
+}
+function npPasarSugeridas(mes){
+  const L=DB.regs.filter(r=>(!mes||mesAnio(r.fecha)===mes)&&npSugerencia(r));
+  if(!L.length)return;
+  L.forEach(r=>{const c=npSugerencia(r);logHistorial('Categoría cambiada',`${r.proveedor} ${r.numFact||''} (${fmt(r.total)}): personal / ${r.categoria} → negocio / ${c}`);r.tipo='negocio';r.categoria=c;});
+  save();renderMov();
+  toast(L.length+' facturas pasadas a NEGOCIO','ok');
+}
+function renderNegVsPer(mes){
+  const box=document.getElementById('np-res');if(!box)return;
+  const R=DB.regs.filter(r=>r.tipo!=='venta'&&(!mes||mesAnio(r.fecha)===mes));
+  const lado=t=>{const m={};R.filter(r=>r.tipo===t).forEach(r=>{const k=r.categoria||'Sin categoría';m[k]=m[k]||{n:0,t:0};m[k].n++;m[k].t+=r.total||0;});
+    return Object.entries(m).sort((a,b)=>b[1].t-a[1].t);};
+  const N=lado('negocio'),P=lado('personal');
+  const tN=N.reduce((a,x)=>a+x[1].t,0),tP=P.reduce((a,x)=>a+x[1].t,0);
+  const nN=N.reduce((a,x)=>a+x[1].n,0),nP=P.reduce((a,x)=>a+x[1].n,0);
+  const td='padding:4px 8px;border-bottom:1px solid var(--bd)';
+  const tabla=(L,color,tit,tot,n)=>`<div style="flex:1 1 280px;min-width:0;border:2px solid ${color};border-radius:8px;padding:8px">
+    <div style="font-weight:800;color:${color};font-size:14px;margin-bottom:4px">${tit}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">${L.length?L.map(([c,v])=>`<tr><td style="${td}">${escH(c)} <span style="color:var(--mu);font-size:10px">(${v.n})</span></td><td style="${td};text-align:right;font-family:monospace">${fmt(v.t)}</td></tr>`).join(''):`<tr><td style="${td};color:var(--mu)">Nada en este mes</td><td></td></tr>`}
+    <tr><td style="padding:6px 8px;font-weight:800">TOTAL (${n} facturas)</td><td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:800;color:${color}">${fmt(tot)}</td></tr></table></div>`;
+  const sug=R.filter(r=>npSugerencia(r));
+  const tS=sug.reduce((a,r)=>a+(r.total||0),0);
+  const dif=tN-tP;
+  box.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap">${tabla(N,'#0d9488','🏢 NEGOCIO',tN,nN)}${tabla(P,'#d97706','🏠 PERSONAL',tP,nP)}</div>
+    <div style="margin-top:8px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap">
+      <span>${mes?'Mes: <b>'+mesLabel(mes)+'</b>':'<b>Todos los meses</b>'}</span>
+      <span>Total gastado: <b style="font-family:monospace">${fmt(tN+tP)}</b></span>
+      <span>Diferencia: <b style="font-family:monospace">${fmt(Math.abs(dif))}</b> más en ${dif>=0?'NEGOCIO':'PERSONAL'}</span>
+    </div>
+    ${sug.length?`<div style="margin-top:8px;background:#fff8e1;color:#5d4037;border:1px solid #ffb300;border-radius:8px;padding:8px 10px;font-size:12px">
+      💡 <b>${sug.length} facturas de PERSONAL parecen de los carros</b> (gasolina, peajes, repuestos) · ${fmt(tS)}:
+      <div style="margin:4px 0">${[...new Set(sug.map(r=>r.proveedor))].map(escH).join(' · ')}</div>
+      <button class="btn btn-sm" style="background:#0d9488;color:#fff" onclick="npPasarSugeridas('${mes||''}')"><i class="ti ti-arrow-right"></i> Pasar estas ${sug.length} a NEGOCIO</button>
+      <span style="font-size:11px">Si alguna era personal, la regresas cambiando su categoría abajo.</span></div>`:''}`;
 }
 
 function toggleDet(id){
