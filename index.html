@@ -10735,7 +10735,7 @@ function renderControl(){
   // Agrupa líneas por editorial (del prodId, o del texto "Título (EDITORIAL)")
   // para poder mostrar un subtotal cuando cambia de grupo — ej. Didáctica
   // primero, Robótica después, cada uno sumado por separado en el mismo cuadro.
-  const gEd=(l)=>{
+  const gEd=(l)=>{ const _s=serieIngles(l); if(_s) return _s;
     if(l.prodId){
       const p=DB.productos.find(x=>x.id===l.prodId);
       if(p&&p.editorial) return p.editorial;
@@ -11289,7 +11289,7 @@ function imprimirControl(nombre){
   ${(()=>{
     // Mismo agrupado por editorial que en pantalla (Control de Ventas): subtotal
     // cuando cambia de grupo, para que impreso se vea igual que en el sistema.
-    const gEd=(l)=>{
+    const gEd=(l)=>{ const _s=serieIngles(l); if(_s) return _s;
       if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
       const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
     };
@@ -11381,6 +11381,16 @@ function imprimirControl(nombre){
 // de Didáctica y va con español. Sirve para
 // sacar el Formato editorial de un colegio por separado: solo español o solo
 // inglés, porque el colegio los paga/maneja aparte.
+// Wonder Family y Limitless (Tech Books) tienen precios distintos de la
+// editorial, así que en Control de ventas / impreso / Excel van en grupos
+// separados, cada uno con su subtotal (pedido de Mónica 2026-11-09).
+function serieIngles(l){
+  let t=String(l.libro||'');
+  if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p) t+=' '+(p.nombre||''); }
+  if(/WONDER/i.test(t)) return 'Wonder Family';
+  if(/LIMIT+LES/i.test(t)) return 'Limitless';
+  return '';
+}
 function esLineaIngles(l){
   let t=String(l.libro||'');
   if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p) t+=' '+(p.nombre||'')+' '+(p.editorial||''); }
@@ -12238,7 +12248,7 @@ function exportColegiosCSV(){
     const tv=T.tv,com=T.totalColegio,costoEd=T.costo,pagEd=T.pagado,pvUnit=T.pvUnit;
     // Mismo agrupado por editorial que en pantalla — fila de Subtotal cuando
     // cambia de grupo, para que el Excel se vea separado igual que el sistema.
-    const gEd=(l)=>{
+    const gEd=(l)=>{ const _s=serieIngles(l); if(_s) return _s;
       if(l.prodId){ const p=DB.productos.find(x=>x.id===l.prodId); if(p&&p.editorial) return p.editorial; }
       const m=String(l.libro||'').match(/\(([^)]*)\)\s*$/); return m?m[1].trim():'';
     };
