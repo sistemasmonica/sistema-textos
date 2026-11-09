@@ -1040,9 +1040,10 @@ a{color:#7dd3fc}
   <div class="filters">
     <select id="f-tipo" onchange="renderMov()">
       <option value="">Todos los tipos</option>
-      <option value="negocio">Negocio</option>
-      <option value="personal">Personal</option>
-      <option value="venta">Venta</option>
+      <option value="compra">📥 Solo RECIBIDAS (facturas que me hicieron)</option>
+      <option value="venta">📤 Solo EMITIDAS (facturas que yo hice)</option>
+      <option value="negocio">Recibidas · Negocio</option>
+      <option value="personal">Recibidas · Personal</option>
     </select>
     <select id="f-cat" onchange="renderMov()"><option value="">Todas las categorías</option></select>
     <select id="f-mes" onchange="renderMov()"><option value="">Todos los meses</option></select>
@@ -9601,7 +9602,7 @@ function renderMov(){
   const selC=document.getElementById('f-cat'),pC=selC.value;
   selC.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${c}"${c===pC?' selected':''}>${c}</option>`).join('');
   let data=[...DB.regs].sort((a,b)=>b.fecha.localeCompare(a.fecha)||String(b.id).localeCompare(String(a.id)));
-  if(tipo)data=data.filter(r=>r.tipo===tipo);
+  if(tipo)data=data.filter(r=>tipo==="compra"?r.tipo!=="venta":r.tipo===tipo); // compra = recibidas (negocio + personal)
   if(cat)data=data.filter(r=>r.categoria===cat);
   if(mes)data=data.filter(r=>mesAnio(r.fecha)===mes);
   if(q)data=data.filter(r=>(r.proveedor||'').toLowerCase().includes(q)||(r.numFact||'').toLowerCase().includes(q)||(r.nota||'').toLowerCase().includes(q));
@@ -9630,7 +9631,7 @@ function renderMov(){
       <td style="font-family:monospace">${fmt(r.subtotal)}</td>
       <td style="font-family:monospace">${fmt(r.iva)}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(r.total)}</td>
-      <td>${r.clasificadoIA?`<span class="bdg bdg-ia">IA ${r.confianzaIA}%</span>`:`<span class="chip">manual</span>`}${hasD?` <span class="chip" style="color:var(--g1);border-color:var(--g1)">▶ ${r.detalles.length} ítems</span>`:''}</td>
+      <td>${r.clasificadoIA?`<span class="bdg bdg-ia">IA ${r.confianzaIA}%</span>`:(r.origen==="sri-lista"?`<span class="chip" style="color:#1565c0;border-color:#1565c0">SRI</span>`:`<span class="chip">manual</span>`)}${hasD?` <span class="chip" style="color:var(--g1);border-color:var(--g1)">▶ ${r.detalles.length} ítems</span>`:''}</td>
       <td><button class="btn btn-d btn-sm" title="Eliminar este registro" onclick="event.stopPropagation();eliminarReg('${r.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>${detHTML}`;
   }).join('')+`<tr class="total-row"><td colspan="8" style="text-align:right;font-size:11px">TOTAL (${data.length} registros):</td><td colspan="2" style="font-family:monospace">${fmt(tot)}</td></tr>`;
