@@ -5215,24 +5215,22 @@ function reparacionNov2026e(){
   save();
 }
 
-// 9-nov (Mónica dijo sí): llenar SOLO los precios VACÍOS de la Lista de
-// precios con el PVP del Control de ventas de ESE MISMO colegio. Un precio ya
-// puesto no se toca (el precio de venta varía por colegio).
+// 9-nov: Mónica — los PRECIOS DE VENTA los pone ella (varían por colegio);
+// el sistema NO los llena. Una versión anterior (marca "precios vacíos de
+// Lista de precios = Control de ventas del colegio") llenó 66: se vuelven a
+// dejar vacíos, solo si siguen con el valor que esa versión puso.
+const _REV_PRECIOS_9NOV_F=[["SAULO","1780928221365_lsmeym",0,14],["EL ROBLE","1780928221365_8k16es",0,35],["EL ROBLE","1780928221365_4g9tkg",0,12],["EL ROBLE","1780928221365_lsmeym",0,12],["DOMINGO SAVIO","1780928221365_p954m4",0,26],["DOMINGO SAVIO","1780928221365_tix46t",0,26],["DOMINGO SAVIO","1780928221365_bumhe3",0,26],["DOMINGO SAVIO","1780928221365_7ar4yl",0,26],["DOMINGO SAVIO","1780928221365_okao2j",0,26],["DOMINGO SAVIO","1780928221365_kxbvdt",0,26],["DOMINGO SAVIO","1780928221365_29yxer",0,26],["DOMINGO SAVIO","1780928221365_1bskrx",0,26],["DOMINGO SAVIO","1780928221365_ft8m0l",0,26],["DOMINGO SAVIO","1780928221365_zcf7vc",0,26],["DOMINGO SAVIO","1780928221365_6t5n14",0,26],["DOMINGO SAVIO","1780928221365_pnjlvc",0,26],["DOMINGO SAVIO","1780928221365_0mtu2g",0,26],["DOMINGO SAVIO","1780928221365_0xqlde",0,26],["DOMINGO SAVIO","1780928221365_43mtkg",0,26],["DOMINGO SAVIO","1780928221365_64akl8",0,26],["DOMINGO SAVIO","1780928221365_7h305a",0,26],["DOMINGO SAVIO","1780928221365_yucz0z",0,26],["DOMINGO SAVIO","1780928221365_0henb0",0,26],["DOMINGO SAVIO","1780928221365_p3bnw9",0,26],["DOMINGO SAVIO","1780928221365_iipopy",0,26],["DOMINGO SAVIO","1780928221365_gjp789",0,26],["DOMINGO SAVIO","1780928221365_uaqhfo",0,26],["DOMINGO SAVIO","1780928221365_54wemj",0,26],["DOMINGO SAVIO","1780928221365_aiq5zr",0,26],["DOMINGO SAVIO","1780928221365_owqyhz",0,26],["DOMINGO SAVIO","1780928221365_s6mzjt",0,26],["DOMINGO SAVIO","1780928221365_s9ifhm",0,26],["DOMINGO SAVIO","1780928221365_v9ff3y",0,26],["DOMINGO SAVIO","1780928221365_1i1s3j",0,26],["DOMINGO SAVIO","1780928221365_bhhfs4",0,26],["DOMINGO SAVIO","1780928221365_vcxqk0",0,26],["DOMINGO SAVIO","1780928221365_zsr1k7",0,26],["DOMINGO SAVIO","1780928221365_wtm1u2",0,26],["DOMINGO SAVIO","1780928221365_xb0h16",0,26],["DOMINGO SAVIO","1780928221365_jy9mtr",0,26],["DOMINGO SAVIO","1789097338138_id1g2j",0,26],["DOMINGO SAVIO","1789097338143_cjoxua",0,26],["DOMINGO SAVIO","1789097338145_wvvzpv",0,26],["DOMINGO SAVIO","1789097338147_du1lnw",0,26],["DOMINGO SAVIO","1789097338148_icsvrq",0,26],["DOMINGO SAVIO","1789097338151_uq0zfz",0,26],["DOMINGO SAVIO","1789097567369_gumrlz",0,26],["DOMINGO SAVIO","1789097567373_tdeem9",0,26],["DOMINGO SAVIO","1789097567377_pjl7if",0,26],["ANTONIO FLORES","1780928221365_n224oz",0,32.5],["LATINOAMERICANO","1789097338152_vnsrzs",0,20],["LATINOAMERICANO","1780928221365_vinscv",0,16],["LATINOAMERICANO","1780928221365_34y4s7",0,16],["HERNAN MALO GONZALES","1780928221365_n224oz","",35],["HERNAN MALO GONZALES","1789097338138_id1g2j",0,32],["HERNAN MALO GONZALES","1789097338143_cjoxua",0,32],["HERNAN MALO GONZALES","1789097338145_wvvzpv",0,32],["HERNAN MALO GONZALES","1789097338147_du1lnw",0,32],["HERNAN MALO GONZALES","1789097338148_icsvrq",0,32],["HERNAN MALO GONZALES","1789097338151_uq0zfz",0,32],["HERNAN MALO GONZALES","1789097567369_gumrlz",0,32],["HERNAN MALO GONZALES","1789097567373_tdeem9",0,32],["HERNAN MALO GONZALES","1789097567377_pjl7if",0,32],["HERNAN MALO GONZALES","1789097567379_y9zzjf",0,32],["HERNAN MALO GONZALES","1789097338152_vnsrzs",0,32],["HERNAN MALO GONZALES","1789097338153_vd8t65",0,32]];
 function reparacionNov2026f(){
   if(MODO_LECTURA||!syncCompleted)return;
-  const MARCA='Reparación 9-nov: precios vacíos de Lista de precios = Control de ventas del colegio';
+  const MARCA='Reparación 9-nov: precios de venta llenados por el sistema regresados a vacío';
   if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  if(!(DB.historial||[]).some(h=>h.accion==='Reparación 9-nov: precios vacíos de Lista de precios = Control de ventas del colegio'))return;
   let n=0;
-  Object.entries(DB.preciosCol||{}).forEach(([col,lista])=>{
-    const d=DB.colData?.[col];if(!Array.isArray(lista)||!d||!Array.isArray(d.lineas))return;
-    lista.forEach(r=>{
-      if(!r.prodId||(parseFloat(r.precio)||0)>0)return;
-      const l=d.lineas.find(x=>x.prodId===r.prodId);
-      const pvp=parseFloat(l?.pvp)||0;
-      if(pvp>0){r.precio=pvp;n++;}
-    });
+  _REV_PRECIOS_9NOV_F.forEach(([col,id,viejo,puesto])=>{
+    const r=(DB.preciosCol?.[col]||[]).find(x=>x.prodId===id);
+    if(r&&Math.abs((parseFloat(r.precio)||0)-puesto)<0.005){r.precio=viejo;n++;}
   });
-  logHistorial(MARCA,n+' precio(s) llenados');
+  logHistorial(MARCA,n+' precio(s) de venta vueltos a vacío (los pone Mónica)');
   save();
 }
 
