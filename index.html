@@ -3100,6 +3100,7 @@ async function procesarCorreoQueue(){
 // IMPORTAR DEL SRI (lista CSV/TXT de comprobantes emitidos o recibidos)
 // ===================================================
 let SRI_FILAS=[], SRI_PEND=null;
+const SRI_MONTO_NEGOCIO=500;
 function sriLeerArchivo(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   const rd=new FileReader();
@@ -3195,7 +3196,7 @@ function sriRender(){
       <div style="background:#ffebee;color:#b71c1c;padding:6px 12px;border-radius:8px">⚠️ Faltan: <b>${nFalta}</b> · ${fmt(tFalta)}</div>
       <div style="padding:6px 0;color:var(--mu)">de ${SRI_FILAS.length} en el archivo del SRI</div></div>
     ${nFalta&&tipo==='compra'?`<div style="margin-bottom:8px"><button class="btn btn-sm" style="background:#2e7d32;color:#fff" onclick="sriGuardarTodas()"><i class="ti ti-checks"></i> Guardar las ${nFalta} que faltan</button>
-      <span style="font-size:11px;color:var(--mu);margin-left:6px">Cada una va a la categoría que ya usaste antes con ese mismo proveedor; si es nuevo, a <b>Personal → Otros personal</b>. Después puedes cambiarla en Movimientos.</span></div>`:''}
+      <span style="font-size:11px;color:var(--mu);margin-left:6px">Cada una va a la categoría que ya usaste antes con ese mismo proveedor; si es nuevo, a <b>Personal → Otros personal</b>, salvo las de <b>$${SRI_MONTO_NEGOCIO} o más</b>, que van a <b>Negocio → Otros negocio</b>. Después puedes cambiarla en Movimientos.</span></div>`:''}
     ${nFalta&&tipo==='compra'?`<div style="font-size:11px;color:#0d47a1;background:#e3f2fd;padding:6px 10px;border-radius:6px;margin-bottom:8px">💡 Si la que falta es de la <b>editorial</b>, mejor baja su <b>XML</b> en el SRI y arrástralo abajo: así entran también los libros al inventario. "Registrar" solo apunta el valor.</div>`:''}
     <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>N° Factura</th><th>${tipo==='venta'?'Cliente':'Proveedor'}</th><th>Tipo</th><th>Monto</th><th>En el sistema</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
@@ -3228,13 +3229,16 @@ function sriGuardarTodas(){
   falt.forEach(f=>{
     const prev=ultimo(f.ruc);
     if(prev&&prev.categoria==='Textos escolares'){edit.push(f);return;}
-    nuevas.push({id:uid(),tipo:prev?prev.tipo:'personal',categoria:prev?prev.categoria:'Otros personal',fecha:f.fecha||today(),
+    // Mónica 9-nov: "si es grande de ley son del negocio" → proveedor nuevo y $500 o más = Negocio / Otros negocio
+    // (no "Textos escolares": eso cambiaría la deuda con la editorial)
+    const grande=!prev&&f.monto>=SRI_MONTO_NEGOCIO;
+    nuevas.push({id:uid(),tipo:prev?prev.tipo:(grande?'negocio':'personal'),categoria:prev?prev.categoria:(grande?'Otros negocio':'Otros personal'),fecha:f.fecha||today(),
       proveedor:f.nombre||(prev&&prev.proveedor)||('RUC '+f.ruc),ruc:f.ruc,numFact:f.nf,subtotal:f.sub||f.monto,iva:f.iva||0,total:f.monto,
       nota:'Desde lista del SRI',origen:'sri-lista'});
   });
   if(!nuevas.length)return toast(edit.length?'Las que faltan son de la editorial: cárgalas con su XML':'No hay nada que guardar','err');
   const nNeg=nuevas.filter(r=>r.tipo==='negocio').length;
-  if(!confirm(`Se van a guardar ${nuevas.length} facturas por ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}:\n\n• ${nuevas.length-nNeg} como Personal\n• ${nNeg} como Negocio (porque ya las tenías así antes)`+
+  if(!confirm(`Se van a guardar ${nuevas.length} facturas por ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}:\n\n• ${nuevas.length-nNeg} como Personal\n• ${nNeg} como Negocio (grandes de $${SRI_MONTO_NEGOCIO} o más, o que ya tenías así antes)`+
     (edit.length?`\n\n${edit.length} de la editorial NO se guardan aquí: bájalas en XML para que entren los libros.`:'')+'\n\n¿Seguir?'))return;
   nuevas.forEach(r=>DB.regs.push(r));
   logHistorial('Facturas importadas de la lista del SRI',`${nuevas.length} facturas — ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}`);
