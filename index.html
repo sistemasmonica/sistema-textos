@@ -3111,6 +3111,11 @@ function sriLeerArchivo(inp){
       let txt=new TextDecoder('utf-8').decode(buf);
       if(txt.includes('�'))txt=new TextDecoder('windows-1252').decode(buf);
       SRI_FILAS=sriParse(txt);
+      // el nombre del archivo del SRI dice si es Emitidos o Recibidos
+      if(/emitid/i.test(f.name)&&SRI_FILAS._tipo!=='venta'){
+        SRI_FILAS._tipo='venta';
+        SRI_FILAS.forEach(x=>{if(x.rucRec){x.ruc=x.rucRec;x.nombre=x.nomRec||'';}});
+      }else if(/recibid/i.test(f.name))SRI_FILAS._tipo='compra';
       if(!SRI_FILAS.length){toast('No encontré facturas en ese archivo','err');document.getElementById('sri-res').innerHTML='';return;}
       if(SRI_FILAS._tipo){const r=document.querySelector(`input[name="sri-tipo"][value="${SRI_FILAS._tipo}"]`);if(r)r.checked=true;}
       sriRender();
@@ -3138,6 +3143,8 @@ function sriParse(txt){
   const iIva=col(/^IVA$/);
   const iFecha=col(/FECHA.?EMISION/,/FECHA/);
   const iTipo=col(/TIPO.?COMPROBANTE/,/^TIPO$/);
+  const iRec=col(/IDENTIFICACION_RECEPTOR|RUC_RECEPTOR/);
+  const iNomRec=col(/RAZON.?SOCIAL.?RECEPTOR|NOMBRE.?RECEPTOR/);
   const filas=[];
   lineas.slice(1).forEach(l=>{
     const c=l.split(sep).map(limpiar);
@@ -3155,10 +3162,27 @@ function sriParse(txt){
     const iva=iIva>=0?leerMonto(c[iIva]):0;
     let sub=iSub>=0?leerMonto(c[iSub]):0;
     if(!sub||Math.abs(sub+iva-monto)>0.02)sub=Math.round((monto-iva)*100)/100; // ej. Zurich con descuento: 8.40 + 0 = 7.90
-    filas.push({num,nf,ruc,nombre:iNom>=0?c[iNom]:'',monto,sub,iva,fecha,tipo:iTipo>=0?c[iTipo]:'Factura'});
+    filas.push({num,nf,ruc,nombre:iNom>=0?c[iNom]:'',monto,sub,iva,fecha,tipo:iTipo>=0?c[iTipo]:'Factura',
+      rucRec:iRec>=0?numFactDigits(c[iRec]):'',nomRec:iNomRec>=0?c[iNomRec]:''});
   });
   const hRuc=iRuc>=0?cab[iRuc]:'';
-  filas._tipo=/PROVEEDOR|EMISOR/.test(hRuc)?'compra':/CLIENTE|RECEPTOR/.test(hRuc)?'venta':'';  return filas;
+  filas._tipo=/PROVEEDOR|EMISOR/.test(hRuc)?'compra':/CLIENTE|RECEPTOR/.test(hRuc)?'venta':'';
+  // ¿Es de EMITIDOS (yo facturé)? Si todas las filas tienen el MISMO emisor, ese emisor es Mónica
+  // → el cliente es el receptor. (En "Recibidos" hay muchos emisores distintos.)
+  const emisores=new Set(filas.map(f=>f.ruc).filter(Boolean));
+  if(/EMISOR/.test(hRuc)&&filas.some(f=>f.rucRec)&&emisores.size===1&&filas.length>1){
+    filas._tipo='venta';
+    filas.forEach(f=>{f.ruc=f.rucRec;f.nombre=f.nomRec||'';});
+  }
+  return filas;
+}
+// Aviso cuando el archivo cargado no es del tipo que Mónica escogió (antes mostraba lo mismo en las dos).
+function sriAvisoOtroTipo(tipo){
+  const esCompra=SRI_FILAS._tipo==='compra';
+  return `<div style="background:#fff8e1;color:#5d4037;border:2px solid #ffb300;border-radius:8px;padding:12px;font-size:13px">
+    ⚠️ El archivo que cargaste es de facturas que <b>${esCompra?'TE HICIERON a ti (Recibidos)':'TÚ HICISTE (Emitidos)'}</b>, por eso no puede mostrar las que ${tipo==='venta'?'tú hiciste':'te hicieron'}.<br><br>
+    Para ver las facturas que <b>${tipo==='venta'?'tú hiciste a los colegios':'te hicieron a ti'}</b>, en la página del SRI entra a
+    <b>Facturación electrónica → Consultas → Comprobantes electrónicos ${tipo==='venta'?'EMITIDOS':'RECIBIDOS'}</b>, baja ese archivo y escógelo aquí.</div>`;
 }
 function sriNombreDeRuc(ruc){
   if(!ruc)return '';
@@ -3178,6 +3202,7 @@ function sriRender(){
   const box=document.getElementById('sri-res');if(!box)return;
   if(!SRI_FILAS.length){box.innerHTML='';return;}
   const tipo=(document.querySelector('input[name="sri-tipo"]:checked')||{}).value||'compra';
+  if(SRI_FILAS._tipo&&SRI_FILAS._tipo!==tipo){box.innerHTML=sriAvisoOtroTipo(tipo);return;}
   let nYa=0,nFalta=0,tFalta=0;
   const filas=SRI_FILAS.map((f,i)=>{
     const reg=sriBuscar(f,tipo);
