@@ -2428,6 +2428,7 @@ async function syncFromCloud(){
     try{reparacionNov2026d();}catch(e){console.warn('Reparación nov-2026 (4):',e);}
     try{reparacionNov2026e();}catch(e){console.warn('Reparación nov-2026 (5):',e);}
     try{reparacionNov2026f();}catch(e){console.warn('Reparación nov-2026 (6):',e);}
+    try{reparacionNov2026g();}catch(e){console.warn('Reparación nov-2026 (7):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5231,6 +5232,31 @@ function reparacionNov2026f(){
     if(r&&Math.abs((parseFloat(r.precio)||0)-puesto)<0.005){r.precio=viejo;n++;}
   });
   logHistorial(MARCA,n+' precio(s) de venta vueltos a vacío (los pone Mónica)');
+  save();
+}
+
+// 9-nov (Mónica): las guías también salen del Control de ventas. Cada línea
+// de guía (no muestra) toma el PVP del Control de ventas de su colegio; el
+// precio que tenía antes queda guardado en l.precioGuiaAntes.
+function reparacionNov2026g(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 9-nov: precios de guías = Control de ventas';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  let n=0,ng=0;
+  (DB.guias||[]).forEach(g=>{
+    if(esGuiaMuestra(g)||!Array.isArray(g.lineas))return;
+    const ks=Object.keys(DB.colData||{});const ex=ks.find(c=>c.toLowerCase()===String(g.cliente||'').trim().toLowerCase());const cand=ks.filter(c=>_coincideColegio(g.cliente,c));const col=ex||(cand.length===1?cand[0]:null);if(!col)return;
+    let cambio=false;
+    g.lineas.forEach(l=>{
+      const p=l.prodId?precioControlVentas(col,l.prodId):null;if(!p)return;
+      if(Math.abs((parseFloat(l.precioVenta)||0)-p.precio)>0.005){
+        if(l.precioGuiaAntes==null)l.precioGuiaAntes=parseFloat(l.precioVenta)||0;
+        l.precioVenta=p.precio;cambio=true;n++;
+      }
+    });
+    if(cambio){g.total=g.lineas.reduce((a,l)=>a+(l.cantidad||0)*(parseFloat(l.precioVenta)||0),0);ng++;}
+  });
+  logHistorial(MARCA,n+' línea(s) en '+ng+' guía(s)');
   save();
 }
 
@@ -9694,9 +9720,13 @@ function precioControlVentas(colegio,prodId){
 // Precio a usar en la guía: primero el acordado en Lista de precios,
 // y si ese libro no está en la lista, el PVP del Control de ventas.
 function precioParaGuia(colegio,prodId){
+  // 9-nov (Mónica): TODO sale del Control de ventas del colegio. La Lista de
+  // precios solo se usa si ese libro todavía no está en el Control.
+  const ctrl=precioControlVentas(colegio,prodId);
+  if(ctrl) return ctrl;
   const acordado=precioAcordado(colegio,prodId);
   if(acordado) return {precio:parseFloat(acordado.precio),origen:'lista'};
-  return precioControlVentas(colegio,prodId);
+  return null;
 }
 
 // Info de referencia SOLO para la vendedora (nunca se imprime en la Nota de
@@ -9714,7 +9744,7 @@ function infoCostoComisionGuia(colegio,prodId){
     lineaControl=d.lineas.find(x=>x.prodId===prodId)
       ||(nom?d.lineas.find(x=>(x.libro||'').trim().toLowerCase()===nom):null);
   }
-  const costo=parseFloat(registroPrecio?.costo)||parseFloat(lineaControl?.costo)||0;
+  const costo=parseFloat(DB.productos.find(p=>p.id===prodId)?.precioCosto)||parseFloat(lineaControl?.costo)||parseFloat(registroPrecio?.costo)||0;
   let comisionTxt='';
   if(lineaControl&&d&&lineaComisiona(lineaControl)){
     const pct=pctLinea(d,lineaControl);
@@ -9750,9 +9780,12 @@ function renderPreciosCol(){
       if(q&&!(p.nombre||'').toLowerCase().includes(q)&&!col.toLowerCase().includes(q))return;
       nFilas++;
       const costo=parseFloat(p.costo)||0;
-      const precioRaw=p.precio;
-      const precio=parseFloat(precioRaw);
+      // 9-nov (Mónica): el precio que manda es el del Control de ventas del colegio.
+      const ctrl=p.prodId?precioControlVentas(col,p.prodId):null;
+      const precioLista=parseFloat(p.precio);
+      const precio=ctrl?ctrl.precio:precioLista;
       const tienePrecio=isFinite(precio)&&precio>0;
+      const notaCtrl=ctrl?`<div style="font-size:10px;color:var(--g1)">del Control de ventas${(precioLista>0&&Math.abs(precioLista-ctrl.precio)>0.005)?` <span style="color:#f57c00">(aquí decía $${precioLista.toFixed(2)})</span>`:''}</div>`:'';
       if(!tienePrecio) sinPrecio++;
       if(tienePrecio){sumCosto+=costo;sumPrecio+=precio;}
       const m=margenPct(costo,precio);
@@ -9764,8 +9797,8 @@ function renderPreciosCol(){
              onchange="setPrecioCol('${escAttr(col)}',${i},'costo',this.value)"
              style="width:88px;text-align:right;font-family:monospace"></td>
         <td><input type="number" step="0.01" min="0" value="${tienePrecio?precio:''}" placeholder="— falta —"
-             onchange="setPrecioCol('${escAttr(col)}',${i},'precio',this.value)"
-             style="width:100px;text-align:right;font-family:monospace;font-weight:700${tienePrecio?'':';border:2px solid var(--r1);background:#ffebee'}"></td>
+             onchange="setPrecioCol('${escAttr(col)}',${i},'precio',this.value)" ${ctrl?'readonly title="Este precio sale del Control de ventas del colegio. Para cambiarlo, cámbielo allá."':''}
+             style="width:100px;text-align:right;font-family:monospace;font-weight:700${tienePrecio?'':';border:2px solid var(--r1);background:#ffebee'}">${notaCtrl}</td>
         <td style="text-align:right;font-family:monospace;font-weight:700;color:${mColor}">${m==null?'—':m.toFixed(1)+'%'}</td>
         <td style="text-align:right;font-family:monospace;color:${tienePrecio?'var(--g1)':'var(--mu)'}">${tienePrecio?fmt(precio-costo):'—'}</td>
         <td><button class="btn btn-d btn-sm" onclick="delPrecioCol('${escAttr(col)}',${i})" title="Quitar de la lista"><i class="ti ti-x"></i></button></td>
