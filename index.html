@@ -395,6 +395,19 @@ a{color:#7dd3fc}
 
 <!-- ===================== XML + IA ===================== -->
 <div id="pn-xml" class="pn">
+  <!-- Importar del SRI (9-nov): la lista CSV/TXT que baja del SRI no trae los libros,
+       solo n°, RUC, monto y fecha → sirve para CRUZAR: qué facturas ya están y cuáles faltan. -->
+  <div class="card" style="margin-bottom:10px;border:2px solid #1565c0">
+    <div class="card-t" style="color:#0d47a1;margin-bottom:6px"><i class="ti ti-file-import"></i> Importar del SRI (lista de comprobantes)</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Escoge el archivo que bajaste del SRI (el que termina en <b>.csv</b> o <b>.txt</b>). El sistema te dice qué facturas <b>ya están</b> registradas y cuáles <b>faltan</b>.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="document.getElementById('sri-fi').click()"><i class="ti ti-upload"></i> Escoger archivo del SRI</button>
+      <label style="font-size:12px"><input type="radio" name="sri-tipo" value="compra" checked onchange="sriRender()"> Facturas que <b>me hicieron</b> (compras)</label>
+      <label style="font-size:12px"><input type="radio" name="sri-tipo" value="venta" onchange="sriRender()"> Facturas que <b>yo hice</b> (ventas)</label>
+    </div>
+    <input type="file" id="sri-fi" accept=".csv,.txt" style="display:none" onchange="sriLeerArchivo(this)">
+    <div id="sri-res" style="margin-top:10px"></div>
+  </div>
   <div class="card" style="margin-bottom:10px;background:var(--p2);border-color:#c4b5fd">
     <div class="card-t" style="color:var(--p1);margin-bottom:8px"><i class="ti ti-key"></i> Clave API de Claude (para clasificación IA)</div>
     <div class="f2" style="align-items:flex-end">
@@ -3084,6 +3097,124 @@ async function procesarCorreoQueue(){
 }
 
 // ===================================================
+// IMPORTAR DEL SRI (lista CSV/TXT de comprobantes emitidos o recibidos)
+// ===================================================
+let SRI_FILAS=[], SRI_PEND=null;
+function sriLeerArchivo(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      SRI_FILAS=sriParse(String(rd.result||''));
+      if(!SRI_FILAS.length){toast('No encontré facturas en ese archivo','err');document.getElementById('sri-res').innerHTML='';return;}
+      if(SRI_FILAS._tipo){const r=document.querySelector(`input[name="sri-tipo"][value="${SRI_FILAS._tipo}"]`);if(r)r.checked=true;}
+      sriRender();
+    }catch(e){console.error(e);toast('No pude leer el archivo: '+e.message,'err');}
+    inp.value='';
+  };
+  rd.readAsText(f,'utf-8');
+}
+function sriParse(txt){
+  txt=txt.replace(/^﻿/,'');
+  const lineas=txt.split(/\r?\n/).filter(l=>l.trim());
+  if(lineas.length<2)return [];
+  const h0=lineas[0];
+  const sep=h0.includes('\t')?'\t':(h0.split(';').length>h0.split(',').length?';':',');
+  const limpiar=v=>String(v??'').trim().replace(/^"|"$/g,'').replace(/^'/,'').trim();
+  const cab=h0.split(sep).map(c=>limpiar(c).toUpperCase());
+  const col=(...res)=>{for(const re of res){const i=cab.findIndex(c=>re.test(c));if(i>=0)return i;}return -1;};
+  const iNum=col(/SERIE_COMPROBANTE|N.?\s*COMPROBANTE|^NUMERO|^ID$/);
+  const iClave=col(/CLAVE.?ACCESO/);
+  const iRuc=col(/PROVEEDOR|RUC_EMISOR|EMISOR|CLIENTE|RECEPTOR|IDENTIFICACION|^RUC/);
+  const iNom=col(/RAZON.?SOCIAL|NOMBRE/);
+  const iMonto=col(/IMPORTE.?TOTAL|MONTO|VALOR.?TOTAL|^TOTAL|VALOR/);
+  const iFecha=col(/FECHA.?EMISION/,/FECHA/);
+  const iTipo=col(/TIPO.?COMPROBANTE/,/^TIPO$/);
+  const filas=[];
+  lineas.slice(1).forEach(l=>{
+    const c=l.split(sep).map(limpiar);
+    let num=iNum>=0?numFactDigits(c[iNum]):'';
+    let ruc=iRuc>=0?numFactDigits(c[iRuc]):'';
+    const clave=iClave>=0?numFactDigits(c[iClave]):(num.length===49?num:'');
+    if(clave.length===49){ if(!num||num.length===49)num=clave.slice(24,39); if(!ruc)ruc=clave.slice(10,23); }
+    if(!num)return;
+    let fecha=iFecha>=0?c[iFecha]:'';
+    let m=fecha.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m)fecha=`${m[1]}-${m[2]}-${m[3]}`;
+    else if((m=fecha.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)))fecha=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    const nf=num.length===15?`${num.slice(0,3)}-${num.slice(3,6)}-${num.slice(6)}`:num;
+    filas.push({num,nf,ruc,nombre:iNom>=0?c[iNom]:'',monto:iMonto>=0?leerMonto(c[iMonto]):0,fecha,tipo:iTipo>=0?c[iTipo]:'Factura'});
+  });
+  const hRuc=iRuc>=0?cab[iRuc]:'';
+  filas._tipo=/PROVEEDOR|EMISOR/.test(hRuc)?'compra':/CLIENTE|RECEPTOR/.test(hRuc)?'venta':'';
+  return filas;
+}
+function sriNombreDeRuc(ruc){
+  if(!ruc)return '';
+  const r=DB.regs.find(x=>numFactDigits(x.ruc)===ruc&&x.proveedor);
+  return r?r.proveedor:'';
+}
+function sriBuscar(f,tipo){
+  return DB.regs.find(r=>{
+    if(tipo==='venta'?r.tipo!=='venta':r.tipo==='venta')return false;
+    if(!mismaFactura(r.numFact,f.num))return false;
+    // si los dos tienen RUC y no coinciden, es otra factura con el mismo n°
+    const rr=numFactDigits(r.ruc);
+    return !(rr&&f.ruc&&rr!==f.ruc);
+  });
+}
+function sriRender(){
+  const box=document.getElementById('sri-res');if(!box)return;
+  if(!SRI_FILAS.length){box.innerHTML='';return;}
+  const tipo=(document.querySelector('input[name="sri-tipo"]:checked')||{}).value||'compra';
+  let nYa=0,nFalta=0,tFalta=0;
+  const filas=SRI_FILAS.map((f,i)=>{
+    const reg=sriBuscar(f,tipo);
+    const nom=f.nombre||sriNombreDeRuc(f.ruc);
+    if(reg)nYa++;else{nFalta++;tFalta+=f.monto;}
+    const estado=reg
+      ?`<span style="color:#2e7d32;font-weight:700">✅ Ya está</span><div style="font-size:10px;color:var(--mu)">${escH(reg.proveedor||'')} · ${fmt(reg.total)}${Math.abs((reg.total||0)-f.monto)>0.05?' <b style="color:#c62828">(monto distinto)</b>':''}</div>`
+      :`<span style="color:#c62828;font-weight:700">⚠️ Falta</span>`;
+    const acc=reg?'':`<button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="sriRegistrar(${i})"><i class="ti ti-pencil"></i> Registrar</button>`;
+    return `<tr style="${reg?'':'background:#fff3f3'}"><td style="font-family:monospace">${escH(f.fecha)}</td><td style="font-family:monospace;font-size:11px">${escH(f.nf)}</td>
+      <td>${nom?escH(nom)+'<br>':''}<span style="font-size:10px;color:var(--mu)">RUC ${escH(f.ruc||'—')}</span></td><td style="font-size:11px">${escH(f.tipo)}</td>
+      <td style="font-family:monospace;text-align:right;font-weight:600">${fmt(f.monto)}</td><td>${estado}</td><td>${acc}</td></tr>`;
+  }).join('');
+  box.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:13px">
+      <div style="background:#e8f5e9;color:#1b5e20;padding:6px 12px;border-radius:8px">✅ Ya están: <b>${nYa}</b></div>
+      <div style="background:#ffebee;color:#b71c1c;padding:6px 12px;border-radius:8px">⚠️ Faltan: <b>${nFalta}</b> · ${fmt(tFalta)}</div>
+      <div style="padding:6px 0;color:var(--mu)">de ${SRI_FILAS.length} en el archivo del SRI</div></div>
+    ${nFalta&&tipo==='compra'?`<div style="font-size:11px;color:#0d47a1;background:#e3f2fd;padding:6px 10px;border-radius:6px;margin-bottom:8px">💡 Si la que falta es de la <b>editorial</b>, mejor baja su <b>XML</b> en el SRI y arrástralo abajo: así entran también los libros al inventario. "Registrar" solo apunta el valor.</div>`:''}
+    <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>N° Factura</th><th>${tipo==='venta'?'Cliente':'Proveedor'}</th><th>Tipo</th><th>Monto</th><th>En el sistema</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`;
+}
+// Lleva los datos al formulario de Factura manual (compras) o Ventas para que Mónica revise y guarde.
+function sriRegistrar(i){
+  const f=SRI_FILAS[i];if(!f)return;
+  const tipo=(document.querySelector('input[name="sri-tipo"]:checked')||{}).value||'compra';
+  const nom=f.nombre||sriNombreDeRuc(f.ruc)||('RUC '+f.ruc);
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+  SRI_PEND={nf:f.nf,ruc:f.ruc};
+  if(tipo==='venta'){
+    irATab('venta');
+    set('vf',f.fecha);set('vnf',f.nf);set('vc',nom);set('vs',f.monto.toFixed(2));set('vi','0.00');
+    if(document.getElementById('vt'))calcTotal('vs','vi','vt');
+    set('vd','Desde lista del SRI · RUC '+f.ruc);
+  }else{
+    irATab('man');
+    set('mf',f.fecha);set('mnf',f.nf);set('mp',nom);set('ms',f.monto.toFixed(2));set('mi','0.00');
+    calcTotal('ms','mi','mt');
+    set('mn','Desde lista del SRI · RUC '+f.ruc+' · revisar si tiene IVA');
+  }
+  toast('Revisa los datos, escoge la categoría y dale Guardar','ok');
+}
+// Al guardar desde "Registrar": pone el RUC del SRI en el registro y refresca la lista.
+function sriAlGuardar(reg){
+  if(SRI_PEND&&reg&&mismaFactura(reg.numFact,SRI_PEND.nf)&&!reg.ruc)reg.ruc=SRI_PEND.ruc;
+  SRI_PEND=null;
+  sriRender();
+}
+
+// ===================================================
 // INGRESO MANUAL
 // ===================================================
 function setTipoMan(tipo){
@@ -3100,6 +3231,7 @@ function saveMan(){
   if(!s)return toast('Ingresa el subtotal','err');
   const iv=leerMonto(document.getElementById('mi')?.value);
   DB.regs.push({id:uid(),tipo:tipoMan,categoria:document.getElementById('mc').value,fecha:document.getElementById('mf').value||today(),proveedor:p,numFact:document.getElementById('mnf').value,subtotal:s,iva:iv,total:s+iv,nota:document.getElementById('mn').value,origen:'manual'});
+  sriAlGuardar(DB.regs[DB.regs.length-1]);
   logHistorial(tipoMan==='negocio'?'Compra de negocio registrada':'Gasto personal registrado',`${p} — ${fmt(s+iv)}`);
   save();updateCount();clearMan();renderDash();toast('Registro guardado','ok');
 }
@@ -3115,6 +3247,7 @@ function saveVenta(){
   if(!s)return toast('Ingresa el subtotal','err');
   const iv=leerMonto(document.getElementById('vi')?.value);
   DB.regs.push({id:uid(),tipo:'venta',categoria:'Venta',fecha:document.getElementById('vf').value||today(),proveedor:c,numFact:document.getElementById('vnf').value,subtotal:s,iva:iv,total:s+iv,nota:document.getElementById('vd').value,origen:'manual'});
+  sriAlGuardar(DB.regs[DB.regs.length-1]);
   logHistorial('Venta registrada',`${c} — ${fmt(s+iv)}`);
   save();updateCount();clearVenta();renderUtilidad();toast('Venta guardada','ok');
 }
