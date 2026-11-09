@@ -3874,6 +3874,15 @@ function guardarProducto(){
     const idx=DB.productos.findIndex(p=>p.id===editId);
     if(idx>=0)DB.productos[idx]=prod;
     logHistorial('Producto editado',`${nom} — costo ${fmt(prod.precioCosto)} / venta ${fmt(prod.precioVenta)}`);
+    // 9-nov (Mónica): el VALOR UNIT. EDITORIAL es uno solo y sale de aquí →
+    // se pasa a todos los colegios (Control de ventas y Lista de precios).
+    // El PVP de cada colegio NO se toca.
+    if(prod.precioCosto>0&&Math.abs((parseFloat(previo?.precioCosto)||0)-prod.precioCosto)>0.005){
+      let nL=0;
+      Object.values(DB.colData||{}).forEach(d=>(d?.lineas||[]).forEach(l=>{if(l.prodId===prod.id&&Math.abs((parseFloat(l.costo)||0)-prod.precioCosto)>0.005){l.costo=prod.precioCosto;nL++;}}));
+      Object.values(DB.preciosCol||{}).forEach(L=>(L||[]).forEach(r=>{if(r.prodId===prod.id)r.costo=prod.precioCosto;}));
+      if(nL){logHistorial('Valor editorial pasado a colegios',`${nom} — ${fmt(prod.precioCosto)} en ${nL} línea(s) de Control de ventas`);toast(`Valor editorial actualizado en ${nL} colegio(s)`,'ok');}
+    }
   }else{
     DB.productos.push(prod);
     logHistorial('Producto creado',`${nom} — stock inicial ${prod.stockInicial}`);
