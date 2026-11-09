@@ -842,6 +842,15 @@ a{color:#7dd3fc}
 
   <!-- RESPALDO VENDEDOR (no afecta inventario) -->
   <div id="inv-respaldo" class="inv-pn" style="display:none">
+    <!-- PAGO A LA VENDEDORA (9-nov-2026): lo vendido en SUS colegios −
+         comisión del colegio − costo distribuidor (costo + recargo $2) =
+         ganancia → 70% vendedora / 30% Daniel. Solo lo ve Mónica. -->
+    <div class="card" style="border:2px solid #15803d">
+      <div class="card-t" style="color:#15803d">💵 Pago a la vendedora (70% ella / 30% Daniel)</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Sale solo de lo vendido en cada colegio (entregado − devuelto). Cuenta: total vendido − comisión del colegio − costo distribuidor = ganancia. De la ganancia, 70% para la vendedora y 30% para Daniel. Marca los colegios donde vendió ella.</div>
+      <div id="pv-cols" style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;margin-bottom:8px"></div>
+      <div id="pv-res"></div>
+    </div>
     <!-- Libros que la vendedora no devolvió (muestras que los colegios no
          entregaron): la editorial me los cobra y yo se los cobro a ella. -->
     <div class="card" style="border:2px solid #dc2626">
@@ -5465,8 +5474,113 @@ function reparacionNov2026g(){
   save();
 }
 
+// ── PAGO A LA VENDEDORA (9-nov-2026) ─────────────────────────────────────
+// Evelyn vendió en Saulo y Jardines de Sueño. Por cada colegio:
+//   total vendido (vendidos × PVP) − comisión del colegio (la de cada línea, igual
+//   que en Control de ventas) − costo distribuidor (costo editorial + $2 de
+//   recargo) = ganancia → 70% vendedora, 30% Daniel.
+// Los $2 son ganancia de Mónica y Evelyn NO lo sabe: en lo que se imprime para
+// ella el costo sale como "Costo distribuidor" y no aparece el recargo ni Daniel.
+const PAGO_VENDEDORA={vendedora:'EVELYN CEDEÑO',pct:70,socio:'DANIEL',colegios:['SAULO','JARDINES DE SUEÑO']};
+let _pvSel=null;
+function _pvColegiosSel(){
+  if(!_pvSel){
+    let g=null;try{g=JSON.parse(localStorage.getItem('pv_cols')||'null');}catch(e){}
+    _pvSel=Array.isArray(g)?g:PAGO_VENDEDORA.colegios.slice();
+  }
+  return _pvSel.filter(c=>DB.colData&&DB.colData[c]);
+}
+function pvToggleCol(i,si){
+  const c=(window._pvTodos||[])[i];if(!c)return;
+  _pvColegiosSel();
+  _pvSel=_pvSel.filter(x=>x!==c);if(si)_pvSel.push(c);
+  try{localStorage.setItem('pv_cols',JSON.stringify(_pvSel));}catch(e){}
+  renderPagoVendedora();
+}
+function _pvR2(n){return Math.round(n*100)/100;}
+function calcPagoVendedora(){
+  const rec=recargoVendedora(PAGO_VENDEDORA.vendedora);
+  return _pvColegiosSel().map(col=>{
+    const d=DB.colData[col]||{};
+    const lineas=(d.lineas||[]).map(l=>{
+      const vend=(l.cant||0)-(l.dev||0);
+      const pvp=parseFloat(l.pvp)||0, costo=parseFloat(l.costo)||0, pct=pctLinea(d,l);
+      return {libro:l.libro,vend,pvp,pct,costoDist:_pvR2(costo+rec),total:_pvR2(vend*pvp),comision:_pvR2(vend*pvp*pct/100),vtotal:_pvR2(vend*(costo+rec))};
+    }).filter(x=>x.vend>0);
+    const sum=k=>_pvR2(lineas.reduce((a,x)=>a+x[k],0));
+    const total=sum('total'),comision=sum('comision'),vtotal=sum('vtotal');
+    const pcts=[...new Set(lineas.map(x=>x.pct))];
+    const neta=_pvR2(total-comision),ganancia=_pvR2(neta-vtotal);
+    const ella=_pvR2(ganancia*PAGO_VENDEDORA.pct/100);
+    const unidades=lineas.reduce((a,x)=>a+x.vend,0);
+    return {col,lineas,total,comision,vtotal,neta,ganancia,ella,socio:_pvR2(ganancia-ella),
+      unidades,recargo:_pvR2(unidades*rec),pctTxt:pcts.length===1?pcts[0]+'%':'varios %'};
+  });
+}
+// para: 'mia' / 'esposo' = todo (con Daniel y los $2); 'evelyn' = sin los $2 ni Daniel
+function pagoVendedoraHTML(R,para){
+  const ev=para==='evelyn';
+  const td='padding:4px 6px;border:1px solid #ccc';
+  const cap=t=>t.charAt(0)+t.slice(1).toLowerCase();
+  const nm=cap(PAGO_VENDEDORA.vendedora.split(' ')[0]), soc=cap(PAGO_VENDEDORA.socio);
+  const n=v=>v.toFixed(2);
+  const fila=(a,b,st)=>`<tr style="${st||''}"><td style="padding:2px 8px">${a}</td><td style="padding:2px 8px;text-align:right">${b}</td></tr>`;
+  let h='';
+  R.forEach(r=>{
+    h+=`<div style="margin:10px 0 14px"><div style="font-weight:800;font-size:14px;background:#fff3b0;color:#222;padding:4px 8px;border:1px solid #e6c800">${escH(r.col)} <span style="font-weight:600;font-size:11px">— comisión colegio ${r.pctTxt}</span></div>
+    <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>
+    <th style="${td};text-align:left">Libro</th><th style="${td}">Cant. vendida</th><th style="${td}">PVP</th><th style="${td}">Total vendido</th><th style="${td}">Costo distribuidor</th><th style="${td}">V. total</th></tr></thead><tbody>`
+    +r.lineas.map(x=>`<tr><td style="${td}">${escH(x.libro)}</td><td style="${td};text-align:center">${x.vend}</td><td style="${td};text-align:right">${n(x.pvp)}</td><td style="${td};text-align:right">${n(x.total)}</td><td style="${td};text-align:right">${n(x.costoDist)}</td><td style="${td};text-align:right">${n(x.vtotal)}</td></tr>`).join('')
+    +`<tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:center">${r.unidades}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.total)}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.vtotal)}</td></tr></tbody></table></div>
+    <table style="border-collapse:collapse;font-size:12px;margin:6px 0 0 auto;min-width:240px">
+    ${fila('Total vendido',n(r.total))}
+    ${fila('− Comisión colegio '+r.pctTxt,n(r.comision))}
+    ${fila('Ganancia neta',n(r.neta),'border-top:1px solid #999')}
+    ${fila('− Costo distribuidor',n(r.vtotal))}
+    ${fila('Ganancia',n(r.ganancia),'border-top:1px solid #999')}
+    ${fila(escH(nm)+' '+PAGO_VENDEDORA.pct+'%',n(r.ella),'font-weight:800;color:#15803d')}
+    ${ev?'':fila(escH(soc)+' '+(100-PAGO_VENDEDORA.pct)+'%',n(r.socio))}
+    </table></div>`;
+  });
+  const T=k=>_pvR2(R.reduce((a,r)=>a+r[k],0));
+  h+=`<div style="border:2px solid #15803d;border-radius:8px;padding:8px 10px;margin-top:8px"><div style="font-weight:800;margin-bottom:4px">TOTAL A PAGAR</div>
+  <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><tr><th style="${td};text-align:left">Colegio</th><th style="${td}">${escH(nm)} ${PAGO_VENDEDORA.pct}%</th>${ev?'':`<th style="${td}">${escH(soc)} ${100-PAGO_VENDEDORA.pct}%</th><th style="${td}">Nuestros $${recargoVendedora(PAGO_VENDEDORA.vendedora)} por libro</th>`}</tr>
+  ${R.map(r=>`<tr><td style="${td}">${escH(r.col)}</td><td style="${td};text-align:right">${n(r.ella)}</td>${ev?'':`<td style="${td};text-align:right">${n(r.socio)}</td><td style="${td};text-align:right">${n(r.recargo)}</td>`}</tr>`).join('')}
+  <tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:right;color:#15803d">${fmt(T('ella'))}</td>${ev?'':`<td style="${td};text-align:right">${fmt(T('socio'))}</td><td style="${td};text-align:right">${fmt(T('recargo'))}</td>`}</tr></table></div>
+  <div style="font-size:16px;font-weight:800;margin-top:8px">Valor a cancelar a ${escH(nm)}: <span style="color:#15803d">${fmt(T('ella'))}</span></div></div>`;
+  if(!ev)h+=`<div style="background:#fff3b0;color:#222;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px"><b>Solo para nosotros:</b> el costo distribuidor tiene $${recargoVendedora(PAGO_VENDEDORA.vendedora)} más por libro que la lista de la editorial. ${T('unidades')} libros = <b>${fmt(T('recargo'))}</b> de ganancia nuestra. ${escH(nm)} no sabe de este valor.</div>`;
+  return h;
+}
+function renderPagoVendedora(){
+  const box=document.getElementById('pv-cols'),res=document.getElementById('pv-res');
+  if(!box||!res)return;
+  const sel=_pvColegiosSel();
+  const todos=Object.keys(DB.colData||{}).filter(c=>(DB.colData[c].lineas||[]).length).sort();
+  window._pvTodos=todos;
+  box.innerHTML=todos.map((c,i)=>`<label style="display:flex;gap:4px;align-items:center;cursor:pointer;${sel.includes(c)?'font-weight:800;color:#15803d':''}"><input type="checkbox" ${sel.includes(c)?'checked':''} onchange="pvToggleCol(${i},this.checked)">${escH(c)}</label>`).join('');
+  if(!sel.length){res.innerHTML='<div style="color:var(--mu);font-size:12px">Marca arriba los colegios donde vendió.</div>';return;}
+  res.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+    <button class="btn btn-sm" style="background:#15803d;color:#fff" onclick="imprimirPagoVendedora('evelyn')"><i class="ti ti-printer"></i> Imprimir para Evelyn (sin los $2)</button>
+    <button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="imprimirPagoVendedora('esposo')"><i class="ti ti-printer"></i> Imprimir para mi esposo (completo)</button></div>`
+    +pagoVendedoraHTML(calcPagoVendedora(),'mia');
+}
+function imprimirPagoVendedora(para){
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  const v=PAGO_VENDEDORA.vendedora;
+  win.document.write(`<html><head><title>Pago a ${escH(v)}</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px}${dmPrintCSS()}</style></head><body>
+  ${dmPrintHeader('Pago a '+v,'Al '+new Date().toLocaleDateString('es-EC'))}
+  ${pagoVendedoraHTML(calcPagoVendedora(),para)}
+  ${para==='evelyn'?`<div style="display:flex;justify-content:space-around;margin-top:50px;font-size:11px;text-align:center"><div>____________________<br>D&amp;M Books</div><div>____________________<br>${escH(v)}</div></div>`:''}
+  <\/body><\/html>`);
+  win.document.close();
+  win.onload=()=>win.print();
+}
+
 function renderRespaldosVendedor(){
   try{renderCobrosVendedora();}catch(e){console.warn(e);}
+  try{renderPagoVendedora();}catch(e){console.warn(e);}
   const fe=document.getElementById('rv-fecha');
   if(fe&&!fe.value)fe.value=today();
   const q=(document.getElementById('rv-q')?.value||'').toLowerCase();
