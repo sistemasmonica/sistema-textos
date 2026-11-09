@@ -1079,7 +1079,7 @@ a{color:#7dd3fc}
       <select id="decl-mes" onchange="renderDecl()">
         <option value="01">Enero</option><option value="02">Febrero</option>
         <option value="03">Marzo</option><option value="04">Abril</option>
-        <option value="05" selected>Mayo</option><option value="06">Junio</option>
+        <option value="05">Mayo</option><option value="06">Junio</option>
         <option value="07">Julio</option><option value="08">Agosto</option>
         <option value="09">Septiembre</option><option value="10">Octubre</option>
         <option value="11">Noviembre</option><option value="12">Diciembre</option>
@@ -1105,7 +1105,7 @@ a{color:#7dd3fc}
         <div class="card-t cg"><i class="ti ti-arrow-bar-up"></i> Ventas del período (IVA cobrado)</div>
         <div id="decl-ventas-det"></div>
         <hr class="sep">
-        <div class="pf"><label>Ventas gravadas (12% IVA)</label><span id="d104-vgrav">$0.00</span></div>
+        <div class="pf"><label>Ventas gravadas (15% IVA)</label><span id="d104-vgrav">$0.00</span></div>
         <div class="pf"><label>Ventas exentas (0% IVA)</label><span id="d104-vexen">$0.00</span></div>
         <div class="pf" style="font-weight:700;color:var(--g1)"><label>IVA cobrado en ventas</label><span id="d104-iva-vtas">$0.00</span></div>
       </div>
@@ -1125,13 +1125,13 @@ a{color:#7dd3fc}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;text-transform:uppercase">VENTAS</div>
-          <div class="pf"><label>Cas. 401 — Ventas locales 12%</label><span class="cg" id="cas-401">$0.00</span></div>
+          <div class="pf"><label>Cas. 401 — Ventas locales 15%</label><span class="cg" id="cas-401">$0.00</span></div>
           <div class="pf"><label>Cas. 411 — IVA en ventas</label><span class="cg" id="cas-411">$0.00</span></div>
           <div class="pf"><label>Cas. 421 — Ventas 0% (exentas)</label><span id="cas-421">$0.00</span></div>
         </div>
         <div>
           <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;text-transform:uppercase">COMPRAS Y CRÉDITO</div>
-          <div class="pf"><label>Cas. 500 — Compras locales 12%</label><span class="ca" id="cas-500">$0.00</span></div>
+          <div class="pf"><label>Cas. 500 — Compras locales 15%</label><span class="ca" id="cas-500">$0.00</span></div>
           <div class="pf"><label>Cas. 510 — IVA en compras</label><span class="ca" id="cas-510">$0.00</span></div>
           <div class="pf"><label>Cas. 601 — Crédito tributario</label><span class="cb" id="cas-601">$0.00</span></div>
         </div>
@@ -1229,7 +1229,7 @@ a{color:#7dd3fc}
       </div>
       <div class="tbl-wrap" style="margin:0">
         <table>
-          <thead><tr><th>Fecha</th><th>RUC Proveedor</th><th>Razón Social</th><th>N° Comprobante</th><th>Tipo</th><th>Base 12%</th><th>IVA 12%</th><th>Base 0%</th><th>Total</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>RUC Proveedor</th><th>Razón Social</th><th>N° Comprobante</th><th>Tipo</th><th>Base 15%</th><th>IVA 15%</th><th>Base 0%</th><th>Total</th></tr></thead>
           <tbody id="tb-anexo"></tbody>
         </table>
       </div>
@@ -12834,6 +12834,14 @@ function declTab(id, el){
 }
 
 function renderDecl(){
+  // 9-nov-2026: la primera vez se pone el mes anterior (el que se declara este mes)
+  if(!window._declIni){
+    window._declIni=true;
+    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);
+    const sm=document.getElementById('decl-mes'),sa=document.getElementById('decl-anio');
+    if(sm)sm.value=String(d.getMonth()+1).padStart(2,'0');
+    if(sa){const y=String(d.getFullYear());if(![...sa.options].some(o=>o.value===y))sa.insertAdjacentHTML('afterbegin',`<option value="${y}">${y}</option>`);sa.value=y;}
+  }
   const mes = document.getElementById('decl-mes')?.value || '05';
   const anio = document.getElementById('decl-anio')?.value || '2026';
   const periodo = anio + '-' + mes;
@@ -12871,7 +12879,7 @@ function renderDecl104(periodo){
   const ivaVentas = totalVentasIVA;
   const ivaCompras = totalComprasIVA;
   const credito = Math.min(ivaCompras, ivaVentas);
-  const resultado = ivaVentas - credito;
+  const resultado = ivaVentas - ivaCompras;   // negativo = crédito tributario a favor
 
   // Update UI
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=fmt(v); };
@@ -12915,7 +12923,8 @@ function renderDecl104(periodo){
     dcEl.innerHTML = compras.length ? compras.map(r=>`
       <div class="pf"><label style="font-size:11px">${r.fecha} · ${r.proveedor}</label>
       <span style="font-family:monospace;font-size:11px">${fmt(r.subtotal)} + ${fmt(r.iva)} IVA</span></div>`
-    ).join('') : '<div class="empty" style="padding:8px">Sin compras de negocio este período</div>';
+    ).join('') : (()=>{const nP=regs.filter(r=>r.tipo==='personal').length;
+      return '<div class="empty" style="padding:8px">Sin compras de NEGOCIO este período'+(nP?`<br><small>Hay ${nP} factura(s) PERSONALES: no entran al 104. Si alguna es del negocio, pásala a Negocio en <b>Movimientos</b>.</small>`:'')+'</div>';})();
   }
 
   // Tabla comprobantes
@@ -13042,12 +13051,12 @@ function imprimirDecl104(){
   const anio = document.getElementById('decl-anio')?.value||'2026';
   const win = window.open('','_blank');
   const campos = [
-    ['401','Ventas locales gravadas tarifa 12%',document.getElementById('cas-401')?.textContent],
+    ['401','Ventas locales gravadas tarifa 15%',document.getElementById('cas-401')?.textContent],
     ['411','IVA generado en ventas',document.getElementById('cas-411')?.textContent],
     ['421','Ventas locales tarifa 0% (exentas)',document.getElementById('cas-421')?.textContent],
-    ['500','Compras locales con IVA 12%',document.getElementById('cas-500')?.textContent],
+    ['500','Compras locales con IVA 15%',document.getElementById('cas-500')?.textContent],
     ['510','IVA en compras',document.getElementById('cas-510')?.textContent],
-    ['601','Crédito tributario período anterior',document.getElementById('cas-601')?.textContent],
+    ['601','Crédito tributario aplicado (IVA compras)',document.getElementById('cas-601')?.textContent],
     ['699','IVA A PAGAR / CRÉDITO',document.getElementById('decl-resultado')?.textContent],
   ];
   win.document.write(`<html><head><title>Form 104 - ${mes}/${anio}</title>
@@ -13074,7 +13083,7 @@ function exportDecl104CSV(){
   const anio = document.getElementById('decl-anio')?.value||'2026';
   const periodo = anio+'-'+mes;
   const regs = DB.regs.filter(r=>r.fecha?.substring(0,7)===periodo&&!declExcluidos.has(r.id));
-  const rows=[['Fecha','RUC','Proveedor/Cliente','N_Factura','Tipo','Base12%','IVA12%','Base0%','Total'],...regs.map(r=>[r.fecha,r.ruc||'',r.proveedor,r.numFact||'',r.tipo==='venta'?'VENTA':'COMPRA',r.iva>0?r.subtotal:0,r.iva,r.iva===0?r.subtotal:0,r.total])];
+  const rows=[['Fecha','RUC','Proveedor/Cliente','N_Factura','Tipo','Base15%','IVA15%','Base0%','Total'],...regs.map(r=>[r.fecha,r.ruc||'',r.proveedor,r.numFact||'',r.tipo==='venta'?'VENTA':'COMPRA',r.iva>0?r.subtotal:0,r.iva,r.iva===0?r.subtotal:0,r.total])];
   dlCSV(rows,'declaracion_104_'+periodo+'.csv');
 }
 
@@ -13083,7 +13092,7 @@ function exportAnexoCSV(){
   const anio = document.getElementById('decl-anio')?.value||'2026';
   const periodo = anio+'-'+mes;
   const regs = DB.regs.filter(r=>r.fecha?.substring(0,7)===periodo&&!declExcluidos.has(r.id));
-  const rows=[['Fecha','RUC','RazonSocial','N_Comprobante','Tipo','Base12','IVA12','Base0','Total'],...regs.map(r=>[r.fecha,r.ruc||'',r.proveedor,r.numFact||'',r.tipo==='venta'?'VENTA':'COMPRA',r.iva>0?r.subtotal:0,r.iva,r.iva===0?r.subtotal:0,r.total])];
+  const rows=[['Fecha','RUC','RazonSocial','N_Comprobante','Tipo','Base15','IVA15','Base0','Total'],...regs.map(r=>[r.fecha,r.ruc||'',r.proveedor,r.numFact||'',r.tipo==='venta'?'VENTA':'COMPRA',r.iva>0?r.subtotal:0,r.iva,r.iva===0?r.subtotal:0,r.total])];
   dlCSV(rows,'ATS_'+periodo+'.csv');
 }
 
@@ -13135,7 +13144,7 @@ function imprimirAnexo(){
   tr:nth-child(even){background:#f5f5f5}
   ${dmPrintCSS()}</style></head><body>
   ${dmPrintHeader('Anexo transaccional',mes+'/'+anio)}
-  <table><tr><th>Fecha</th><th>RUC</th><th>Razón Social</th><th>Comprobante</th><th>Tipo</th><th>Base 12%</th><th>IVA</th><th>Base 0%</th><th>Total</th></tr>
+  <table><tr><th>Fecha</th><th>RUC</th><th>Razón Social</th><th>Comprobante</th><th>Tipo</th><th>Base 15%</th><th>IVA</th><th>Base 0%</th><th>Total</th></tr>
   ${regs.map(r=>`<tr><td>${r.fecha}</td><td>${r.ruc||'—'}</td><td>${r.proveedor}</td><td>${r.numFact||'—'}</td><td>${r.tipo==='venta'?'VENTA':'COMPRA'}</td><td style="text-align:right">${r.iva>0?'$'+r.subtotal.toFixed(2):'—'}</td><td style="text-align:right">$${r.iva.toFixed(2)}</td><td style="text-align:right">${r.iva===0?'$'+r.subtotal.toFixed(2):'—'}</td><td style="text-align:right;font-weight:bold">$${r.total.toFixed(2)}</td></tr>`).join('')}
   </table>
   <script>window.onload=()=>window.print();<\/script></body></html>`);
