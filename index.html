@@ -2452,6 +2452,7 @@ async function syncFromCloud(){
     try{reparacionNov2026e();}catch(e){console.warn('Reparación nov-2026 (5):',e);}
     try{reparacionNov2026f();}catch(e){console.warn('Reparación nov-2026 (6):',e);}
     try{reparacionNov2026g();}catch(e){console.warn('Reparación nov-2026 (7):',e);}
+    try{reparacionNov2026h();}catch(e){console.warn('Reparación nov-2026 (8):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -3221,7 +3222,7 @@ function sriRender(){
     const estado=reg
       ?`<span style="color:#2e7d32;font-weight:700">✅ Ya está</span><div style="font-size:10px;color:var(--mu)">${escH(reg.proveedor||'')} · ${fmt(reg.total)}${Math.abs((reg.total||0)-f.monto)>0.05?' <b style="color:#c62828">(monto distinto)</b>':''}</div>`
       :`<span style="color:#c62828;font-weight:700">⚠️ Falta</span>`;
-    const acc=reg?'':`<button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="sriRegistrar(${i})"><i class="ti ti-pencil"></i> Registrar</button>`;
+    const acc=reg?'':(tipo==='venta'?`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;margin-bottom:3px" onclick="sriGuardarCobroColegio(${i})" title="Factura de un pago de colegio que ya está en Colegios/Pagos: se guarda para el SRI pero NO se suma otra vez a la ganancia"><i class="ti ti-school"></i> Es pago de un colegio</button><br>`:'')+`<button class="btn btn-sm" style="background:#1565c0;color:#fff" onclick="sriRegistrar(${i})"><i class="ti ti-pencil"></i> ${tipo==='venta'?'Es venta aparte':'Registrar'}</button>`;
     return `<tr style="${reg?'':'background:#fff3f3'}"><td style="font-family:monospace">${escH(f.fecha)}</td><td style="font-family:monospace;font-size:11px">${escH(f.nf)}</td>
       <td>${nom?escH(nom)+'<br>':''}<span style="font-size:10px;color:var(--mu)">RUC ${escH(f.ruc||'—')}</span></td><td style="font-size:11px">${escH(f.tipo)}</td>
       <td style="font-family:monospace;text-align:right;font-weight:600">${fmt(f.monto)}</td><td>${estado}</td><td>${acc}</td></tr>`;
@@ -3279,6 +3280,21 @@ function sriGuardarTodas(){
   logHistorial('Facturas importadas de la lista del SRI',`${nuevas.length} facturas — ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}`);
   save();updateCount();renderDash();sriRender();
   toast(`${nuevas.length} facturas guardadas`,'ok');
+}
+// Factura emitida que es el comprobante de un PAGO DE COLEGIO (9-nov-2026, factura 341 Latinoamericano):
+// se guarda como venta para Declaraciones/Movimientos, pero con cobroColegio:true para que la
+// ganancia no la sume otra vez (la venta ya está en Colegios y el cobro en Pagos).
+function sriGuardarCobroColegio(i){
+  const f=SRI_FILAS[i];if(!f)return;
+  const cols=Object.keys(DB.colData||{}).sort();
+  const col=(prompt('¿De qué colegio es este pago? Escríbelo igual que en Colegios.\n\n'+cols.join(', '))||'').trim();
+  if(!col)return toast('Escribe el colegio para guardarla','err');
+  DB.regs.push({id:uid(),tipo:'venta',categoria:'Cobro colegio',cobroColegio:true,colegio:col.toUpperCase(),fecha:f.fecha||today(),
+    proveedor:(f.nombre||('RUC '+(f.ruc||'')))+' — '+col.toUpperCase(),ruc:f.ruc||'',numFact:f.nf,subtotal:f.sub||f.monto,iva:f.iva||0,total:f.monto,
+    nota:'Factura de pago del colegio (ya contado en Colegios) · desde lista del SRI',origen:'sri-lista'});
+  logHistorial('Factura emitida de cobro de colegio',f.nf+' — '+col+' — '+fmt(f.monto));
+  save();updateCount();sriRender();
+  toast('Guardada como pago de '+col+' (no se suma otra vez a la ganancia)','ok');
 }
 // Al guardar desde "Registrar": pone el RUC del SRI en el registro y refresca la lista.
 function sriAlGuardar(reg){
@@ -5350,6 +5366,21 @@ function imprimirCobroVendedora(v,col){
 }
 // 4-nov-2026: lista que mandó Mónica por WhatsApp (Saulo y Florentinos, de
 // Evelyn). "BG5 preparatoria" de Florentinos no se sabe qué libro es: la agrega ella.
+// 9-nov-2026 (Mónica): factura emitida 001-002-000000341 del 07-oct por $10,000 a nombre de
+// Camila Muñoz Pazmiño = "PAGO COLEGIO LATINOAMERICANO 2026". El cobro ya está en Pagos y la
+// venta en Colegios → se guarda como cobroColegio (sale en Declaraciones, no suma a la ganancia).
+function reparacionNov2026h(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 9-nov: factura 341 Latinoamericano (Camila Muñoz)';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  if(!DB.regs.some(r=>r.tipo==='venta'&&mismaFactura(r.numFact,'001-002-000000341'))){
+    DB.regs.push({id:uid(),tipo:'venta',categoria:'Cobro colegio',cobroColegio:true,colegio:'LATINOAMERICANO',fecha:'2026-10-07',
+      proveedor:'MUÑOZ PAZMIÑO CAMILA — LATINOAMERICANO',ruc:'1725373433001',numFact:'001-002-000000341',subtotal:10000,iva:0,total:10000,
+      nota:'PAGO COLEGIO LATINOAMERICANO 2026 · material didáctico impreso (ya contado en Colegios/Pagos)',origen:'sri-lista'});
+  }
+  logHistorial(MARCA,'001-002-000000341 — $10,000.00');
+  save();
+}
 function reparacionNov2026b(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 4-nov: libros no devueltos Saulo/Florentinos (Evelyn)';
@@ -14221,7 +14252,7 @@ function resumenGanancia(){
     const T=totalesColegio(DB.colData[nom]);
     ventasCol+=T.tv; costoVendido+=T.costo; comisionCol+=T.totalColegio;
   });
-  const ventasRegs=DB.regs.filter(r=>r.tipo==='venta').reduce((a,r)=>a+(r.total||0),0);
+  const ventasRegs=DB.regs.filter(r=>r.tipo==='venta'&&!r.cobroColegio).reduce((a,r)=>a+(r.total||0),0); // cobroColegio = factura de un pago de colegio, ya contado en Colegios
   const ventas=ventasCol+ventasRegs;
 
   const costoLibros=DB.regs.filter(esCompraEditorial).reduce((a,r)=>a+(r.total||0),0); // todo lo facturado por la editorial
@@ -15368,7 +15399,7 @@ function renderLiquidacion(){
     const T=totalesColegio(DB.colData[nom]);
     ventasCol+=T.tv; costoVendidoCol+=T.costo; comisionCol+=T.totalColegio;
   });
-  const ventasRegs=f(DB.regs).filter(r=>r.tipo==='venta').reduce((a,r)=>a+r.total,0);
+  const ventasRegs=f(DB.regs).filter(r=>r.tipo==='venta'&&!r.cobroColegio).reduce((a,r)=>a+r.total,0); // cobroColegio = ya contado en Colegios
   const ventas=ventasCol+ventasRegs;
   compararLiquidacionConsolidado(anioFil,ventas);
   const comprasEdit=f(DB.regs).filter(r=>r.tipo==='negocio'&&r.categoria==='Textos escolares').reduce((a,r)=>a+r.total,0);
