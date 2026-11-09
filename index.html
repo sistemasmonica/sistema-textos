@@ -9735,7 +9735,7 @@ function renderNegVsPer(mes){
       <span>Total gastado: <b style="font-family:monospace">${fmt(tN+tP)}</b></span>
       <span>Diferencia: <b style="font-family:monospace">${fmt(Math.abs(dif))}</b> más en ${dif>=0?'NEGOCIO':'PERSONAL'}</span>
     </div>
-    ${sug.length?`<div style="margin-top:8px;background:#fff8e1;color:#5d4037;border:1px solid #ffb300;border-radius:8px;padding:8px 10px;font-size:12px">
+    ${sug.length?`<div style="margin-top:8px;background:rgba(255,179,0,.14);color:var(--tx);border:1px solid #ffb300;border-radius:8px;padding:8px 10px;font-size:12px">
       💡 <b>${sug.length} facturas de PERSONAL parecen de los carros</b> (gasolina, peajes, repuestos) · ${fmt(tS)}:
       <div style="margin:4px 0">${[...new Set(sug.map(r=>r.proveedor))].map(escH).join(' · ')}</div>
       <button class="btn btn-sm" style="background:#0d9488;color:#fff" onclick="npPasarSugeridas('${mes||''}')"><i class="ti ti-arrow-right"></i> Pasar estas ${sug.length} a NEGOCIO</button>
