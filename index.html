@@ -2426,6 +2426,7 @@ async function syncFromCloud(){
     try{reparacionNov2026b();}catch(e){console.warn('Reparación nov-2026 (2):',e);}
     try{reparacionNov2026c();}catch(e){console.warn('Reparación nov-2026 (3):',e);}
     try{reparacionNov2026d();}catch(e){console.warn('Reparación nov-2026 (4):',e);}
+    try{reparacionNov2026e();}catch(e){console.warn('Reparación nov-2026 (5):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5192,6 +5193,24 @@ function reparacionNov2026d(){
     });
   });
   logHistorial(MARCA,nc+' costo(s) corregidos'+(nr?', '+nr+' precio(s) regresados a como estaban':''));
+  save();
+}
+
+// 9-nov (Mónica): el costo de la editorial es UNO SOLO, el de la lista
+// general (catálogo); solo el precio de venta cambia por colegio. Se alinea el
+// costo de cada línea del Control de ventas al catálogo (ej. Dumas Pasaporte
+// EGB 8 estaba en 4.50, catálogo 5).
+function reparacionNov2026e(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 9-nov: costos de Control de ventas = catálogo';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const det=[];
+  Object.entries(DB.colData||{}).forEach(([col,d])=>(d?.lineas||[]).forEach(l=>{
+    const p=l.prodId&&DB.productos.find(x=>x.id===l.prodId);
+    const c=parseFloat(p?.precioCosto)||0;
+    if(c>0&&Math.abs((parseFloat(l.costo)||0)-c)>0.005){det.push(col+' '+l.libro+' '+l.costo+'→'+c);l.costo=c;}
+  }));
+  logHistorial(MARCA,det.length+' línea(s)'+(det.length?': '+det.slice(0,30).join('; '):''));
   save();
 }
 
