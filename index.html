@@ -3105,14 +3105,18 @@ function sriLeerArchivo(inp){
   const rd=new FileReader();
   rd.onload=()=>{
     try{
-      SRI_FILAS=sriParse(String(rd.result||''));
+      // el SRI a veces baja el archivo en Latin-1 ("DIDÁCTICA" sale "DID?CTICA"): se decodifica de nuevo
+      const buf=new Uint8Array(rd.result);
+      let txt=new TextDecoder('utf-8').decode(buf);
+      if(txt.includes('�'))txt=new TextDecoder('windows-1252').decode(buf);
+      SRI_FILAS=sriParse(txt);
       if(!SRI_FILAS.length){toast('No encontré facturas en ese archivo','err');document.getElementById('sri-res').innerHTML='';return;}
       if(SRI_FILAS._tipo){const r=document.querySelector(`input[name="sri-tipo"][value="${SRI_FILAS._tipo}"]`);if(r)r.checked=true;}
       sriRender();
     }catch(e){console.error(e);toast('No pude leer el archivo: '+e.message,'err');}
     inp.value='';
   };
-  rd.readAsText(f,'utf-8');
+  rd.readAsArrayBuffer(f);
 }
 function sriParse(txt){
   txt=txt.replace(/^﻿/,'');
@@ -3125,9 +3129,12 @@ function sriParse(txt){
   const col=(...res)=>{for(const re of res){const i=cab.findIndex(c=>re.test(c));if(i>=0)return i;}return -1;};
   const iNum=col(/SERIE_COMPROBANTE|N.?\s*COMPROBANTE|^NUMERO|^ID$/);
   const iClave=col(/CLAVE.?ACCESO/);
-  const iRuc=col(/PROVEEDOR|RUC_EMISOR|EMISOR|CLIENTE|RECEPTOR|IDENTIFICACION|^RUC/);
-  const iNom=col(/RAZON.?SOCIAL|NOMBRE/);
-  const iMonto=col(/IMPORTE.?TOTAL|MONTO|VALOR.?TOTAL|^TOTAL|VALOR/);
+  // cada regex en orden de prioridad (ej. IMPORTE_TOTAL antes que VALOR_SIN_IMPUESTOS)
+  const iRuc=col(/PROVEEDOR/,/RUC_EMISOR/,/CLIENTE/,/RUC_RECEPTOR|IDENTIFICACION_RECEPTOR/,/^RUC/);
+  const iNom=col(/RAZON.?SOCIAL/,/NOMBRE/);
+  const iMonto=col(/IMPORTE.?TOTAL/,/MONTO/,/VALOR.?TOTAL/,/^TOTAL/);
+  const iSub=col(/VALOR.?SIN.?IMPUESTO/,/SUBTOTAL/);
+  const iIva=col(/^IVA$/);
   const iFecha=col(/FECHA.?EMISION/,/FECHA/);
   const iTipo=col(/TIPO.?COMPROBANTE/,/^TIPO$/);
   const filas=[];
@@ -3143,11 +3150,14 @@ function sriParse(txt){
     if(m)fecha=`${m[1]}-${m[2]}-${m[3]}`;
     else if((m=fecha.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)))fecha=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
     const nf=num.length===15?`${num.slice(0,3)}-${num.slice(3,6)}-${num.slice(6)}`:num;
-    filas.push({num,nf,ruc,nombre:iNom>=0?c[iNom]:'',monto:iMonto>=0?leerMonto(c[iMonto]):0,fecha,tipo:iTipo>=0?c[iTipo]:'Factura'});
+    const monto=iMonto>=0?leerMonto(c[iMonto]):0;
+    const iva=iIva>=0?leerMonto(c[iIva]):0;
+    let sub=iSub>=0?leerMonto(c[iSub]):0;
+    if(!sub||Math.abs(sub+iva-monto)>0.02)sub=Math.round((monto-iva)*100)/100; // ej. Zurich con descuento: 8.40 + 0 = 7.90
+    filas.push({num,nf,ruc,nombre:iNom>=0?c[iNom]:'',monto,sub,iva,fecha,tipo:iTipo>=0?c[iTipo]:'Factura'});
   });
   const hRuc=iRuc>=0?cab[iRuc]:'';
-  filas._tipo=/PROVEEDOR|EMISOR/.test(hRuc)?'compra':/CLIENTE|RECEPTOR/.test(hRuc)?'venta':'';
-  return filas;
+  filas._tipo=/PROVEEDOR|EMISOR/.test(hRuc)?'compra':/CLIENTE|RECEPTOR/.test(hRuc)?'venta':'';  return filas;
 }
 function sriNombreDeRuc(ruc){
   if(!ruc)return '';
@@ -3184,6 +3194,8 @@ function sriRender(){
       <div style="background:#e8f5e9;color:#1b5e20;padding:6px 12px;border-radius:8px">✅ Ya están: <b>${nYa}</b></div>
       <div style="background:#ffebee;color:#b71c1c;padding:6px 12px;border-radius:8px">⚠️ Faltan: <b>${nFalta}</b> · ${fmt(tFalta)}</div>
       <div style="padding:6px 0;color:var(--mu)">de ${SRI_FILAS.length} en el archivo del SRI</div></div>
+    ${nFalta&&tipo==='compra'?`<div style="margin-bottom:8px"><button class="btn btn-sm" style="background:#2e7d32;color:#fff" onclick="sriGuardarTodas()"><i class="ti ti-checks"></i> Guardar las ${nFalta} que faltan</button>
+      <span style="font-size:11px;color:var(--mu);margin-left:6px">Cada una va a la categoría que ya usaste antes con ese mismo proveedor; si es nuevo, a <b>Personal → Otros personal</b>. Después puedes cambiarla en Movimientos.</span></div>`:''}
     ${nFalta&&tipo==='compra'?`<div style="font-size:11px;color:#0d47a1;background:#e3f2fd;padding:6px 10px;border-radius:6px;margin-bottom:8px">💡 Si la que falta es de la <b>editorial</b>, mejor baja su <b>XML</b> en el SRI y arrástralo abajo: así entran también los libros al inventario. "Registrar" solo apunta el valor.</div>`:''}
     <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>N° Factura</th><th>${tipo==='venta'?'Cliente':'Proveedor'}</th><th>Tipo</th><th>Monto</th><th>En el sistema</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
@@ -3196,16 +3208,38 @@ function sriRegistrar(i){
   SRI_PEND={nf:f.nf,ruc:f.ruc};
   if(tipo==='venta'){
     irATab('venta');
-    set('vf',f.fecha);set('vnf',f.nf);set('vc',nom);set('vs',f.monto.toFixed(2));set('vi','0.00');
+    set('vf',f.fecha);set('vnf',f.nf);set('vc',nom);set('vs',(f.sub||f.monto).toFixed(2));set('vi',(f.iva||0).toFixed(2));
     if(document.getElementById('vt'))calcTotal('vs','vi','vt');
     set('vd','Desde lista del SRI · RUC '+f.ruc);
   }else{
     irATab('man');
-    set('mf',f.fecha);set('mnf',f.nf);set('mp',nom);set('ms',f.monto.toFixed(2));set('mi','0.00');
+    set('mf',f.fecha);set('mnf',f.nf);set('mp',nom);set('ms',(f.sub||f.monto).toFixed(2));set('mi',(f.iva||0).toFixed(2));
     calcTotal('ms','mi','mt');
-    set('mn','Desde lista del SRI · RUC '+f.ruc+' · revisar si tiene IVA');
+    set('mn','Desde lista del SRI · RUC '+f.ruc);
   }
   toast('Revisa los datos, escoge la categoría y dale Guardar','ok');
+}
+// Guarda de una vez todas las compras que faltan. Categoría = la última usada con ese RUC;
+// si el proveedor es nuevo → Personal / Otros personal. Las de la editorial NO (necesitan el XML por los libros).
+function sriGuardarTodas(){
+  const falt=SRI_FILAS.filter(f=>!sriBuscar(f,'compra'));
+  const ultimo=ruc=>{for(let k=DB.regs.length-1;k>=0;k--){const r=DB.regs[k];if(r.tipo!=='venta'&&numFactDigits(r.ruc)===ruc)return r;}return null;};
+  const edit=[],nuevas=[];
+  falt.forEach(f=>{
+    const prev=ultimo(f.ruc);
+    if(prev&&prev.categoria==='Textos escolares'){edit.push(f);return;}
+    nuevas.push({id:uid(),tipo:prev?prev.tipo:'personal',categoria:prev?prev.categoria:'Otros personal',fecha:f.fecha||today(),
+      proveedor:f.nombre||(prev&&prev.proveedor)||('RUC '+f.ruc),ruc:f.ruc,numFact:f.nf,subtotal:f.sub||f.monto,iva:f.iva||0,total:f.monto,
+      nota:'Desde lista del SRI',origen:'sri-lista'});
+  });
+  if(!nuevas.length)return toast(edit.length?'Las que faltan son de la editorial: cárgalas con su XML':'No hay nada que guardar','err');
+  const nNeg=nuevas.filter(r=>r.tipo==='negocio').length;
+  if(!confirm(`Se van a guardar ${nuevas.length} facturas por ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}:\n\n• ${nuevas.length-nNeg} como Personal\n• ${nNeg} como Negocio (porque ya las tenías así antes)`+
+    (edit.length?`\n\n${edit.length} de la editorial NO se guardan aquí: bájalas en XML para que entren los libros.`:'')+'\n\n¿Seguir?'))return;
+  nuevas.forEach(r=>DB.regs.push(r));
+  logHistorial('Facturas importadas de la lista del SRI',`${nuevas.length} facturas — ${fmt(nuevas.reduce((a,r)=>a+r.total,0))}`);
+  save();updateCount();renderDash();sriRender();
+  toast(`${nuevas.length} facturas guardadas`,'ok');
 }
 // Al guardar desde "Registrar": pone el RUC del SRI en el registro y refresca la lista.
 function sriAlGuardar(reg){
