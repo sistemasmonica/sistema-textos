@@ -2459,6 +2459,7 @@ async function syncFromCloud(){
     try{reparacionNov2026f();}catch(e){console.warn('Reparación nov-2026 (6):',e);}
     try{reparacionNov2026g();}catch(e){console.warn('Reparación nov-2026 (7):',e);}
     try{reparacionNov2026h();}catch(e){console.warn('Reparación nov-2026 (8):',e);}
+    try{reparacionNov2026i();}catch(e){console.warn('Reparación nov-2026 (9):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5310,17 +5311,30 @@ function cobrosVendedoraHTML(soloVend,print,soloCol){
   const vends=[...new Set(L.map(c=>c.vendedora))].sort();
   const td='padding:5px 8px;border:1px solid #ddd';
   return vends.map(v=>{
-    const LV=L.filter(c=>c.vendedora===v);
+    const LT=L.filter(c=>c.vendedora===v);
+    // cargo:'colegio' = ese libro se descuenta de la comisión del colegio (10-nov-2026, acuerdo con Evelyn)
+    const LV=LT.filter(c=>c.cargo!=='colegio'), LCol=LT.filter(c=>c.cargo==='colegio');
     const cols=[...new Set(LV.map(c=>c.colegio))].sort();
     const tot=LV.reduce((a,c)=>a+c.cant*c.precio,0),nLib=LV.reduce((a,c)=>a+c.cant,0);
-    const cobrado=LV.every(c=>c.cobrado);
+    const cobrado=LV.length>0&&LV.every(c=>c.cobrado);
     const esc=escH(v).replace(/'/g,"\\'");
+    const btnCargo=c=>print?'':` <button class="btn btn-s btn-sm" style="padding:1px 6px;font-size:10px" onclick="cvCambiarCargo('${c.id}')" title="Cambiar quién paga este libro">${c.cargo==='colegio'?'→ que lo pague '+escH(v.split(' ')[0]):'→ descontar al colegio'}</button>`;
+    const bloqueColegio=!LCol.length?'':[...new Set(LCol.map(c=>c.colegio))].sort().map(col=>{
+      const LC=LCol.filter(c=>c.colegio===col).sort((a,b)=>a.libro.localeCompare(b.libro,'es',{numeric:true}));
+      const tc=LC.reduce((a,c)=>a+c.cant*c.precio,0),nc=LC.reduce((a,c)=>a+c.cant,0);
+      return `<div style="margin-top:10px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="background:#1565c0;color:#fff"><th style="${td};text-align:left" colspan="${print?4:5}">🏫 ${escH(col)} — estos libros NO los paga ${escH(v.split(' ')[0])}: se descuentan de la comisión del colegio</th></tr>
+        ${LC.map(c=>`<tr><td style="${td}">${escH(c.libro)}${btnCargo(c)}</td><td style="${td};text-align:center">${c.cant}</td><td style="${td};text-align:right">${fmt(c.precio)}</td><td style="${td};text-align:right;font-weight:700">${fmt(c.cant*c.precio)}</td>${print?'':`<td style="${td};text-align:center"><button class="btn btn-s btn-sm" onclick="borrarCobroVendedora('${c.id}')" title="Quitar">✕</button></td>`}</tr>`).join('')}
+        <tr style="background:#dbeafe;font-weight:800;color:#0c3c78"><td style="${td};text-align:right">SE DESCUENTA DE LA COMISIÓN DE ${escH(col)}</td><td style="${td};text-align:center">${nc}</td><td style="${td}"></td><td style="${td};text-align:right">${fmt(tc)}</td>${print?'':`<td style="${td}"></td>`}</tr>
+      </table></div>`;
+    }).join('');
+    if(!LV.length)return `<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:800">👩 ${escH(v)} — no paga ningún libro</div>${bloqueColegio}</div>`;
     const filas=cols.map(col=>{
       const LC=LV.filter(c=>c.colegio===col).sort((a,b)=>a.libro.localeCompare(b.libro,'es',{numeric:true}));
       const tc=LC.reduce((a,c)=>a+c.cant*c.precio,0),nc=LC.reduce((a,c)=>a+c.cant,0);
       const escC=escH(col).replace(/'/g,"\\'");
       return `<tr style="background:#fee2e2;color:#7f1d1d;font-weight:800"><td style="${td}" colspan="${print?4:5}">🏫 ${escH(col)}${print?'':` <button class="btn btn-sm" style="background:#dc2626;color:#fff;float:right;padding:2px 10px" onclick="imprimirCobroVendedora('${esc}','${escC}')"><i class="ti ti-printer"></i> Imprimir solo ${escH(col)}</button>`}</td></tr>`
-        +LC.map(c=>`<tr><td style="${td}">${escH(c.libro)}</td><td style="${td};text-align:center">${c.cant}</td><td style="${td};text-align:right">${fmt(c.precio)}</td><td style="${td};text-align:right;font-weight:700">${fmt(c.cant*c.precio)}</td>${print?'':`<td style="${td};text-align:center"><button class="btn btn-s btn-sm" onclick="borrarCobroVendedora('${c.id}')" title="Quitar">✕</button></td>`}</tr>`).join('')
+        +LC.map(c=>`<tr><td style="${td}">${escH(c.libro)}${btnCargo(c)}</td><td style="${td};text-align:center">${c.cant}</td><td style="${td};text-align:right">${fmt(c.precio)}</td><td style="${td};text-align:right;font-weight:700">${fmt(c.cant*c.precio)}</td>${print?'':`<td style="${td};text-align:center"><button class="btn btn-s btn-sm" onclick="borrarCobroVendedora('${c.id}')" title="Quitar">✕</button></td>`}</tr>`).join('')
         +`<tr style="font-weight:700"><td style="${td};text-align:right">Subtotal ${escH(col)}</td><td style="${td};text-align:center">${nc}</td><td style="${td}"></td><td style="${td};text-align:right">${fmt(tc)}</td>${print?'':`<td style="${td}"></td>`}</tr>`;
     }).join('');
     return `<div style="margin-bottom:14px">
@@ -5334,8 +5348,20 @@ function cobrosVendedoraHTML(soloVend,print,soloCol){
         <tr style="background:#dc2626;color:#fff"><th style="${td};text-align:left">LIBRO</th><th style="${td}">CANT.</th><th style="${td}">PRECIO C/U</th><th style="${td}">TOTAL</th>${print?'':`<th style="${td}"></th>`}</tr>
         ${filas}
         <tr style="background:#fecaca;font-weight:800;font-size:14px;color:#7f1d1d"><td style="${td};text-align:right">TOTAL A COBRAR A ${escH(v)}${soloCol?' — '+escH(soloCol):''}</td><td style="${td};text-align:center">${nLib}</td><td style="${td}"></td><td style="${td};text-align:right">${fmt(tot)}</td>${print?'':`<td style="${td}"></td>`}</tr>
-      </table></div></div>`;
+      </table></div>${bloqueColegio}</div>`;
   }).join('');
+}
+// Cambia quién paga un libro no devuelto: la vendedora ⇄ el colegio (de su comisión).
+function cvCambiarCargo(id){
+  const x=(DB.cobrosVendedora||[]).find(c=>c.id===id);if(!x)return;
+  if(x.cargo==='colegio')delete x.cargo;else x.cargo='colegio';
+  logHistorial('Libro no devuelto: quién paga',`${x.colegio}: ${x.libro} → ${x.cargo==='colegio'?'se descuenta de la comisión del colegio':'lo paga '+x.vendedora}`);
+  save();renderCobrosVendedora();try{renderPagoVendedora();}catch(e){}
+}
+// Libros no devueltos que se descuentan de la comisión de un colegio.
+function descuentoComisionLibros(colegio){
+  return Math.round((DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&_normNombre(c.colegio)===_normNombre(colegio))
+    .reduce((a,c)=>a+c.cant*c.precio,0)*100)/100;
 }
 function renderCobrosVendedora(){
   const box=document.getElementById('cv-lista');if(!box)return;
@@ -5375,6 +5401,22 @@ function imprimirCobroVendedora(v,col){
 // 9-nov-2026 (Mónica): factura emitida 001-002-000000341 del 07-oct por $10,000 a nombre de
 // Camila Muñoz Pazmiño = "PAGO COLEGIO LATINOAMERICANO 2026". El cobro ya está en Pagos y la
 // venta en Colegios → se guarda como cobroColegio (sale en Declaraciones, no suma a la ganancia).
+// 10-nov-2026 (acuerdo Mónica–Evelyn): de los libros que Saulo no devolvió, 12 se
+// descuentan de la comisión del colegio; Evelyn paga solo Solucionario Historia BG 1 y BG 2
+// y los 3 de Florentinos.
+function reparacionNov2026i(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 10-nov: Saulo paga 12 libros no devueltos de su comisión';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const ELLA=['SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 1','SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 2'];
+  let n=0,t=0;
+  (DB.cobrosVendedora||[]).forEach(c=>{
+    if(_normNombre(c.colegio)!==_normNombre('SAULO')||ELLA.includes(c.libro))return;
+    c.cargo='colegio';n+=c.cant;t+=c.cant*c.precio;
+  });
+  logHistorial(MARCA,n+' libros, '+fmt(t));
+  save();
+}
 function reparacionNov2026h(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 9-nov: factura 341 Latinoamericano (Camila Muñoz)';
@@ -5519,7 +5561,9 @@ function reparacionNov2026g(){
 //   recargo) = ganancia → 70% vendedora, 30% Daniel.
 // Los $2 son ganancia de Mónica y Evelyn NO lo sabe: en lo que se imprime para
 // ella el costo sale como "Costo distribuidor" y no aparece el recargo ni Daniel.
-const PAGO_VENDEDORA={vendedora:'EVELYN CEDEÑO',pct:70,socio:'DANIEL',colegios:['SAULO','JARDINES DE SUEÑO']};
+const PAGO_VENDEDORA={vendedora:'EVELYN CEDEÑO',pct:70,socio:'DANIEL',colegios:['SAULO','JARDINES DE SUEÑO'],
+  // Plata de colegios que la vendedora cobró directo y se quedó (se resta de su pago). 10-nov-2026.
+  cobradoPorElla:[{colegio:'JARDINES DE SUEÑO',valor:273,nota:'Jardines de Sueño le pagó directo'}]};
 let _pvSel=null;
 function _pvColegiosSel(){
   if(!_pvSel){
@@ -5585,7 +5629,34 @@ function pagoVendedoraHTML(R,para){
   <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><tr><th style="${td};text-align:left">Colegio</th><th style="${td}">${escH(nm)} ${PAGO_VENDEDORA.pct}%</th>${ev?'':`<th style="${td}">${escH(soc)} ${100-PAGO_VENDEDORA.pct}%</th><th style="${td}">Nuestros $${recargoVendedora(PAGO_VENDEDORA.vendedora)} por libro</th>`}</tr>
   ${R.map(r=>`<tr><td style="${td}">${escH(r.col)}</td><td style="${td};text-align:right">${n(r.ella)}</td>${ev?'':`<td style="${td};text-align:right">${n(r.socio)}</td><td style="${td};text-align:right">${n(r.recargo)}</td>`}</tr>`).join('')}
   <tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:right;color:#15803d">${fmt(T('ella'))}</td>${ev?'':`<td style="${td};text-align:right">${fmt(T('socio'))}</td><td style="${td};text-align:right">${fmt(T('recargo'))}</td>`}</tr></table></div>
-  <div style="font-size:16px;font-weight:800;margin-top:8px">Valor a cancelar a ${escH(nm)}: <span style="color:#15803d">${fmt(T('ella'))}</span></div></div>`;
+  <div style="font-size:16px;font-weight:800;margin-top:8px">Comisión de ${escH(nm)}: <span style="color:#15803d">${fmt(T('ella'))}</span></div></div>`;
+  // CUENTA FINAL: comisión − lo que ella cobró de colegios − libros no devueltos que paga ella
+  const v=PAGO_VENDEDORA.vendedora;
+  const cobradoElla=(PAGO_VENDEDORA.cobradoPorElla||[]);
+  const libsElla=(DB.cobrosVendedora||[]).filter(c=>c.vendedora===v&&c.cargo!=='colegio').sort((a,b)=>a.colegio.localeCompare(b.colegio)||a.libro.localeCompare(b.libro,'es',{numeric:true}));
+  const totLib=_pvR2(libsElla.reduce((a,c)=>a+c.cant*c.precio,0));
+  const resultado=_pvR2(T('ella')-cobradoElla.reduce((a,x)=>a+x.valor,0)-totLib);
+  const ff=(a,b,st)=>`<tr style="${st||''}"><td style="padding:3px 8px">${a}</td><td style="padding:3px 8px;text-align:right;white-space:nowrap">${b}</td></tr>`;
+  h+=`<div style="border:2px solid #b45309;border-radius:8px;padding:8px 10px;margin-top:10px"><div style="font-weight:800;margin-bottom:4px">CUENTA FINAL CON ${escH(v)}</div>
+  <table style="border-collapse:collapse;font-size:12px;width:100%">
+  ${ff('Comisión de '+escH(nm),fmt(T('ella')),'font-weight:700')}
+  ${cobradoElla.map(x=>ff('− '+escH(x.nota)+' ('+escH(x.colegio)+')','−'+fmt(x.valor))).join('')}
+  ${libsElla.map(c=>ff('− Libro no devuelto ('+escH(c.colegio)+'): '+escH(c.libro)+(c.cant>1?' × '+c.cant:''),'−'+fmt(c.cant*c.precio))).join('')}
+  ${ff(resultado<0?escH(nm)+' debe pagar a D&amp;M Books':'Valor a cancelar a '+escH(nm),fmt(Math.abs(resultado)),'font-weight:800;font-size:16px;border-top:2px solid #999;color:'+(resultado<0?'#b91c1c':'#15803d'))}
+  </table></div>`;
+  // Comisión de los colegios con libros no devueltos que se les descuentan
+  const colsDesc=[...new Set((DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio').map(c=>c.colegio))];
+  colsDesc.forEach(col=>{
+    const k=Object.keys(DB.colData||{}).find(x=>_normNombre(x)===_normNombre(col));
+    const com=k?_pvR2(totalesColegio(DB.colData[k]).totalColegio):0, desc=descuentoComisionLibros(col);
+    const nl=(DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&c.colegio===col).reduce((a,c)=>a+c.cant,0);
+    h+=`<div style="border:2px solid #1565c0;border-radius:8px;padding:8px 10px;margin-top:10px"><div style="font-weight:800;margin-bottom:4px">COMISIÓN DEL COLEGIO ${escH(col)}</div>
+    <table style="border-collapse:collapse;font-size:12px;width:100%">
+    ${ff('Comisión del colegio',fmt(com))}
+    ${ff('− '+nl+' libros que no devolvieron',' −'+fmt(desc))}
+    ${ff('A '+escH(col)+' se le entrega',fmt(_pvR2(com-desc)),'font-weight:800;font-size:16px;border-top:2px solid #999;color:#1565c0')}
+    </table></div>`;
+  });
   if(!ev)h+=`<div style="background:#fff3b0;color:#222;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px"><b>Solo para nosotros:</b> el costo distribuidor tiene $${recargoVendedora(PAGO_VENDEDORA.vendedora)} más por libro que la lista de la editorial. ${T('unidades')} libros = <b>${fmt(T('recargo'))}</b> de ganancia nuestra. ${escH(nm)} no sabe de este valor.</div>`;
   return h;
 }
