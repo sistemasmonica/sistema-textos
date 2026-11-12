@@ -2463,6 +2463,7 @@ async function syncFromCloud(){
     try{reparacionNov2026j();}catch(e){console.warn('Reparación nov-2026 (10):',e);}
     try{reparacionNov2026k();}catch(e){console.warn('Reparación nov-2026 (11):',e);}
     try{reparacionNov2026l();}catch(e){console.warn('Reparación nov-2026 (12):',e);}
+    try{reparacionNov2026m();}catch(e){console.warn('Reparación nov-2026 (13):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5414,6 +5415,21 @@ function imprimirCobroVendedora(v,col){
 // 11-nov (3): Mónica — a Evelyn se le cobran Florentinos (3) + Solucionario Historia BG 1 y BG 2
 // de Saulo, todos a costo + $2. Se regresan los dos de Historia si se borraron y se suben $2
 // a cualquier libro de Evelyn que haya quedado al costo.
+// 11-nov (4): Mónica — los 12 libros que Saulo no devolvió van al precio TE QUEDA de Saulo:
+// Caligrafía 9.10 (14 − 35%) y los demás 21.45 (33 − 35%). Solo Saulo; Florentinos y los
+// dos de Historia de Evelyn no se tocan.
+function reparacionNov2026m(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 11-nov (4): 12 libros de Saulo al precio TE QUEDA (9.10 / 21.45)';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  let n=0,t=0;
+  (DB.cobrosVendedora||[]).forEach(c=>{
+    if(c.cargo!=='colegio'||_normNombre(c.colegio)!==_normNombre('SAULO'))return;
+    c.precio=/^CALIGRAFIA/.test(c.libro)?9.10:21.45;c.precioTeQueda=true;n+=c.cant;t+=c.cant*c.precio;
+  });
+  logHistorial(MARCA,n+' libros, '+fmt(t));
+  save();
+}
 function reparacionNov2026l(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 11-nov (3): Historia BG 1 y 2 vuelven a Evelyn; todo a costo + $2';
