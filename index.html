@@ -5652,10 +5652,15 @@ function calcPagoVendedora(){
     const sum=k=>_pvR2(lineas.reduce((a,x)=>a+x[k],0));
     const total=sum('total'),comision=sum('comision'),vtotal=sum('vtotal');
     const pcts=[...new Set(lineas.map(x=>x.pct))];
-    const neta=_pvR2(total-comision),ganancia=_pvR2(neta-vtotal);
+    // 11-nov-2026 (Mónica): Total vendido − Costo distribuidor (TE QUEDA) = Comisión;
+    // − libros que el colegio no devolvió = Queda → 70% vendedora / 30% Daniel.
+    const neta=_pvR2(total-vtotal);
+    const libsCol=(DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&_normNombre(c.colegio)===_normNombre(col));
+    const nLib=libsCol.reduce((a,c)=>a+c.cant,0), descLib=_pvR2(libsCol.reduce((a,c)=>a+c.cant*c.precio,0));
+    const ganancia=_pvR2(neta-descLib);
     const ella=_pvR2(ganancia*PAGO_VENDEDORA.pct/100);
     const unidades=lineas.reduce((a,x)=>a+x.vend,0);
-    return {col,lineas,total,comision,vtotal,neta,ganancia,ella,socio:_pvR2(ganancia-ella),
+    return {col,lineas,total,comision,vtotal,neta,nLib,descLib,ganancia,ella,socio:_pvR2(ganancia-ella),
       unidades,recargo:_pvR2(unidades*rec),pctTxt:pcts.length===1?pcts[0]+'%':'varios %'};
   });
 }
@@ -5676,10 +5681,10 @@ function pagoVendedoraHTML(R,para){
     +`<tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:center">${r.unidades}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.total)}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.vtotal)}</td></tr></tbody></table></div>
     <table style="border-collapse:collapse;font-size:12px;margin:6px 0 0 auto;min-width:240px">
     ${fila('Total vendido',n(r.total))}
-    ${fila('− Comisión colegio '+r.pctTxt,n(r.comision))}
-    ${fila('Ganancia neta',n(r.neta),'border-top:1px solid #999')}
     ${fila('− Costo distribuidor',n(r.vtotal))}
-    ${fila('Ganancia',n(r.ganancia),'border-top:1px solid #999')}
+    ${fila('Comisión',n(r.neta),'border-top:1px solid #999')}
+    ${r.nLib?fila('− '+r.nLib+' libros no devueltos',n(r.descLib)):''}
+    ${fila('Queda',n(r.ganancia),'border-top:1px solid #999')}
     ${fila(escH(nm)+' '+PAGO_VENDEDORA.pct+'%',n(r.ella),'font-weight:800;color:#15803d')}
     ${ev?'':fila(escH(soc)+' '+(100-PAGO_VENDEDORA.pct)+'%',n(r.socio))}
     </table></div>`;
@@ -5706,7 +5711,7 @@ function pagoVendedoraHTML(R,para){
   </table></div>`;
   // Comisión de los colegios con libros no devueltos que se les descuentan
   const colsDesc=[...new Set((DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio').map(c=>c.colegio))];
-  colsDesc.forEach(col=>{
+  if(false)colsDesc.forEach(col=>{
     const k=Object.keys(DB.colData||{}).find(x=>_normNombre(x)===_normNombre(col));
     const com=k?_pvR2(totalesColegio(DB.colData[k]).totalColegio):0, desc=descuentoComisionLibros(col);
     const nl=(DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&c.colegio===col).reduce((a,c)=>a+c.cant,0);
