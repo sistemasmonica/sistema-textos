@@ -5587,7 +5587,9 @@ function calcPagoVendedora(){
     const lineas=(d.lineas||[]).map(l=>{
       const vend=(l.cant||0)-(l.dev||0);
       const pvp=parseFloat(l.pvp)||0, costo=parseFloat(l.costo)||0, pct=pctLinea(d,l);
-      return {libro:l.libro,vend,pvp,pct,costoDist:_pvR2(costo+rec),total:_pvR2(vend*pvp),comision:_pvR2(vend*pvp*pct/100),vtotal:_pvR2(vend*(costo+rec))};
+      // Costo distribuidor = TE QUEDA/LIBRO de Control de ventas (PVP − comisión del colegio). Pedido por Mónica 11-nov-2026.
+      const cd=_pvR2(pvp*(1-pct/100));
+      return {libro:l.libro,vend,pvp,pct,costoDist:cd,total:_pvR2(vend*pvp),comision:_pvR2(vend*pvp*pct/100),vtotal:_pvR2(vend*cd)};
     }).filter(x=>x.vend>0);
     const sum=k=>_pvR2(lineas.reduce((a,x)=>a+x[k],0));
     const total=sum('total'),comision=sum('comision'),vtotal=sum('vtotal');
