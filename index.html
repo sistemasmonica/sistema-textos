@@ -2460,6 +2460,7 @@ async function syncFromCloud(){
     try{reparacionNov2026g();}catch(e){console.warn('Reparación nov-2026 (7):',e);}
     try{reparacionNov2026h();}catch(e){console.warn('Reparación nov-2026 (8):',e);}
     try{reparacionNov2026i();}catch(e){console.warn('Reparación nov-2026 (9):',e);}
+    try{reparacionNov2026j();}catch(e){console.warn('Reparación nov-2026 (10):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5267,12 +5268,13 @@ function guardarDevolucionRV(){
 // Solo control: no mueve stock ni la deuda con la editorial.
 // {id,fecha,vendedora,colegio,prodId,libro,cant,precio,cobrado}
 // A Evelyn Mónica le da los libros al precio normal (costo) + $2 cada uno (4-nov-2026).
-const RECARGO_VENDEDORA={'EVELYN CEDEÑO':2};
+// 11-nov-2026: Mónica quita los $2 — los libros van al costo de Control de muestras.
+const RECARGO_VENDEDORA={};
 function recargoVendedora(v){return RECARGO_VENDEDORA[_normNombre(v)===_normNombre('EVELYN CEDEÑO')?'EVELYN CEDEÑO':String(v||'').trim().toUpperCase()]||0;}
 function cvLibroElegido(){
   const n=document.getElementById('cv-libro').value.trim();
   const p=DB.productos.find(x=>x.editorial!=='Hist.'&&x.nombre===n);
-  if(p)document.getElementById('cv-precio').value=String((parseFloat(p.precioCosto)||0)+recargoVendedora(document.getElementById('cv-vend').value)).replace('.',',');
+  if(p)document.getElementById('cv-precio').value=String((parseFloat(p.precioCosto)||0)).replace('.',',');
 }
 function guardarCobroVendedora(){
   const vendedora=(document.getElementById('cv-vend').value||'').trim().toUpperCase();
@@ -5284,7 +5286,7 @@ function guardarCobroVendedora(){
   if(cant<=0)return toast('La cantidad debe ser 1 o más','err');
   const p=DB.productos.find(x=>x.editorial!=='Hist.'&&x.nombre===libro);
   DB.cobrosVendedora=DB.cobrosVendedora||[];
-  DB.cobrosVendedora.push({id:uid(),fecha:today(),vendedora,colegio,prodId:p?.id||'',libro:p?p.nombre:libro.toUpperCase(),cant,precio,recargo:recargoVendedora(vendedora),cobrado:false});
+  DB.cobrosVendedora.push({id:uid(),fecha:today(),vendedora,colegio,prodId:p?.id||'',libro:p?p.nombre:libro.toUpperCase(),cant,precio,recargo:0,cobrado:false});
   logHistorial('Libro no devuelto por vendedora',`${vendedora} — ${colegio}: ${cant} × ${libro} (${fmt(cant*precio)})`);
   save();
   document.getElementById('cv-libro').value='';document.getElementById('cv-cant').value='1';document.getElementById('cv-precio').value='';
@@ -5404,6 +5406,26 @@ function imprimirCobroVendedora(v,col){
 // 10-nov-2026 (acuerdo Mónica–Evelyn): de los libros que Saulo no devolvió, 12 se
 // descuentan de la comisión del colegio; Evelyn paga solo Solucionario Historia BG 1 y BG 2
 // y los 3 de Florentinos.
+// 11-nov: Mónica — Saulo son solo 12 libros (se quitan Solucionario Historia BG 1 y BG 2)
+// y el precio de cada libro no devuelto es el de Control de muestras (costo del
+// catálogo, sin los $2). Vale para Saulo y Florentinos.
+function reparacionNov2026j(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 11-nov: libros no devueltos al precio de Control de muestras; Saulo 12 libros';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const QUITAR=['SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 1','SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 2'];
+  const antes=(DB.cobrosVendedora||[]).length;
+  DB.cobrosVendedora=(DB.cobrosVendedora||[]).filter(c=>!(_normNombre(c.colegio)===_normNombre('SAULO')&&QUITAR.includes(c.libro)));
+  const quit=antes-DB.cobrosVendedora.length;
+  let n=0;
+  DB.cobrosVendedora.forEach(c=>{
+    const p=DB.productos.find(x=>(c.prodId&&x.id===c.prodId))||DB.productos.find(x=>x.editorial!=='Hist.'&&x.nombre===c.libro);
+    const costo=parseFloat(p?.precioCosto);
+    if(isFinite(costo)&&costo>0){c.precio=costo;c.recargo=0;n++;}
+  });
+  logHistorial(MARCA,quit+' quitado(s), '+n+' precio(s) al costo de Control de muestras');
+  save();
+}
 function reparacionNov2026i(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 10-nov: Saulo paga 12 libros no devueltos de su comisión';
@@ -5628,9 +5650,9 @@ function pagoVendedoraHTML(R,para){
   });
   const T=k=>_pvR2(R.reduce((a,r)=>a+r[k],0));
   h+=`<div style="border:2px solid #15803d;border-radius:8px;padding:8px 10px;margin-top:8px"><div style="font-weight:800;margin-bottom:4px">TOTAL A PAGAR</div>
-  <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><tr><th style="${td};text-align:left">Colegio</th><th style="${td}">${escH(nm)} ${PAGO_VENDEDORA.pct}%</th>${ev?'':`<th style="${td}">${escH(soc)} ${100-PAGO_VENDEDORA.pct}%</th><th style="${td}">Nuestros $${recargoVendedora(PAGO_VENDEDORA.vendedora)} por libro</th>`}</tr>
-  ${R.map(r=>`<tr><td style="${td}">${escH(r.col)}</td><td style="${td};text-align:right">${n(r.ella)}</td>${ev?'':`<td style="${td};text-align:right">${n(r.socio)}</td><td style="${td};text-align:right">${n(r.recargo)}</td>`}</tr>`).join('')}
-  <tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:right;color:#15803d">${fmt(T('ella'))}</td>${ev?'':`<td style="${td};text-align:right">${fmt(T('socio'))}</td><td style="${td};text-align:right">${fmt(T('recargo'))}</td>`}</tr></table></div>
+  <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><tr><th style="${td};text-align:left">Colegio</th><th style="${td}">${escH(nm)} ${PAGO_VENDEDORA.pct}%</th>${ev?'':`<th style="${td}">${escH(soc)} ${100-PAGO_VENDEDORA.pct}%</th>${recargoVendedora(PAGO_VENDEDORA.vendedora)?`<th style="${td}">Nuestros $${recargoVendedora(PAGO_VENDEDORA.vendedora)} por libro</th>`:''}`}</tr>
+  ${R.map(r=>`<tr><td style="${td}">${escH(r.col)}</td><td style="${td};text-align:right">${n(r.ella)}</td>${ev?'':`<td style="${td};text-align:right">${n(r.socio)}</td>${recargoVendedora(PAGO_VENDEDORA.vendedora)?`<td style="${td};text-align:right">${n(r.recargo)}</td>`:''}`}</tr>`).join('')}
+  <tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:right;color:#15803d">${fmt(T('ella'))}</td>${ev?'':`<td style="${td};text-align:right">${fmt(T('socio'))}</td>${recargoVendedora(PAGO_VENDEDORA.vendedora)?`<td style="${td};text-align:right">${fmt(T('recargo'))}</td>`:''}`}</tr></table></div>
   <div style="font-size:16px;font-weight:800;margin-top:8px">Comisión de ${escH(nm)}: <span style="color:#15803d">${fmt(T('ella'))}</span></div></div>`;
   // CUENTA FINAL: comisión − lo que ella cobró de colegios − libros no devueltos que paga ella
   const v=PAGO_VENDEDORA.vendedora;
@@ -5659,7 +5681,7 @@ function pagoVendedoraHTML(R,para){
     ${ff('A '+escH(col)+' se le entrega',fmt(_pvR2(com-desc)),'font-weight:800;font-size:16px;border-top:2px solid #999;color:#1565c0')}
     </table></div>`;
   });
-  if(!ev)h+=`<div style="background:#fff3b0;color:#222;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px"><b>Solo para nosotros:</b> el costo distribuidor tiene $${recargoVendedora(PAGO_VENDEDORA.vendedora)} más por libro que la lista de la editorial. ${T('unidades')} libros = <b>${fmt(T('recargo'))}</b> de ganancia nuestra. ${escH(nm)} no sabe de este valor.</div>`;
+  if(!ev&&recargoVendedora(PAGO_VENDEDORA.vendedora))h+=`<div style="background:#fff3b0;color:#222;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px"><b>Solo para nosotros:</b> el costo distribuidor tiene $${recargoVendedora(PAGO_VENDEDORA.vendedora)} más por libro que la lista de la editorial. ${T('unidades')} libros = <b>${fmt(T('recargo'))}</b> de ganancia nuestra. ${escH(nm)} no sabe de este valor.</div>`;
   return h;
 }
 function renderPagoVendedora(){
