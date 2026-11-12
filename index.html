@@ -2462,6 +2462,7 @@ async function syncFromCloud(){
     try{reparacionNov2026i();}catch(e){console.warn('Reparación nov-2026 (9):',e);}
     try{reparacionNov2026j();}catch(e){console.warn('Reparación nov-2026 (10):',e);}
     try{reparacionNov2026k();}catch(e){console.warn('Reparación nov-2026 (11):',e);}
+    try{reparacionNov2026l();}catch(e){console.warn('Reparación nov-2026 (12):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
@@ -5410,6 +5411,31 @@ function imprimirCobroVendedora(v,col){
 // y el precio de cada libro no devuelto es el de Control de muestras (costo del
 // catálogo, sin los $2). Vale para Saulo y Florentinos.
 // 11-nov (2): Mónica — los precios de los libros no devueltos NO se bajan: vuelven a costo + $2.
+// 11-nov (3): Mónica — a Evelyn se le cobran Florentinos (3) + Solucionario Historia BG 1 y BG 2
+// de Saulo, todos a costo + $2. Se regresan los dos de Historia si se borraron y se suben $2
+// a cualquier libro de Evelyn que haya quedado al costo.
+function reparacionNov2026l(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 11-nov (3): Historia BG 1 y 2 vuelven a Evelyn; todo a costo + $2';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  DB.cobrosVendedora=DB.cobrosVendedora||[];
+  const V='EVELYN CEDEÑO';
+  let agregados=0,subidos=0;
+  ['SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 1','SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 2'].forEach(nom=>{
+    if(DB.cobrosVendedora.some(c=>_normNombre(c.colegio)===_normNombre('SAULO')&&c.libro===nom))return;
+    const p=DB.productos.find(x=>x.editorial!=='Hist.'&&x.nombre===nom);
+    DB.cobrosVendedora.push({id:uid(),fecha:'2026-11-04',vendedora:V,colegio:'SAULO',prodId:p?.id||'',libro:nom,cant:1,precio:Math.round(((parseFloat(p?.precioCosto)||0)+2)*100)/100,recargo:2,cobrado:false});
+    agregados++;
+  });
+  DB.cobrosVendedora.forEach(c=>{
+    if(_normNombre(c.vendedora)!==_normNombre(V)||c.recargo!==0)return;
+    const p=DB.productos.find(x=>(c.prodId&&x.id===c.prodId))||DB.productos.find(x=>x.editorial!=='Hist.'&&x.nombre===c.libro);
+    const costo=parseFloat(p?.precioCosto);
+    if(isFinite(costo)&&costo>0&&Math.abs(c.precio-costo)<0.005){c.precio=Math.round((costo+2)*100)/100;c.recargo=2;subidos++;}
+  });
+  logHistorial(MARCA,agregados+' regresado(s), '+subidos+' con +$2');
+  save();
+}
 function reparacionNov2026k(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 11-nov: libros no devueltos vuelven a su precio (costo + $2)';
@@ -5430,7 +5456,7 @@ function reparacionNov2026j(){
   if((DB.historial||[]).some(h=>h.accion===MARCA))return;
   const QUITAR=['SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 1','SOLUCIONARIO HISTORIA EVOLUCION 5.0 BG 2'];
   const antes=(DB.cobrosVendedora||[]).length;
-  DB.cobrosVendedora=(DB.cobrosVendedora||[]).filter(c=>!(_normNombre(c.colegio)===_normNombre('SAULO')&&QUITAR.includes(c.libro)));
+  return; // 11-nov: anulado — Historia BG 1 y 2 se quedan (los paga Evelyn)
   const quit=antes-DB.cobrosVendedora.length;
   const n=0;
   logHistorial(MARCA,quit+' quitado(s), '+n+' precio(s) al costo de Control de muestras');
