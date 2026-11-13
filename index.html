@@ -13504,13 +13504,60 @@ function estadoEditorialHTML(ed,modo){
   return `<div class="card" style="padding:12px 14px;margin-bottom:14px;border:2px solid ${col}">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <div class="card-t" style="color:${col}">${titulo}</div>
-      ${modo==='plegado'?`<button class="btn btn-s btn-sm" onclick="imprimirEditorialPorColegio('${ed}')"><i class="ti ti-printer"></i> Imprimir solo ${ed==='tb'?'Tech Books':'Didáctica'}</button>`:''}
+      ${modo==='plegado'?`<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-s btn-sm" onclick="imprimirDevolucionEditorial('${ed}')"><i class="ti ti-arrow-back-up"></i> Imprimir devolución</button><button class="btn btn-s btn-sm" onclick="imprimirEditorialPorColegio('${ed}')"><i class="ti ti-printer"></i> Imprimir solo ${ed==='tb'?'Tech Books':'Didáctica'}</button></div>`:''}
     </div>
     <div style="font-size:11px;margin-bottom:6px;opacity:.8">Precio = el costo de cada libro en <b>Colegios → Control de ventas</b> (lo que la editorial te cobra en ese colegio). Entregado − devolución = vendido.</div>
     <div style="overflow-x:auto">${resumen}</div>
-    ${modo==='plegado'?`<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700;color:${col}">▸ Ver libro por libro</summary><div style="overflow-x:auto">${detalle}</div></details>`:`<div style="margin-top:14px;font-weight:800;font-size:13px">DETALLE LIBRO POR LIBRO</div>${detalle}`}
+    ${modo==='plegado'?`<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700;color:${col}">▸ Ver libro por libro</summary><div style="overflow-x:auto">${detalle}</div></details><details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;color:#b00020">▸ Ver devolución libro por libro (por colegio)</summary><div style="overflow-x:auto">${devolucionEditorialHTML(ed)}</div></details>`:`<div style="margin-top:14px;font-weight:800;font-size:13px">DETALLE LIBRO POR LIBRO</div>${detalle}`}
     ${ed==='did'?'<div style="font-size:11px;color:#92400e;background:#fffbeb;border-radius:6px;padding:7px 10px;margin-top:8px">Ojo: Didáctica te cobra <b>todo lo que te facturó</b>, también los libros que están en bodega o en guías y aún no devuelves. La deuda real con Didáctica está en <b>Mi cuenta → Editoriales</b>, y baja cuando devuelves libros y te hacen nota de crédito.</div>':''}
   </div>`;
+}
+// (Mónica 13-nov, pedido del esposo) DEVOLUCIÓN libro por libro, colegio por
+// colegio: solo los libros devueltos (dev > 0) de Control de ventas, más los de
+// bodega que nunca se quedaron en un colegio, y al final el total por título
+// (lo que hay que empacar para la editorial).
+function devolucionEditorialHTML(ed){
+  const E=estadoEditorialDatos(ed);
+  const m=v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const col=ed==='tb'?'#1565c0':'#2e7d32',bg=ed==='tb'?'#e3f2fd':'#e8f5e9';
+  const td='padding:4px 7px;border:1px solid #ccc;text-align:right;font-family:monospace;white-space:nowrap';
+  const tc='padding:4px 7px;border:1px solid #ccc;text-align:center;font-weight:700';
+  const tl='padding:4px 7px;border:1px solid #ccc';
+  const th=`padding:5px 7px;border:1px solid #bbb;font-size:11px;background:${bg};color:#111`;
+  const grupos=E.colegios.map(c=>({nom:c.nom,filas:c.filas.filter(r=>r.d>0)})).filter(g=>g.filas.length);
+  const otros=(E.otros||[]).filter(r=>r.d>0);
+  if(otros.length)grupos.push({nom:'Otros libros en bodega (no se quedaron en ningún colegio)',filas:otros});
+  if(!grupos.length)return '<div style="padding:8px;opacity:.7">No hay devoluciones registradas.</div>';
+  const porTit={};
+  const tabla=(fs)=>{let u=0,v=0;const rows=fs.slice().sort((a,b)=>a.t.localeCompare(b.t,'es',{numeric:true})).map(r=>{u+=r.d;v+=r.d*r.p;
+      const k=r.t.trim().toUpperCase();porTit[k]=porTit[k]||{t:r.t,d:0,v:0};porTit[k].d+=r.d;porTit[k].v+=r.d*r.p;
+      return `<tr><td style="${tl}">${escH(r.t)}</td><td style="${tc}">${r.d}</td><td style="${td}">${m(r.p)}</td><td style="${td}">${m(r.d*r.p)}</td></tr>`;}).join('');
+    return `<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Libro</th><th style="${th}">Cant. devuelta</th><th style="${th}">Precio</th><th style="${th}">Valor</th></tr></thead><tbody>${rows}
+      <tr style="font-weight:800;background:${bg}"><td style="${tl}">TOTAL</td><td style="${tc}">${u}</td><td style="${tl}"></td><td style="${td}">${m(v)}</td></tr></tbody></table>`;};
+  let html=grupos.map((g,i)=>`<div style="font-weight:800;margin:12px 0 3px;color:${col}">${i+1}. ${escH(g.nom)}</div>${tabla(g.filas)}`).join('');
+  const lista=Object.values(porTit).sort((a,b)=>a.t.localeCompare(b.t,'es',{numeric:true}));
+  let U=0,V=0;
+  html+=`<div style="font-weight:800;margin:16px 0 3px;color:#b00020">TOTAL DE LA DEVOLUCIÓN POR LIBRO (todos los colegios juntos)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Libro</th><th style="${th}">Cant. devuelta</th><th style="${th}">Valor</th></tr></thead><tbody>
+    ${lista.map(r=>{U+=r.d;V+=r.v;return `<tr><td style="${tl}">${escH(r.t)}</td><td style="${tc}">${r.d}</td><td style="${td}">${m(r.v)}</td></tr>`;}).join('')}
+    <tr style="font-weight:800;background:#fdecea"><td style="${tl}">TOTAL A DEVOLVER</td><td style="${tc}">${U}</td><td style="${td}">${m(V)}</td></tr></tbody></table>`;
+  return html;
+}
+function imprimirDevolucionEditorial(ed){
+  ed=ed==='did'?'did':'tb';
+  const win=window.open('','_blank');
+  if(!win) return toast('El navegador bloqueó la ventana: permite las ventanas emergentes para este sitio','err');
+  const nom=ed==='tb'?'Tech Books':'Didáctica';
+  win.document.write(`<html><head><title>Devolución ${nom}</title>
+  <style>body{font-family:Arial,sans-serif;padding:15px;font-size:12px;background:#fff;color:#111}
+  .btn-print{background:#6a1b9a;color:#fff;padding:8px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:14px}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}${dmPrintCSS()}</style></head><body>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+  ${dmPrintHeader('Devolución de libros — '+nom,'Libro por libro, por colegio · al '+new Date().toLocaleDateString('es-EC'))}
+  ${devolucionEditorialHTML(ed)}
+  ${dmPrintFooter()}
+  </body></html>`);
+  win.document.close();
 }
 function editorialPorColegioHTML(){
   return '<div style="font-size:12px;margin-bottom:10px;opacity:.8">Cada editorial por separado: lo entregado, lo devuelto y lo vendido, colegio por colegio. Sale de <b>Colegios → Control de ventas</b>; los abonos salen de <b>Pagos</b>. Cada una se imprime aparte.</div>'
