@@ -332,6 +332,7 @@ a{color:#7dd3fc}
     <label id="lbl-restaurar" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Restaurar datos desde backup">📂 Restaurar<input type="file" id="fi-backup" accept=".json" style="display:none" onchange="restoreData(this)"></label>
     <button onclick="verCopiasNube()" id="btn-copias" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Copias diarias guardadas en la nube (últimos 14 días): volver a como estaba el sistema un día anterior">☁️ Copias</button>
     <button onclick="entrarModoContadora()" id="btn-contadora" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Acceso de solo lectura para la contadora">🔒 Contadora</button>
+    <button onclick="verAniosAnteriores()" id="btn-anios" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Cerrar el año escolar y ver los años anteriores guardados">📚 Años</button>
     <button onclick="cerrarSesionNube()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit" title="Salir: la próxima vez se pide la clave">🚪 Cerrar sesión</button>
   </div>
 </div>
@@ -2133,6 +2134,7 @@ async function iniciarNube(){
     MODO_LECTURA=true;sessionStorage.setItem('txe_modo','contadora');aplicarModoLectura();
   }
   NUBE_OK=true;
+  if(VER_ANIO){cargarAnioGuardado(VER_ANIO);return;}
   syncFromCloud();
 }
 function cerrarSesionNube(){
@@ -2146,6 +2148,13 @@ function cerrarSesionNube(){
 // ===================================================
 // La clave de la contadora se valida en Supabase (rol 'contadora').
 let MODO_LECTURA=sessionStorage.getItem('txe_modo')==='contadora';
+// (Mónica 13-nov-2026) AÑO ESCOLAR. Cada año se cierra con "📚 Años → Cerrar
+// año": el año completo se guarda aparte en la nube (app_data txe_anio_AAAA,
+// índice en txe_anios) y el sistema sigue limpio con el año siguiente.
+// VER_ANIO = se está mirando un año guardado (solo lectura, nada se guarda).
+let ANIO_ACTUAL=localStorage.getItem('txe_anio')||'2026';
+const VER_ANIO=sessionStorage.getItem('txe_ver_anio')||'';
+if(VER_ANIO)MODO_LECTURA=true;
 
 async function entrarModoContadora(){
   const clave=prompt('Clave de acceso para la contadora:');
@@ -2168,6 +2177,15 @@ function salirModoContadora(){
 }
 function aplicarModoLectura(){
   if(!MODO_LECTURA)return;
+  if(VER_ANIO){
+    const b=document.createElement('div');
+    b.style.cssText='position:sticky;top:0;z-index:999;background:#4c1d95;color:#fff;padding:9px 14px;font-size:13px;font-weight:700;text-align:center';
+    b.innerHTML='📚 ESTÁ VIENDO EL AÑO '+escH(VER_ANIO)+' (guardado) — solo para ver e imprimir, no se puede cambiar. <button onclick="volverAnioActual()" style="margin-left:10px;background:#fbbf24;color:#111;border:none;border-radius:6px;padding:4px 12px;font-weight:800;cursor:pointer">↩ Volver al año actual</button>';
+    document.body.insertBefore(b,document.body.firstChild);
+    ['btn-backup','lbl-restaurar','btn-copias','btn-contadora'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+    setTimeout(()=>document.getElementById('nav-main')?.classList.add('ver-mas'),0);
+    return;
+  }
   const banner=document.createElement('div');
   banner.style.cssText='position:sticky;top:0;z-index:999;background:#fff3cd;color:#7a5b00;border-bottom:1px solid #ffe08a;padding:8px 14px;font-size:12px;font-weight:700;text-align:center';
   banner.textContent='🔒 MODO CONTADORA — solo lectura. Los cambios que intentes hacer no se guardarán.';
@@ -2267,7 +2285,8 @@ async function _subirANube(data){
       preciosCol:data.preciosCol||{},
       notasCredito:data.notasCredito||[],comisiones:data.comisiones||[],
       deudas:data.deudas||[],productos:data.productos||[],
-      respaldosVendedor:data.respaldosVendedor||[],cobrosVendedora:data.cobrosVendedora||[],pagos:data.pagos||[],historial:data.historial||[],reglasBanco:data.reglasBanco||{},conteo:data.conteo||{}
+      respaldosVendedor:data.respaldosVendedor||[],cobrosVendedora:data.cobrosVendedora||[],pagos:data.pagos||[],historial:data.historial||[],reglasBanco:data.reglasBanco||{},conteo:data.conteo||{},
+      anio:ANIO_ACTUAL
     };
     await nubeGuardar('app_data','txe_main',payload);
     // Mantener igual la copia aparte de productos (por si algún aparato viejo la lee)
@@ -2359,8 +2378,20 @@ async function syncFromCloud(){
     // sigue igual que la última vez que esta computadora habló con ella, lo de
     // la computadora es lo más nuevo: se queda y se sube. Si la nube también
     // cambió (otro aparato), lo de la computadora se baja a un archivo antes.
+    // AÑO NUEVO: si la nube ya está en otro año (se cerró el año desde otro
+    // aparato), lo guardado en este aparato es del año viejo: se reemplaza todo
+    // con lo de la nube, aunque venga vacío.
+    const anioNube=String(main?.value?.anio||'2026');
+    const cambioAnio=!mainErr&&!!main?.value&&anioNube!==ANIO_ACTUAL;
+    if(cambioAnio){
+      if(localStorage.getItem('txe_sin_subir')==='1'){try{backupSilencioso('CAMBIOS_SIN_SUBIR_');}catch(e){}localStorage.removeItem('txe_sin_subir');}
+      const v=main.value;
+      ['regs','banco','conciliaciones','movInv','guias','colegios','notasCredito','comisiones','deudas','respaldosVendedor','cobrosVendedora','pagos','historial'].forEach(k=>{DB[k]=Array.isArray(v[k])?v[k]:[];});
+      ['colData','preciosCol','reglasBanco','conteo'].forEach(k=>{DB[k]=v[k]&&typeof v[k]==='object'?v[k]:{};});
+      ANIO_ACTUAL=anioNube;localStorage.setItem('txe_anio',anioNube);
+    }
     let usarLocal=false;
-    if(!mainErr&&main?.value&&localStorage.getItem('txe_sin_subir')==='1'&&localStorage.getItem('txe_v4')){
+    if(!cambioAnio&&!mainErr&&main?.value&&localStorage.getItem('txe_sin_subir')==='1'&&localStorage.getItem('txe_v4')){
       const base=localStorage.getItem('txe_base_rev');
       if(base&&revLeida===base)usarLocal=true;
       else{
@@ -2443,6 +2474,7 @@ async function syncFromCloud(){
         renderCatalogo();updateCount();
       }
     }
+    if(ANIO_ACTUAL==='2026'){ // arreglos de datos del año 2026: no corren en años nuevos
     try{migrarCostosTechBooks();}catch(e){console.warn('Costos Tech Books:',e);}
     try{reparacionOct2026();}catch(e){console.warn('Reparación oct-2026:',e);}
     try{reparacionOct2026b();}catch(e){console.warn('Reparación oct-2026 (2):',e);}
@@ -2465,6 +2497,7 @@ async function syncFromCloud(){
     try{reparacionNov2026l();}catch(e){console.warn('Reparación nov-2026 (12):',e);}
     try{reparacionNov2026m();}catch(e){console.warn('Reparación nov-2026 (13):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
+    }
     // Verificar facturas pendientes desde correo
     verificarCorreoQueue();
     // Cargar clave Claude
@@ -2596,6 +2629,7 @@ function backupSilencioso(prefijo){
 
 // Backup automático al cerrar la ventana
 window.addEventListener('beforeunload',()=>{
+  if(VER_ANIO)return; // se está viendo un año guardado: no tocar lo de esta computadora
   try{
     const toSave={regs:DB.regs,banco:DB.banco,conciliaciones:DB.conciliaciones,
       movInv:DB.movInv,guias:DB.guias,colegios:DB.colegios,colData:DB.colData,preciosCol:DB.preciosCol,
@@ -13306,6 +13340,149 @@ function imprimirAnexo(){
   </table>
   <script>window.onload=()=>window.print();<\/script></body></html>`);
   win.document.close();
+}
+
+// ===================================================
+// AÑOS ESCOLARES — CERRAR EL AÑO Y VER AÑOS GUARDADOS
+// ===================================================
+const _CLAVES_LISTA=['regs','banco','conciliaciones','movInv','guias','colegios','notasCredito','comisiones','deudas','respaldosVendedor','cobrosVendedora','pagos','historial','productos'];
+const _CLAVES_OBJ=['colData','preciosCol','reglasBanco','conteo'];
+function _todoElSistema(){
+  const o={version:'backup_v2',fecha_backup:new Date().toISOString(),anio:ANIO_ACTUAL};
+  _CLAVES_LISTA.forEach(k=>o[k]=DB[k]||[]);_CLAVES_OBJ.forEach(k=>o[k]=DB[k]||{});
+  return o;
+}
+async function _leerIndiceAnios(){
+  const r=await nubeLeer('app_data','txe_anios');
+  return Array.isArray(r?.value?.lista)?r.value.lista:[];
+}
+// Lo que queda pendiente al cerrar (para no olvidarlo en el año nuevo)
+function pendientesDelAnio(){
+  const p={cobrar:[],editorial:[],deudas:[]};
+  try{filasComisiones().forEach(x=>{if((x.falta||0)>0.5)p.cobrar.push({nombre:x.nombre||x.nom||x.colegio||'',falta:Math.round(x.falta*100)/100});});}catch(e){}
+  try{const R=resumenNegocio();Object.entries(R.ed||{}).forEach(([g,x])=>{if(Math.abs(x.debeFinal||0)>0.5)p.editorial.push({nombre:g,debe:Math.round(x.debeFinal*100)/100});});}catch(e){}
+  p.deudas=(DB.deudas||[]).filter(d=>!d.pagada).map(d=>({nombre:d.acreedor,monto:d.montoTotal}));
+  return p;
+}
+function _pendientesTexto(p){
+  const m=v=>'$'+(+v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const l=[];
+  if(p.cobrar.length)l.push('FALTA COBRAR a colegios:\
+'+p.cobrar.map(x=>'   • '+x.nombre+': '+m(x.falta)).join('\
+'));
+  if(p.editorial.length)l.push('CON LAS EDITORIALES:\
+'+p.editorial.map(x=>'   • '+x.nombre+': '+(x.debe>0?'falta pagar '+m(x.debe):'a favor '+m(-x.debe))).join('\
+'));
+  if(p.deudas.length)l.push('DEUDAS sin terminar de pagar (pasan al año nuevo):\
+'+p.deudas.map(x=>'   • '+x.nombre).join('\
+'));
+  return l.join('\
+\
+');
+}
+async function cerrarAnioEscolar(){
+  if(MODO_LECTURA)return alert('En modo solo lectura no se puede cerrar el año.');
+  if(!NUBE_OK||!syncCompleted)return alert('Para cerrar el año se necesita internet. Revise la conexión y recargue la página.');
+  const anio=ANIO_ACTUAL,nuevo=String((parseInt(anio,10)||2026)+1);
+  const p=pendientesDelAnio(),txt=_pendientesTexto(p);
+  if(!confirm('CERRAR EL AÑO '+anio+'\
+\
+Se va a:\
+ 1) Guardar TODO el año '+anio+' en la nube (se puede ver e imprimir cuando quiera en 📚 Años).\
+ 2) Bajar un respaldo a Descargas.\
+ 3) Empezar el año '+nuevo+' limpio: ventas de colegios, guías, facturas, banco, pagos y comisiones en cero.\
+\
+Pasan al año '+nuevo+': el catálogo de libros con sus costos, la lista de colegios con su % de comisión y sus precios, y los libros que quedan en bodega.'+(txt?'\
+\
+⚠️ TODAVÍA QUEDA PENDIENTE:\
+\
+'+txt+'\
+\
+Esto queda anotado en 📚 Años para no olvidarlo. Lo mejor es cerrar cuando ya esté todo cobrado y pagado.':'')+'\
+\
+¿Seguir?'))return;
+  const escrito=prompt('Para confirmar, escriba la palabra CERRAR');
+  if(String(escrito||'').trim().toUpperCase()!=='CERRAR')return alert('No se cerró nada.');
+  try{
+    toast('Guardando el año '+anio+' en la nube…','ok');
+    backupSilencioso('CIERRE_ANIO_'+anio+'_');
+    const todo=_todoElSistema();
+    await nubeGuardar('app_data','txe_anio_'+anio,todo);
+    // Comprobar que quedó bien guardado ANTES de borrar nada
+    const chk=await nubeLeer('app_data','txe_anio_'+anio);
+    const v=chk?.value;
+    if(!v||(v.regs||[]).length!==todo.regs.length||(v.pagos||[]).length!==todo.pagos.length||Object.keys(v.colData||{}).length!==Object.keys(todo.colData).length)
+      throw new Error('La copia del año en la nube no salió completa');
+    const lista=(await _leerIndiceAnios()).filter(x=>x.anio!==anio);
+    lista.push({anio,cerrado:new Date().toISOString(),pendientes:p});
+    await nubeGuardar('app_data','txe_anios',{lista});
+  }catch(e){return alert('⚠️ NO se cerró el año: no se pudo guardar en la nube.\
+No se borró nada.\
+\
+Detalle: '+(e.message||e));}
+  // Año nuevo
+  const stock={};DB.productos.forEach(pr=>{stock[pr.id]=stockActual(pr.id);});
+  DB.productos.forEach(pr=>{pr.stockInicial=stock[pr.id]||0;});
+  const colData={};
+  Object.keys(DB.colData||{}).forEach(nom=>{const d=DB.colData[nom]||{};
+    colData[nom]={lineas:[],fin:[],kit:Array.isArray(d.kit)?d.kit:[],pagosEdit:[],comisionPct:d.comisionPct,comisionPVUnit:d.comisionPVUnit};});
+  // Las marcas de arreglos ya hechos se quedan para que no vuelvan a correr
+  const marcas=(DB.historial||[]).filter(h=>/^Reparaci|^Costos Tech Books fijados$/.test(h.accion||''));
+  DB.regs=[];DB.banco=[];DB.conciliaciones=[];DB.movInv=[];DB.guias=[];DB.colData=colData;
+  DB.notasCredito=[];DB.comisiones=[];DB.respaldosVendedor=[];DB.cobrosVendedora=[];DB.pagos=[];DB.conteo={};
+  DB.deudas=(DB.deudas||[]).filter(d=>!d.pagada);
+  DB.historial=marcas;
+  ANIO_ACTUAL=nuevo;localStorage.setItem('txe_anio',nuevo);
+  logHistorial('Año '+anio+' cerrado','Todo el año '+anio+' quedó guardado en la nube (📚 Años). Empieza el año '+nuevo+'. Libros en bodega pasan como saldo inicial.');
+  save();
+  for(let i=0;i<100&&(_saveCorriendo||_savePendiente);i++)await new Promise(r=>setTimeout(r,300));
+  if(localStorage.getItem('txe_sin_subir')==='1')return alert('El año '+anio+' quedó guardado, pero el año nuevo todavía no se subió a la nube. No cierre esta página; revise el internet.');
+  alert('✅ Listo. El año '+anio+' quedó guardado.\
+\
+Ya está en el año '+nuevo+'.\
+Para ver el '+anio+': botón 📚 Años arriba.');
+  location.reload();
+}
+async function verAniosAnteriores(){
+  document.getElementById('anios-ov')?.remove();
+  let lista=[];
+  try{lista=await _leerIndiceAnios();}catch(e){return alert('No se pudo leer los años guardados (¿hay internet?).\
+'+(e.message||e));}
+  const m=v=>'$'+(+v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pend=p=>{if(!p)return '';const l=[];
+    p.cobrar?.forEach(x=>l.push('Falta cobrar a '+escH(x.nombre)+': <b>'+m(x.falta)+'</b>'));
+    p.editorial?.forEach(x=>l.push(escH(x.nombre)+': '+(x.debe>0?'falta pagar <b>'+m(x.debe)+'</b>':'a favor '+m(-x.debe))));
+    return l.length?'<div style="font-size:12px;color:#92400e;margin-top:4px">Quedó pendiente al cerrar:<br>• '+l.join('<br>• ')+'</div>':'<div style="font-size:12px;color:#166534;margin-top:4px">Se cerró sin pendientes.</div>';};
+  const ov=document.createElement('div');ov.id='anios-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=`<div style="background:#fff;color:#111;border-radius:12px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px 20px;font-family:Arial,sans-serif">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">📚 Años escolares</b><button onclick="document.getElementById('anios-ov').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#111">×</button></div>
+    <div style="margin:10px 0;padding:10px;background:#eef2ff;border-radius:8px">Año en uso: <b style="font-size:16px">${escH(VER_ANIO?VER_ANIO+' (viendo guardado)':ANIO_ACTUAL)}</b></div>
+    <div style="font-weight:700;margin:12px 0 6px">Años guardados</div>
+    ${lista.length?lista.slice().sort((a,b)=>String(b.anio).localeCompare(String(a.anio))).map(x=>`<div style="border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><b style="font-size:15px">Año ${escH(x.anio)}</b><div style="font-size:11px;color:#666">Cerrado el ${new Date(x.cerrado).toLocaleDateString('es-EC')}</div></div>
+      <button onclick="verAnioGuardado('${escH(x.anio)}')" style="background:#4c1d95;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer">👁 Ver año ${escH(x.anio)}</button></div>${pend(x.pendientes)}</div>`).join(''):'<div style="color:#666;font-size:13px">Todavía no hay años cerrados.</div>'}
+    ${VER_ANIO?'<button onclick="volverAnioActual()" style="margin-top:10px;width:100%;background:#fbbf24;border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">↩ Volver al año actual</button>'
+      :(MODO_LECTURA?'':`<div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;font-size:12px;color:#444">Cuando ya esté todo cobrado, pagado y con las notas de crédito registradas:</div>
+      <button onclick="document.getElementById('anios-ov').remove();cerrarAnioEscolar()" style="margin-top:8px;width:100%;background:#b91c1c;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">🔒 Cerrar el año ${escH(ANIO_ACTUAL)} y empezar el ${(parseInt(ANIO_ACTUAL,10)||2026)+1}</button>`)}
+  </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+}
+function verAnioGuardado(anio){sessionStorage.setItem('txe_ver_anio',anio);location.reload();}
+function volverAnioActual(){sessionStorage.removeItem('txe_ver_anio');location.reload();}
+async function cargarAnioGuardado(anio){
+  try{
+    setSyncStatus('load');
+    const r=await nubeLeer('app_data','txe_anio_'+anio);
+    const v=r?.value;if(!v)throw new Error('No se encontró el año '+anio+' en la nube');
+    _CLAVES_LISTA.forEach(k=>{DB[k]=Array.isArray(v[k])?v[k]:[];});
+    _CLAVES_OBJ.forEach(k=>{DB[k]=v[k]&&typeof v[k]==='object'?v[k]:{};});
+    updateCount();renderDash();
+    try{renderComisiones();}catch(e){}
+    try{renderCatalogo();}catch(e){}
+    const el=document.getElementById('sync-status');if(el){el.textContent='📚 Año '+anio;el.style.opacity='1';}
+  }catch(e){alert('No se pudo abrir el año '+anio+': '+(e.message||e));volverAnioActual();}
 }
 
 // ===================================================
