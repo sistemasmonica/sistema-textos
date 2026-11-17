@@ -5708,8 +5708,11 @@ function pvToggleCol(i,si){
 }
 function _pvR2(n){return Math.round(n*100)/100;}
 function calcPagoVendedora(){
+  return _pvColegiosSel().map(_pvCalcCol);
+}
+function _pvCalcCol(col){
   const rec=recargoVendedora(PAGO_VENDEDORA.vendedora);
-  return _pvColegiosSel().map(col=>{
+  {
     const d=DB.colData[col]||{};
     const esS=_normNombre(col)===_normNombre('SAULO'); // la cuenta con TE QUEDA es SOLO para Saulo (11-nov-2026)
     const lineas=(d.lineas||[]).map(l=>{
@@ -5732,7 +5735,7 @@ function calcPagoVendedora(){
     const unidades=lineas.reduce((a,x)=>a+x.vend,0);
     return {col,esS,lineas,total,comision,vtotal,neta,nLib,descLib,ganancia,ella,socio:_pvR2(ganancia-ella),
       unidades,recargo:_pvR2(unidades*rec),pctTxt:pcts.length===1?pcts[0]+'%':'varios %'};
-  });
+  }
 }
 // para: 'mia' / 'esposo' = todo (con Daniel y los $2); 'evelyn' = sin los $2 ni Daniel
 function pagoVendedoraHTML(R,para){
@@ -6751,6 +6754,35 @@ function renderPorCobrar(){
 // cambio es solo del documento impreso, NO se guarda en el sistema: si la
 // devolución es real, hay que anotarla también en Colegios → Control de
 // Ventas para que quede guardada.
+// 17-nov-2026 (Mónica): el estado de cuenta de SAULO lo manda Evelyn al colegio,
+// así que debe mostrar la misma cuenta de la comisión que Respaldo vendedor
+// (Total vendido − Costo distribuidor = Comisión − libros no devueltos = valor).
+// Sin Daniel ni el reparto 70/30. Solo para colegios con la cuenta TE QUEDA (esS).
+function comisionVendedoraEC(nombre){
+  if(typeof PAGO_VENDEDORA==='undefined'||!PAGO_VENDEDORA.colegios.some(c=>_normNombre(c)===_normNombre(nombre)))return '';
+  const r=_pvCalcCol(nombre);
+  if(!r.esS)return '';
+  const n=v=>'$'+v.toFixed(2);
+  const libs=(DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&_normNombre(c.colegio)===_normNombre(nombre))
+    .sort((a,b)=>a.libro.localeCompare(b.libro,'es',{numeric:true}));
+  const fila=(a,b,st)=>`<tr style="${st||''}"><td style="text-align:right">${a}</td><td style="text-align:right;width:130px;font-family:monospace">${b}</td></tr>`;
+  return `<h3>🤝 Comisión ${r.pctTxt}</h3>
+  <table>
+    ${fila('Total vendido',n(r.total))}
+    ${fila('(−) Costo distribuidor',n(r.vtotal))}
+    ${fila('COMISIÓN',n(r.neta),'background:#e3f2fd;font-weight:bold')}
+  </table>
+  ${libs.length?`<h3>📕 Libros no devueltos (se descuentan de la comisión)</h3>
+  <table>
+    <tr><th>Libro</th><th style="text-align:center">Cant.</th><th style="text-align:right">P. Unit.</th><th style="text-align:right">Subtotal</th></tr>
+    ${libs.map(c=>`<tr><td>${escH(c.libro)}</td><td style="text-align:center">${c.cant}</td><td style="text-align:right">${n(c.precio)}</td><td style="text-align:right;font-family:monospace">${n(_pvR2(c.cant*c.precio))}</td></tr>`).join('')}
+    <tr class="tot"><td style="text-align:right">TOTAL</td><td style="text-align:center">${r.nLib}</td><td></td><td style="text-align:right">${n(r.descLib)}</td></tr>
+  </table>`:''}
+  <div class="saldo-box" style="border-color:#1565c0">
+    <div class="lbl" style="color:#1565c0">Comisión ${n(r.neta)}${r.nLib?' − '+r.nLib+' libros no devueltos '+n(r.descLib):''}</div>
+    <div class="val" style="color:#1565c0">${n(r.ganancia)}</div>
+  </div>`;
+}
 function imprimirEstadoCuenta(nombre){
   initColData();
   const d=DB.colData[nombre];
@@ -6830,6 +6862,7 @@ function imprimirEstadoCuenta(nombre){
     <div class="lbl" id="saldo-lbl">Saldo pendiente por cobrar</div>
     <div class="val" id="saldo-val">$0.00</div>
   </div>
+  ${comisionVendedoraEC(nombre)}
   ${dmPrintFooter()}
   <script>
   (function(){
