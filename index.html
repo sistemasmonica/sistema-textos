@@ -1117,6 +1117,9 @@ a{color:#7dd3fc}
         <div class="pf"><label>Compras gravadas con IVA</label><span id="d104-cgrav">$0.00</span></div>
         <div class="pf"><label>IVA pagado en compras</label><span id="d104-iva-cmp">$0.00</span></div>
         <div class="pf" style="font-weight:700;color:var(--b1)"><label>Crédito tributario IVA</label><span id="d104-credito">$0.00</span></div>
+        <hr class="sep">
+        <div class="card-t" style="font-size:12px;margin-bottom:4px"><i class="ti ti-receipt-refund"></i> Notas de crédito recibidas en el mes</div>
+        <div id="decl-nc-det"></div>
       </div>
     </div>
 
@@ -1135,6 +1138,11 @@ a{color:#7dd3fc}
           <div class="pf"><label>Cas. 500 — Compras locales 15%</label><span class="ca" id="cas-500">$0.00</span></div>
           <div class="pf"><label>Cas. 510 — IVA en compras</label><span class="ca" id="cas-510">$0.00</span></div>
           <div class="pf"><label>Cas. 601 — Crédito tributario</label><span class="cb" id="cas-601">$0.00</span></div>
+          <div style="font-size:11px;font-weight:700;color:var(--mu);margin:10px 0 6px;text-transform:uppercase">COMPRAS TARIFA 0% (libros, peajes sin IVA)</div>
+          <div class="pf"><label>Cas. 507 — Valor bruto</label><span id="cas-507">$0.00</span></div>
+          <div class="pf"><label>Notas de crédito del mes (N/C)</label><span class="cr" id="cas-507nc">$0.00</span></div>
+          <div class="pf" style="font-weight:700"><label>Cas. 517 — Valor neto (bruto − N/C)</label><span id="cas-517">$0.00</span></div>
+          <div id="decl-nc-aviso"></div>
         </div>
       </div>
       <hr class="sep">
@@ -13070,6 +13078,14 @@ function renderDecl104(periodo){
   const ivaVentas = totalVentasIVA;
   const ivaCompras = totalComprasIVA;
   const credito = Math.min(ivaCompras, ivaVentas);
+
+  // 16-nov-2026: notas de crédito recibidas (devoluciones a editoriales) del mes.
+  // Solo las que son documento real (no "Devolución física (falta nota de crédito)").
+  const ncMes = (DB.notasCredito||[]).filter(n=>n.fecha && n.fecha.substring(0,7)===periodo
+    && /^\d{3}-\d{3}-\d+/.test(String(n.num||'').trim()) && !declExcluidos.has(n.id));
+  const ncTotal = ncMes.reduce((a,n)=>a+(+n.total||0),0);
+  const compras0Bruto = compras.filter(r=>r.iva===0).reduce((a,r)=>a+r.subtotal,0);
+  const compras0Neto = compras0Bruto - ncTotal;
   const resultado = ivaVentas - ivaCompras;   // negativo = crédito tributario a favor
 
   // Update UI
@@ -13088,6 +13104,19 @@ function renderDecl104(periodo){
   set('cas-500', comprasGravadas);
   set('cas-510', ivaCompras);
   set('cas-601', credito);
+  set('cas-507', compras0Bruto);
+  set('cas-507nc', ncTotal);
+  set('cas-517', compras0Neto);
+  const avEl = document.getElementById('decl-nc-aviso');
+  if(avEl) avEl.innerHTML = compras0Neto<0
+    ? `<div style="margin-top:8px;padding:8px;border-radius:6px;background:var(--a2);color:var(--a1);font-size:11px">⚠️ Las notas de crédito (${fmt(ncTotal)}) son mayores que las compras 0% del mes (${fmt(compras0Bruto)}): el neto sale negativo y el SRI no acepta negativos. Preguntar a la contadora cómo ponerlas (por ejemplo, N/C solo hasta ${fmt(compras0Bruto)} para que el neto quede en $0). <b>No cambia el IVA a pagar</b>: son libros con 0%.</div>`
+    : '';
+  const ncEl = document.getElementById('decl-nc-det');
+  if(ncEl) ncEl.innerHTML = ncMes.length ? ncMes.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(n=>`
+      <div class="pf"><label style="font-size:11px">${n.fecha} · ${n.editorial||''} · N/C ${n.num}</label>
+      <span style="font-family:monospace;font-size:11px">${fmt(+n.total||0)}</span></div>`).join('')
+      + `<div class="pf" style="font-weight:700"><label>Total notas de crédito</label><span>${fmt(ncTotal)}</span></div>`
+    : '<div class="empty" style="padding:8px">Sin notas de crédito este mes</div>';
 
   const resEl = document.getElementById('decl-resultado');
   const resLabel = document.getElementById('decl-resultado-label');
@@ -13098,6 +13127,15 @@ function renderDecl104(periodo){
   }
   if(resLabel) resLabel.textContent = resultado >= 0 ? 'IVA A PAGAR (Cas. 699)' : 'CRÉDITO TRIBUTARIO A FAVOR';
   if(resNota) resNota.textContent = resultado >= 0 ? 'IVA ventas − Crédito tributario' : 'Tienes saldo a favor para el siguiente mes';
+  // 16-nov-2026: Mónica vende solo libros (IVA 0%): sin ventas con IVA, el IVA de compras
+  // NO es crédito a favor (factor de proporcionalidad 0) → a pagar $0.
+  if(ivaVentas===0 && ivaCompras>0){
+    if(resEl){resEl.textContent=fmt(0);resEl.style.color="var(--r1)";}
+    if(resLabel) resLabel.textContent="IVA A PAGAR (Cas. 699)";
+    if(resNota) resNota.textContent="Ventas con IVA 0%: el IVA pagado en compras ("+fmt(ivaCompras)+") no se recupera ni queda a favor";
+    const c6=document.getElementById("cas-601"); if(c6) c6.textContent=fmt(0);
+    const dc=document.getElementById("d104-credito"); if(dc) dc.textContent=fmt(0);
+  }
 
   // Detalle ventas
   const dvEl = document.getElementById('decl-ventas-det');
@@ -13107,6 +13145,7 @@ function renderDecl104(periodo){
       <span style="font-family:monospace;font-size:11px">${fmt(r.subtotal)} + ${fmt(r.iva)} IVA</span></div>`
     ).join('') : '<div class="empty" style="padding:8px">Sin ventas este período</div>';
   }
+  if(dvEl) dvEl.insertAdjacentHTML("afterbegin",'<div style="margin-bottom:8px;padding:8px;border-radius:6px;background:var(--b2,#dbeafe);color:var(--b1,#1e40af);font-size:11px">ℹ️ Las <b>ventas</b> que valen para el 104 son las que el SRI pone solas (Facturación Electrónica). El sistema no guarda tus facturas de venta, así que aquí puede salir menos: usa el valor del SRI.</div>');
 
   // Detalle compras
   const dcEl = document.getElementById('decl-compras-det');
@@ -13122,7 +13161,18 @@ function renderDecl104(periodo){
   const tb = document.getElementById('tb-decl-104');
   if(tb){
     const todosRegs = regs.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-    tb.innerHTML = todosRegs.map(r=>`<tr>
+    const ncTodas = (DB.notasCredito||[]).filter(n=>n.fecha && n.fecha.substring(0,7)===periodo && /^\d{3}-\d{3}-\d+/.test(String(n.num||'').trim()));
+    const filasNC = ncTodas.map(n=>`<tr>
+      <td><input type="checkbox" ${declExcluidos.has(n.id)?'':'checked'} onchange="toggleExcluido('${n.id}',this.checked)"></td>
+      <td style="font-family:monospace">${n.fecha}</td>
+      <td>${n.editorial||''}</td>
+      <td style="font-family:monospace;font-size:11px">${n.num}</td>
+      <td><span class="bdg" style="background:#fee2e2;color:#991b1b">NOTA CRÉDITO</span></td>
+      <td style="font-family:monospace">−${fmt(+n.total||0)}</td>
+      <td style="font-family:monospace">$0.00</td>
+      <td style="font-family:monospace;font-weight:600">−${fmt(+n.total||0)}</td>
+    </tr>`).join('');
+    tb.innerHTML = filasNC + todosRegs.map(r=>`<tr>
       <td><input type="checkbox" checked onchange="toggleExcluido('${r.id}',this.checked)"></td>
       <td style="font-family:monospace">${r.fecha}</td>
       <td>${r.proveedor}</td>
@@ -13131,7 +13181,7 @@ function renderDecl104(periodo){
       <td style="font-family:monospace">${fmt(r.subtotal)}</td>
       <td style="font-family:monospace">${fmt(r.iva)}</td>
       <td style="font-family:monospace;font-weight:600">${fmt(r.total)}</td>
-    </tr>`).join('') || '<tr><td colspan="8"><div class="empty">Sin comprobantes en este período</div></td></tr>';
+    </tr>`).join('') || (filasNC?'':'<tr><td colspan="8"><div class="empty">Sin comprobantes en este período</div></td></tr>');
   }
 }
 
@@ -13248,6 +13298,9 @@ function imprimirDecl104(){
     ['500','Compras locales con IVA 15%',document.getElementById('cas-500')?.textContent],
     ['510','IVA en compras',document.getElementById('cas-510')?.textContent],
     ['601','Crédito tributario aplicado (IVA compras)',document.getElementById('cas-601')?.textContent],
+    ['507','Compras tarifa 0% — valor bruto',document.getElementById('cas-507')?.textContent],
+    ['N/C','Notas de crédito recibidas en el mes',document.getElementById('cas-507nc')?.textContent],
+    ['517','Compras tarifa 0% — valor neto (bruto − N/C)',document.getElementById('cas-517')?.textContent],
     ['699','IVA A PAGAR / CRÉDITO',document.getElementById('decl-resultado')?.textContent],
   ];
   win.document.write(`<html><head><title>Form 104 - ${mes}/${anio}</title>
@@ -13275,6 +13328,8 @@ function exportDecl104CSV(){
   const periodo = anio+'-'+mes;
   const regs = DB.regs.filter(r=>r.fecha?.substring(0,7)===periodo&&!declExcluidos.has(r.id));
   const rows=[['Fecha','RUC','Proveedor/Cliente','N_Factura','Tipo','Base15%','IVA15%','Base0%','Total'],...regs.map(r=>[r.fecha,r.ruc||'',r.proveedor,r.numFact||'',r.tipo==='venta'?'VENTA':'COMPRA',r.iva>0?r.subtotal:0,r.iva,r.iva===0?r.subtotal:0,r.total])];
+  (DB.notasCredito||[]).filter(n=>n.fecha&&n.fecha.substring(0,7)===periodo&&/^\d{3}-\d{3}-\d+/.test(String(n.num||'').trim())&&!declExcluidos.has(n.id))
+    .forEach(n=>rows.push([n.fecha,'',n.editorial||'',n.num,'NOTA CREDITO',0,0,-(+n.total||0),-(+n.total||0)]));
   dlCSV(rows,'declaracion_104_'+periodo+'.csv');
 }
 
