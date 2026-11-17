@@ -6841,6 +6841,8 @@ function imprimirEstadoCuenta(nombre){
   <div class="barra">
     <button class="btn-print" onclick="window.print()">🖨 Imprimir Estado de Cuenta</button>
     <button class="btn-print" id="btn-guardar-dev" style="background:#1565c0" onclick="guardarDevEstadoCuenta('${escAttr(nombre)}')">💾 Guardar esta devolución en el sistema</button>
+    <label style="font-size:13px;cursor:pointer"><input type="checkbox" checked onchange="document.getElementById('sec-pagos').style.display=this.checked?'':'none'"> Mostrar pagos recibidos</label>
+    <label style="font-size:13px;cursor:pointer"><input type="checkbox" checked onchange="document.getElementById('saldo-box').style.display=this.checked?'':'none'"> Mostrar saldo (Al día / pendiente)</label>
   </div>
   <div class="tip-ed">✏️ La columna <b>DEVOLUCIÓN</b> es editable: si el colegio te devuelve libros que no vendió, escribe la cantidad ahí y el saldo se recalcula solo. Al terminar, usa <b>"💾 Guardar esta devolución en el sistema"</b> para que quede registrada en Colegios → Control de Ventas (necesita que la pestaña del sistema siga abierta).</div>
   ${dmPrintHeader('Estado de Cuenta', escH(nombre))}
@@ -6852,13 +6854,13 @@ function imprimirEstadoCuenta(nombre){
     <tr${T.descontada?'':' style="display:none"'}><td colspan="5" style="text-align:right">(−) Comisión del colegio</td><td style="text-align:right" id="tc-total">−$${T.totalColegio.toFixed(2)}</td></tr>
     <tr class="tot"><td colspan="5" style="text-align:right">TOTAL A PAGAR</td><td style="text-align:right" id="ta-total">$${T.aCobrar.toFixed(2)}</td></tr>
   </table>
-  <h3>💵 Pagos recibidos</h3>
+  <div id="sec-pagos"><h3>💵 Pagos recibidos</h3>
   <table>
     <tr><th>Fecha</th><th>Forma</th><th style="text-align:right">Valor</th><th>Nota</th></tr>
     ${filasPagos}
     <tr class="tot"><td colspan="2" style="text-align:right">TOTAL PAGADO</td><td style="text-align:right">$${cobrado.toFixed(2)}</td><td></td></tr>
-  </table>
-  <div class="saldo-box" id="saldo-box">
+  </table></div>
+  <div class="saldo-box" id="saldo-box" data-sec="1">
     <div class="lbl" id="saldo-lbl">Saldo pendiente por cobrar</div>
     <div class="val" id="saldo-val">$0.00</div>
   </div>
