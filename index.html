@@ -318,11 +318,14 @@ a{color:#7dd3fc}
 @media screen and (min-width:900px){
   body{padding-left:215px}
   .w{max-width:1240px}
-  #nav-main{position:fixed;left:0;top:0;bottom:0;width:215px;margin:0;border-radius:0;border:0;border-right:1px solid #1e293b;background:#0f172a;
+  #nav-main{position:fixed;left:0;top:0;bottom:0;width:215px;margin:0;border-radius:0;border:0;border-right:1px solid #1f5c3a;background:linear-gradient(180deg,#0d3b24,#082616);
     flex-direction:column;flex-wrap:nowrap;overflow-y:auto;overflow-x:hidden;padding:16px 10px;gap:3px;z-index:40}
-  #nav-main::before{content:"📚 Textos Escolares";display:block;color:#fbbf24;font-weight:700;font-size:15px;padding:4px 10px 14px;border-bottom:1px solid #1e293b;margin-bottom:8px}
+  #nav-main::before{content:"📚 Textos Escolares";display:block;color:#fbbf24;font-weight:700;font-size:15px;padding:4px 10px 14px;border-bottom:1px solid #1f5c3a;margin-bottom:8px}
   #nav-main>.nt,#nav-main>.nt-mas{flex:0 0 auto;width:100%;min-width:0;text-align:left;font-size:13.5px!important;padding:10px 12px;border-radius:8px;display:flex;align-items:center;gap:8px;white-space:normal}
-  #nav-main>.nt:not(.on){color:#cbd5e1}
+  #nav-main>.nt:not(.on){color:#d1fae5}
+  #nav-main>.nt:hover:not(.on){background:#14532d}
+  #nav-main>.nt.extra:not(.on){background:#0f3320}
+  #nav-main>.nt-mas{background:#14532d;color:#ecfdf5;border-color:#2f7d52}
   #nav-main>.nt-mas{margin:10px 0 4px;justify-content:center}
 }
 </style>
