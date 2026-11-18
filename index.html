@@ -312,6 +312,19 @@ a{color:#7dd3fc}
 [style*=";color:#450a0a"]:not(#recibo-ov *),[style*=";color:#450A0A"]:not(#recibo-ov *),[style^="color:#450a0a"]:not(#recibo-ov *){color:hsl(0 75% 70%)!important}
 }
 /* ===== fin tema oscuro ===== */
+/* ===== Menú a la izquierda (18-nov-2026, pedido de Mónica: "como en Tech Books") =====
+   Solo cambia DÓNDE se ve el menú en pantallas anchas; los botones y tab() son los mismos.
+   En celular (<900px) y al imprimir queda como antes. */
+@media screen and (min-width:900px){
+  body{padding-left:215px}
+  .w{max-width:1240px}
+  #nav-main{position:fixed;left:0;top:0;bottom:0;width:215px;margin:0;border-radius:0;border:0;border-right:1px solid #1e293b;background:#0f172a;
+    flex-direction:column;flex-wrap:nowrap;overflow-y:auto;overflow-x:hidden;padding:16px 10px;gap:3px;z-index:40}
+  #nav-main::before{content:"📚 Textos Escolares";display:block;color:#fbbf24;font-weight:700;font-size:15px;padding:4px 10px 14px;border-bottom:1px solid #1e293b;margin-bottom:8px}
+  #nav-main>.nt,#nav-main>.nt-mas{flex:0 0 auto;width:100%;min-width:0;text-align:left;font-size:13.5px!important;padding:10px 12px;border-radius:8px;display:flex;align-items:center;gap:8px;white-space:normal}
+  #nav-main>.nt:not(.on){color:#cbd5e1}
+  #nav-main>.nt-mas{margin:10px 0 4px;justify-content:center}
+}
 </style>
 </head>
 <body>
