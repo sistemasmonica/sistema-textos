@@ -11332,7 +11332,11 @@ function totalesColegio(d){
       comisionPV+=c*pvUnit;
     }
   });
-  const totalColegio=comision+comisionPV;
+  // Descuento extra en $ que el colegio se quedó aparte del % (ej. Hernán Malo
+  // 18-nov-2026: $0.25 por libro de inglés y $0.50 por libro de español = $140).
+  // Cuenta como comisión del colegio, NO como cobro (no toca la caja).
+  const comisionExtra=Math.max(0,parseFloat(d.comisionExtra)||0);
+  const totalColegio=comision+comisionPV+comisionExtra;
   const ingreso=tv-totalColegio;
   // Regla de Mónica (26-oct-2026): la librería/colegio paga lo VENDIDO a PVP
   // (menos devoluciones) y ella entrega la comisión aparte, de esa misma venta.
@@ -11341,7 +11345,7 @@ function totalesColegio(d){
   const descontada=d.comisionPagada?.modo==='descontada';
   const aCobrar=tv-(descontada?totalColegio:0);
   const pagado=(d.pagosEdit||[]).reduce((a,p)=>a+(parseFloat(p.monto)||0),0);
-  return {pvUnit,cant,dev,vend,tvBruto,tv,costo,comision,comisionPV,totalColegio,
+  return {pvUnit,cant,dev,vend,tvBruto,tv,costo,comision,comisionPV,comisionExtra,totalColegio,
           ingreso,aCobrar,descontada,ganancia:ingreso-costo,pagado,saldoEdit:costo-pagado};
 }
 
@@ -11701,6 +11705,7 @@ function renderControl(){
         <table style="width:100%;font-size:12px">
           <tr><td style="padding:3px 0">Comisión general (<input type="number" value="${d.comisionPct}" min="0" max="100" style="width:40px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPct=parseFloat(this.value)||0;renderControl()">%)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comision">$${comision.toFixed(2)}</td></tr>
           <tr><td style="padding:3px 0">C. P.Venta (x$<input type="number" value="${pvUnit}" min="0" step="0.01" style="width:38px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="DB.colData['${nombre}'].comisionPVUnit=parseFloat(this.value)||0;recalcControl('${nombre}');save()">)</td><td style="font-family:monospace;font-weight:700;text-align:right" id="ctrl-comisionpv">$${comisionPV.toFixed(2)}</td></tr>
+          <tr><td style="padding:3px 0" title="Lo que el colegio se descontó aparte del %, por ejemplo tanto por libro. Cuenta como comisión, no como pago.">Descuento extra $<input type="number" value="${d.comisionExtra||""}" min="0" step="0.01" placeholder="0" style="width:60px;border:1px solid #ccc;border-radius:3px;padding:2px;font-size:11px" onchange="setComisionExtra('${nombre}',this.value)"></td><td style="font-family:monospace;font-weight:700;text-align:right">$${(parseFloat(d.comisionExtra)||0).toFixed(2)}</td></tr>
           <tr style="border-top:2px solid #f9d71c"><td style="padding:5px 0;font-weight:700">TOTAL COLEGIO</td><td style="font-family:monospace;font-weight:700;color:var(--a1);text-align:right" id="ctrl-totalcol">$${totalColegio.toFixed(2)}</td></tr>
         </table>
       </div>
@@ -11805,6 +11810,16 @@ function cambiarLineaCtrl(nombre,i,campo,valor){
   const antes=l[campo];l[campo]=valor;
   if(antes!==valor)logHistorial('Control de ventas',nombre+' — '+l.libro+': '+({cant:'cantidad',dev:'devueltos',pvp:'PVP'}[campo])+' '+antes+' → '+valor);
   recalcControl(nombre);save();
+}
+function setComisionExtra(nombre,v){
+  const d=DB.colData[nombre];if(!d)return;
+  const n=Math.max(0,Math.round((parseFloat(v)||0)*100)/100);
+  const antes=parseFloat(d.comisionExtra)||0;
+  if(n)d.comisionExtra=n;else delete d.comisionExtra;
+  if(d.comisionPagada)d.comisionPagada.monto=Math.round(totalesColegio(d).totalColegio*100)/100;
+  logHistorial("Descuento extra del colegio",nombre+": $"+antes.toFixed(2)+" → $"+n.toFixed(2));
+  save();renderControl();
+  try{renderComisionesColegios();renderResumenNegocio();}catch(x){}
 }
 function recalcControl(nombre){
   const d=DB.colData[nombre]; if(!d) return;
