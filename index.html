@@ -7708,18 +7708,13 @@ function guardarGuia(){
   const lineas=[];
   let stockWarn=[];
   let faltaPrecio=[];
+  const pedido={};
   lineasEls.forEach(el=>{
     const sel=el.querySelector('select');
     const cant=parseInt(el.querySelector('[id$="-cant"]')?.value)||0;
     if(!sel?.value||!cant)return;
-    // Si estamos editando, devolver temporalmente el stock original de ese producto
-    let stockDisp=stockActual(sel.value);
-    if(editId){
-      const gOrig=DB.guias.find(x=>x.id===editId);
-      const lOrig=gOrig?.lineas.find(l=>l.prodId===sel.value);
-      if(lOrig)stockDisp+=lOrig.cantidad;
-    }
-    if(cant>stockDisp)stockWarn.push(`• ${sel.selectedOptions[0]?.text?.split('—')[0].trim()} (disponible: ${stockDisp})`);
+    // Stock: se revisa abajo, sumando todas las líneas del mismo libro.
+    pedido[sel.value]=(pedido[sel.value]||0)+cant;
     const prod=DB.productos.find(p=>p.id===sel.value);
     const nombre=prod?.nombre||sel.selectedOptions[0]?.text?.split('—')[0].trim()||'N/A';
     // El precio SIEMPRE sale de lo que está escrito en la línea. Si está vacío
@@ -7730,6 +7725,20 @@ function guardarGuia(){
     if(!precioOk)faltaPrecio.push('• '+nombre);
     lineas.push({prodId:sel.value,nombre,cantidad:cant,precioVenta:precioOk?pv:0});
   });
+  // Mónica 18-nov-2026: "si no tengo stock no me dejes sacar". Ya NO se puede
+  // guardar una guía que saque más de lo que hay en bodega. Al editar una guía
+  // se cuenta lo que ella misma ya había sacado, y se deja guardar si no se
+  // aumenta la cantidad (para poder corregir guías viejas con el stock enredado).
+  const gOrigS=editId?DB.guias.find(x=>x.id===editId):null;
+  Object.keys(pedido).forEach(pid=>{
+    const antes=(gOrigS?.lineas||[]).filter(l=>l.prodId===pid).reduce((a,l)=>a+(l.cantidad||0),0);
+    const disp=stockActual(pid)+antes;
+    if(pedido[pid]>disp&&pedido[pid]>antes){
+      const nom=DB.productos.find(p=>p.id===pid)?.nombre||pid;
+      stockWarn.push(`• ${nom}: quieres sacar ${pedido[pid]}, en bodega hay ${Math.max(0,disp)}`);
+    }
+  });
+  if(stockWarn.length)return alert(`⛔ No hay suficientes libros en bodega:\n\n${stockWarn.join('\n')}\n\nBaja la cantidad, o primero registra la entrada de esos libros (compra a la editorial o devolución de un colegio).`);
   if(faltaPrecio.length){
     // La guía de retiro es sobre todo un documento de ENTREGA. El precio puede
     // ir aquí o registrarse en Colegios → Control de ventas. Se avisa, no se bloquea.
@@ -7740,7 +7749,6 @@ function guardarGuia(){
       'El valor de la venta lo registras en Colegios → Control de ventas.\n\n'+
       '¿Guardar la guía así?'))return;
   }
-  if(stockWarn.length&&!confirm(`⚠️ Stock insuficiente en:\n${stockWarn.join('\n')}\n\n¿Registrar la guía de todas formas?`))return;
   if(!lineas.length)return toast('Agrega al menos un producto','err');
   let numero=document.getElementById('g-num').value;
   const fecha=document.getElementById('g-fecha').value||today();
