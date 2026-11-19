@@ -2533,6 +2533,7 @@ async function syncFromCloud(){
     try{reparacionNov2026m();}catch(e){console.warn('Reparación nov-2026 (13):',e);}
     try{reparacionNov2026n();}catch(e){console.warn('Reparación nov-2026 (14):',e);}
     try{reparacionNov2026o();}catch(e){console.warn('Reparación nov-2026 (15):',e);}
+    try{reparacionNov2026p();}catch(e){console.warn('Reparación nov-2026 (16):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     }
     // Verificar facturas pendientes desde correo
@@ -14748,6 +14749,24 @@ function reparacionNov2026o(){
   logHistorial(MARCA,hecho);
   save();
   try{renderPagos();}catch(e){}
+}
+// Mónica 18-nov-2026: la comisión de Evelyn ($286.79) − libros que paga ella ($58) =
+// $228.79 ya se la cobró de los $273 que Jardines le depositó. Se anota como comisión
+// pagada (sale de la caja) para que la caja quede +$44.21 = lo que Evelyn le debe.
+function reparacionNov2026p(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 18-nov: comisión Evelyn $228.79 cruzada con Jardines';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  DB.comisiones=DB.comisiones||[];
+  let hecho='Ya estaba';
+  if(!DB.comisiones.some(c=>/EVELYN/i.test(c.beneficiario||'')&&+c.monto===228.79)){
+    DB.comisiones.push({id:uid(),fecha:'2026-11-18',beneficiario:'Evelyn Cedeño (vendedora)',tipo:'vendedora',numFactura:'',monto:228.79,estado:'pagado',
+      nota:'Su comisión $286.79 − libros que paga ella $58 = $228.79, ya cruzada con los $273 que Jardines de Sueño le depositó. Evelyn queda debiendo $44.21.'});
+    hecho='comisión Evelyn $228.79 pagada (cruce)';
+  }
+  logHistorial(MARCA,hecho);
+  save();
+  try{renderComisiones();}catch(e){}
 }
 function reparacionOct2026g(){
   if(MODO_LECTURA||!syncCompleted)return;
