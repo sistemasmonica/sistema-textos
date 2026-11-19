@@ -6869,7 +6869,8 @@ function imprimirEstadoCuenta(nombre){
     <tr><th>Libro</th><th style="text-align:center">Cant.</th><th style="text-align:right">P. Unit.</th><th style="text-align:center">Devolución</th><th style="text-align:center">Vendido</th><th style="text-align:right">Subtotal</th></tr>
     ${filasLibros||'<tr><td colspan="6" style="text-align:center;color:#888;padding:10px">Sin libros entregados</td></tr>'}
     <tr class="tot"><td colspan="5" style="text-align:right">TOTAL VENDIDO</td><td style="text-align:right" id="tv-total">$${T.tv.toFixed(2)}</td></tr>
-    <tr${T.descontada?'':' style="display:none"'}><td colspan="5" style="text-align:right">(−) Comisión del colegio</td><td style="text-align:right" id="tc-total">−$${T.totalColegio.toFixed(2)}</td></tr>
+    <tr${T.descontada?'':' style="display:none"'}><td colspan="5" style="text-align:right">(−) Comisión del colegio</td><td style="text-align:right" id="tc-total">−$${(T.totalColegio-(T.comisionExtra||0)).toFixed(2)}</td></tr>
+    ${T.descontada&&T.comisionExtra?`<tr><td colspan="5" style="text-align:right">(−) Pago por la venta de los libros (descuento extra)</td><td style="text-align:right">−$${T.comisionExtra.toFixed(2)}</td></tr>`:''}
     <tr class="tot"><td colspan="5" style="text-align:right">TOTAL A PAGAR</td><td style="text-align:right" id="ta-total">$${T.aCobrar.toFixed(2)}</td></tr>
   </table>
   <div id="sec-pagos"><h3>💵 Pagos recibidos</h3>
@@ -6911,7 +6912,7 @@ function imprimirEstadoCuenta(nombre){
       var ingreso=totalVendido-totalComision;
       var saldo=ingreso-cobrado;
       var tv=document.getElementById('tv-total'); if(tv)tv.textContent='$'+totalVendido.toFixed(2);
-      var tc=document.getElementById('tc-total'); if(tc)tc.textContent='−$'+totalComision.toFixed(2);
+      var tc=document.getElementById('tc-total'); if(tc)tc.textContent='−$'+(totalComision-extra).toFixed(2);
       var ta=document.getElementById('ta-total'); if(ta)ta.textContent='$'+ingreso.toFixed(2);
       var color=saldo>0.01?'#c62828':(saldo<-0.01?'#e65100':'#2e7d32');
       var texto=saldo>0.01?'Saldo pendiente por cobrar':(saldo<-0.01?'Pagó de más (a favor del colegio)':'Al día — sin saldo pendiente');
