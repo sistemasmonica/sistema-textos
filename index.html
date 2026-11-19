@@ -2534,6 +2534,7 @@ async function syncFromCloud(){
     try{reparacionNov2026n();}catch(e){console.warn('Reparación nov-2026 (14):',e);}
     try{reparacionNov2026o();}catch(e){console.warn('Reparación nov-2026 (15):',e);}
     try{reparacionNov2026p();}catch(e){console.warn('Reparación nov-2026 (16):',e);}
+    try{reparacionNov2026q();}catch(e){console.warn('Reparación nov-2026 (17):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     }
     // Verificar facturas pendientes desde correo
@@ -14767,6 +14768,22 @@ function reparacionNov2026p(){
   logHistorial(MARCA,hecho);
   save();
   try{renderComisiones();}catch(e){}
+}
+// Mónica 18-nov-2026: Latinoamericano ya pagó el saldo de $280 por transferencia.
+function reparacionNov2026q(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 18-nov: cobro Latinoamericano $280';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const col='LATINOAMERICANO';
+  let hecho='Ya estaba';
+  if(DB.colData&&DB.colData[col]&&!(DB.pagos||[]).some(p=>p.tipo==='cobro'&&_cobroEsDeColegio(p,col)&&+p.valor===280)){
+    DB.pagos.push({id:uid(),fecha:'2026-11-18',tipo:'cobro',nombre:col,colegio:col,valor:280,forma:'Transferencia',
+      nota:'Saldo final Latinoamericano (anotado el 18-nov; si la fecha del depósito es otra, corrígela con Editar)'});
+    hecho='cobro $280 transferencia';
+  }
+  logHistorial(MARCA,hecho);
+  save();
+  try{renderPagos();}catch(e){}
 }
 function reparacionOct2026g(){
   if(MODO_LECTURA||!syncCompleted)return;
