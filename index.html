@@ -2535,6 +2535,7 @@ async function syncFromCloud(){
     try{reparacionNov2026o();}catch(e){console.warn('Reparación nov-2026 (15):',e);}
     try{reparacionNov2026p();}catch(e){console.warn('Reparación nov-2026 (16):',e);}
     try{reparacionNov2026q();}catch(e){console.warn('Reparación nov-2026 (17):',e);}
+    try{reparacionNov2026r();}catch(e){console.warn('Reparación nov-2026 (18):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     }
     // Verificar facturas pendientes desde correo
@@ -14782,6 +14783,29 @@ function reparacionNov2026q(){
     hecho='cobro $280 transferencia';
   }
   logHistorial(MARCA,hecho);
+  save();
+  try{renderPagos();}catch(e){}
+}
+// Mónica 18-nov-2026: Huellitas de Amor pagó $140.42 por transferencia, ya descontada
+// su comisión ($55.58) → se marca "el colegio se descontó la comisión".
+function reparacionNov2026r(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 18-nov: Huellitas de Amor $140.42 (comisión descontada)';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const col='HUELLITAS DE AMOR', d=DB.colData&&DB.colData[col];
+  const hecho=[];
+  if(d){
+    if(!(DB.pagos||[]).some(p=>p.tipo==='cobro'&&_cobroEsDeColegio(p,col)&&Math.abs(+p.valor-140.42)<0.005)){
+      DB.pagos.push({id:uid(),fecha:'2026-11-18',tipo:'cobro',nombre:col,colegio:col,valor:140.42,forma:'Transferencia',
+        nota:'Pago final Huellitas de Amor, ya descontada su comisión $55.58 (anotado el 18-nov; si la fecha es otra, corrígela con Editar)'});
+      hecho.push('cobro $140.42 transferencia');
+    }
+    if(!d.comisionPagada){
+      d.comisionPagada={fecha:'2026-11-18',monto:Math.round(totalesColegio(d).totalColegio*100)/100,modo:'descontada'};
+      hecho.push('comisión descontada por el colegio');
+    }
+  }
+  logHistorial(MARCA,hecho.join(' · ')||'Ya estaba');
   save();
   try{renderPagos();}catch(e){}
 }
