@@ -2532,6 +2532,7 @@ async function syncFromCloud(){
     try{reparacionNov2026l();}catch(e){console.warn('Reparación nov-2026 (12):',e);}
     try{reparacionNov2026m();}catch(e){console.warn('Reparación nov-2026 (13):',e);}
     try{reparacionNov2026n();}catch(e){console.warn('Reparación nov-2026 (14):',e);}
+    try{reparacionNov2026o();}catch(e){console.warn('Reparación nov-2026 (15):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     }
     // Verificar facturas pendientes desde correo
@@ -14729,6 +14730,24 @@ function reparacionNov2026n(){
   logHistorial(MARCA,hecho.join(' · ')||'No se encontró nada');
   save();
   try{renderPagos();renderControl();}catch(e){}
+}
+// Mónica 18-nov-2026: Jardines de Sueño pagó $273 directo a Evelyn (depósito a ella).
+// Se anota como cobro "Compensación" para que el colegio quede al día; en la cuenta
+// de Evelyn ya se le descuenta (PAGO_VENDEDORA.cobradoPorElla).
+function reparacionNov2026o(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 18-nov: Jardines de Sueño $273 cobrado por Evelyn';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const col='JARDINES DE SUEÑO';
+  let hecho='Ya estaba';
+  if(!(DB.pagos||[]).some(p=>p.tipo==='cobro'&&p.colegio===col&&+p.valor===273)){
+    DB.pagos.push({id:uid(),fecha:'2026-11-10',tipo:'cobro',nombre:col,colegio:col,valor:273,forma:'Compensación',
+      nota:'Jardines de Sueño le depositó a Evelyn. Se descuenta en la cuenta de Evelyn (no entró a mi caja)'});
+    hecho='cobro $273 Compensación';
+  }
+  logHistorial(MARCA,hecho);
+  save();
+  try{renderPagos();}catch(e){}
 }
 function reparacionOct2026g(){
   if(MODO_LECTURA||!syncCompleted)return;
