@@ -6887,10 +6887,12 @@ function imprimirEstadoCuenta(nombre){
   <script>
   (function(){
     var pvUnit=${T.pvUnit||0};
+    // Descuento extra en $ del colegio (ej. Hernán Malo $140): va junto a la comisión.
+    var extra=${T.descontada?(T.comisionExtra||0):0};
     var cobrado=${cobrado};
     var inputs=[].slice.call(document.querySelectorAll('input.devin'));
     function recalc(){
-      var totalVendido=0, totalComision=0;
+      var totalVendido=0, totalComision=extra;
       inputs.forEach(function(inp){
         var i=inp.getAttribute('data-i');
         var cant=parseFloat(inp.getAttribute('data-cant'))||0;
