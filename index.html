@@ -2531,6 +2531,7 @@ async function syncFromCloud(){
     try{reparacionNov2026k();}catch(e){console.warn('Reparación nov-2026 (11):',e);}
     try{reparacionNov2026l();}catch(e){console.warn('Reparación nov-2026 (12):',e);}
     try{reparacionNov2026m();}catch(e){console.warn('Reparación nov-2026 (13):',e);}
+    try{reparacionNov2026n();}catch(e){console.warn('Reparación nov-2026 (14):',e);}
     try{reparacionProductosEditados();}catch(e){console.warn('Reparación productos editados:',e);}
     }
     // Verificar facturas pendientes desde correo
@@ -14696,6 +14697,25 @@ function reparacionOct2026f(){
 // $3,174.75; los $73.25 restantes = su comisión $70 + $3.25 de fundas, cruzados
 // con lo que debía. El "cobro" de $73.25 pasa a Compensación y se anota la
 // comisión de librería repartida por lo vendido en cada colegio. Una sola vez.
+// Mónica 18-nov-2026 (Hernán Malo): el cobro de $188 del 4-nov no va; el colegio
+// se quedó $140 (pago por la venta: $0.25 por libro de inglés, $0.50 por libro de
+// español) y pagó $2,225 para cerrar. Ella confirmó que queda "falta $48".
+function reparacionNov2026n(){
+  if(MODO_LECTURA||!syncCompleted)return;
+  const MARCA='Reparación 18-nov: Hernán Malo sin cobro $188 + descuento extra $140';
+  if((DB.historial||[]).some(h=>h.accion===MARCA))return;
+  const hecho=[];
+  const n0=(DB.pagos||[]).length;
+  DB.pagos=(DB.pagos||[]).filter(p=>!(p.id==='1793851722748_50ybrq'&&p.tipo==='cobro'&&+p.valor===188));
+  if(DB.pagos.length<n0)hecho.push('cobro $188 del 04-nov eliminado');
+  const d=(DB.colData||{})['HERNAN MALO GONZALES'];
+  if(d){d.comisionExtra=140;
+    if(d.comisionPagada)d.comisionPagada.monto=Math.round(totalesColegio(d).totalColegio*100)/100;
+    hecho.push('descuento extra $140 (pago por venta de libros)');}
+  logHistorial(MARCA,hecho.join(' · ')||'No se encontró nada');
+  save();
+  try{renderPagos();renderControl();}catch(e){}
+}
 function reparacionOct2026g(){
   if(MODO_LECTURA||!syncCompleted)return;
   const MARCA='Reparación 26-oct (5): comisión librería Calderón $73.25 (Saulo + SJM Kids)';
