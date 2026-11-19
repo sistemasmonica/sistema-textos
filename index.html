@@ -6346,7 +6346,7 @@ function comisionPagosColegio(nombre){
 // descontó, o los pagos de comisión en Pagos que ya cubren todo.
 function comisionPagadaDe(nombre,d){
   if(d.comisionPagada)return d.comisionPagada;
-  const T=totalesColegio(d),pg=comisionPagosColegio(nombre);
+  const T=totalesColegio(d),pg=comisionPagosColegio(nombre)+descuentoComisionLibros(nombre);
   if(T.totalColegio>0.005&&pg>=T.totalColegio-TOL_COBRO){
     const f=(DB.pagos||[]).filter(p=>p.tipo==='pago'&&p.editorial==='comision'&&p.colegio===nombre).map(p=>p.fecha||'').sort().pop();
     return {fecha:f,monto:pg,modo:'pagos'};
@@ -6356,7 +6356,8 @@ function comisionPagadaDe(nombre,d){
 // Lo que todavía le debes de comisión al colegio (total − pagos de comisión).
 function comisionFaltaDe(nombre,d){
   if(comisionPagadaDe(nombre,d))return 0;
-  return Math.max(0,Math.round((totalesColegio(d).totalColegio-comisionPagosColegio(nombre))*100)/100);
+  // Libros que el colegio no devolvió se descuentan de su comisión (Saulo: 12 libros, 18-nov-2026).
+  return Math.max(0,Math.round((totalesColegio(d).totalColegio-comisionPagosColegio(nombre)-descuentoComisionLibros(nombre))*100)/100);
 }
 function _pareceEditorial(t){return /EDITORIAL|DID[AÁ]CTICA|TECH\s*BOOKS|DANIEL|MARCOS?\b|LIBROS/i.test(String(t||''));}
 // A qué editorial va un pago (Didáctica / Tech Books) o null si no es pago de libros.
