@@ -5741,7 +5741,9 @@ function _pvCalcCol(col){
       // del catálogo (ej. Imagina 16 en vez de 14), ella YA le subió los $2: se usa tal cual.
       const cat=parseFloat((DB.productos.find(p=>p.id===l.prodId)||{}).precioCosto)||0;
       const yaSubido=cat>0&&costo>cat+0.005;
-      const cd=esS?_pvR2(pvp*(1-pct/100)):_pvR2(yaSubido?costo:costo+rec);
+      // 18-nov-2026 (Mónica): Saulo también = (PVP − % colegio) − valor al que ella le vende a Evelyn
+      // (ya NO el TE QUEDA del 11-nov).
+      const cd=_pvR2(yaSubido?costo:costo+rec);
       return {libro:l.libro,vend,pvp,pct,costoDist:cd,total:_pvR2(vend*pvp),comision:_pvR2(vend*pvp*pct/100),vtotal:_pvR2(vend*cd)};
     }).filter(x=>x.vend>0);
     const sum=k=>_pvR2(lineas.reduce((a,x)=>a+x[k],0));
@@ -5749,10 +5751,10 @@ function _pvCalcCol(col){
     const pcts=[...new Set(lineas.map(x=>x.pct))];
     // 11-nov-2026 (Mónica): Total vendido − Costo distribuidor (TE QUEDA) = Comisión;
     // − libros que el colegio no devolvió = Queda → 70% vendedora / 30% Daniel.
-    const neta=esS?_pvR2(total-vtotal):_pvR2(total-comision);
+    const neta=_pvR2(total-comision);
     const libsCol=esS?(DB.cobrosVendedora||[]).filter(c=>c.cargo==='colegio'&&_normNombre(c.colegio)===_normNombre(col)):[];
     const nLib=libsCol.reduce((a,c)=>a+c.cant,0), descLib=_pvR2(libsCol.reduce((a,c)=>a+c.cant*c.precio,0));
-    const ganancia=esS?_pvR2(neta-descLib):_pvR2(neta-vtotal);
+    const ganancia=_pvR2(neta-vtotal-descLib);
     const ella=_pvR2(ganancia*PAGO_VENDEDORA.pct/100);
     const unidades=lineas.reduce((a,x)=>a+x.vend,0);
     return {col,esS,lineas,total,comision,vtotal,neta,nLib,descLib,ganancia,ella,socio:_pvR2(ganancia-ella),
@@ -5776,13 +5778,10 @@ function pagoVendedoraHTML(R,para){
     +`<tr style="font-weight:800"><td style="${td}">TOTAL</td><td style="${td};text-align:center">${r.unidades}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.total)}</td><td style="${td}"></td><td style="${td};text-align:right">${n(r.vtotal)}</td></tr></tbody></table></div>
     <table style="border-collapse:collapse;font-size:12px;margin:6px 0 0 auto;min-width:240px">
     ${fila('Total vendido',n(r.total))}
-    ${r.esS?fila('− Costo distribuidor',n(r.vtotal))
-      +fila('Comisión',n(r.neta),'border-top:1px solid #999')
-      +(r.nLib?fila('− '+r.nLib+' libros no devueltos',n(r.descLib)):'')
-      +fila('Queda',n(r.ganancia),'border-top:1px solid #999')
-    :fila('− Comisión colegio '+r.pctTxt,n(r.comision))
+    ${fila('− Comisión colegio '+r.pctTxt,n(r.comision))
       +fila('Ganancia neta',n(r.neta),'border-top:1px solid #999')
       +fila('− Costo distribuidor',n(r.vtotal))
+      +(r.nLib?fila('− '+r.nLib+' libros no devueltos',n(r.descLib)):'')
       +fila('Ganancia',n(r.ganancia),'border-top:1px solid #999')}
     ${fila(escH(nm)+' '+PAGO_VENDEDORA.pct+'%',n(r.ella),'font-weight:800;color:#15803d')}
     ${ev?'':fila(escH(soc)+' '+(100-PAGO_VENDEDORA.pct)+'%',n(r.socio))}
@@ -6791,8 +6790,9 @@ function comisionVendedoraEC(nombre){
   return `<h3>🤝 Comisión ${r.pctTxt}</h3>
   <table>
     ${fila('Total vendido',n(r.total))}
+    ${fila('(−) Comisión colegio '+r.pctTxt,n(r.comision))}
     ${fila('(−) Costo distribuidor',n(r.vtotal))}
-    ${fila('COMISIÓN',n(r.neta),'background:#e3f2fd;font-weight:bold')}
+    ${fila('COMISIÓN',n(_pvR2(r.neta-r.vtotal)),'background:#e3f2fd;font-weight:bold')}
   </table>
   ${libs.length?`<h3>📕 Libros no devueltos (se descuentan de la comisión)</h3>
   <table>
@@ -6801,7 +6801,7 @@ function comisionVendedoraEC(nombre){
     <tr class="tot"><td style="text-align:right">TOTAL</td><td style="text-align:center">${r.nLib}</td><td></td><td style="text-align:right">${n(r.descLib)}</td></tr>
   </table>`:''}
   <div class="saldo-box" style="border-color:#1565c0">
-    <div class="lbl" style="color:#1565c0">Comisión ${n(r.neta)}${r.nLib?' − '+r.nLib+' libros no devueltos '+n(r.descLib):''}</div>
+    <div class="lbl" style="color:#1565c0">Comisión ${n(_pvR2(r.neta-r.vtotal))}${r.nLib?' − '+r.nLib+' libros no devueltos '+n(r.descLib):''}</div>
     <div class="val" style="color:#1565c0">${n(r.ganancia)}</div>
   </div>`;
 }
