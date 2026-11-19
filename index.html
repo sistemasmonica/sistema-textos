@@ -5737,7 +5737,11 @@ function _pvCalcCol(col){
       const vend=(l.cant||0)-(l.dev||0);
       const pvp=parseFloat(l.pvp)||0, costo=parseFloat(l.costo)||0, pct=pctLinea(d,l);
       // Costo distribuidor = TE QUEDA/LIBRO de Control de ventas (PVP − comisión del colegio). Pedido por Mónica 11-nov-2026.
-      const cd=esS?_pvR2(pvp*(1-pct/100)):_pvR2(costo+rec);
+      // 18-nov-2026 (Mónica): si en Control de ventas el costo ya está más alto que el
+      // del catálogo (ej. Imagina 16 en vez de 14), ella YA le subió los $2: se usa tal cual.
+      const cat=parseFloat((DB.productos.find(p=>p.id===l.prodId)||{}).precioCosto)||0;
+      const yaSubido=cat>0&&costo>cat+0.005;
+      const cd=esS?_pvR2(pvp*(1-pct/100)):_pvR2(yaSubido?costo:costo+rec);
       return {libro:l.libro,vend,pvp,pct,costoDist:cd,total:_pvR2(vend*pvp),comision:_pvR2(vend*pvp*pct/100),vtotal:_pvR2(vend*cd)};
     }).filter(x=>x.vend>0);
     const sum=k=>_pvR2(lineas.reduce((a,x)=>a+x[k],0));
